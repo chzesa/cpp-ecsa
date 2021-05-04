@@ -439,7 +439,8 @@ void Controller::testAcyclic()
 			if (blockers[dependee] < 0)
 			{
 				std::string errMsg = "[czss] Cyclical reference to "
-					+ std::to_string(dependee);
+					+ systems[dependee]->name()
+					+ " (" +std::to_string(dependee) + ")";
 				throw std::logic_error(errMsg);
 			}
 		}
@@ -462,8 +463,10 @@ void Controller::testComplete()
 				if (!dependencyExists(pair.first, reader))
 				{
 					std::string errMsg = "[czss] No ordering between writer "
-					+ std::to_string(pair.first) + " and reader " + std::to_string(reader)
-					+ " accessing the same resource";
+					+ systems[pair.first]->name() + " (" + std::to_string(pair.first)
+					+ ") and reader "
+					+ systems[reader]->name() + " ("+ std::to_string(reader)
+					+ ") accessing the same resource";
 					throw std::logic_error(errMsg);
 				}
 			}
@@ -474,8 +477,10 @@ void Controller::testComplete()
 				if (!dependencyExists(pair.first, writer))
 				{
 					std::string errMsg = "[czss] No ordering between writer "
-					+ std::to_string(pair.first) + " and writer " + std::to_string(writer)
-					+ " accessing the same resource";
+					+ systems[pair.first]->name() + " (" + std::to_string(pair.first)
+					+ ") and writer "
+					+ systems[writer]->name() + " ("+ std::to_string(writer)
+					+ ") accessing the same resource";
 					throw std::logic_error(errMsg);
 				}
 			}
