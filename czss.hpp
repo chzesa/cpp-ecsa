@@ -64,7 +64,6 @@ protected:
 
 struct SystemData
 {
-	const SystemBase* system = nullptr;
 	std::unordered_set<uint64_t> readsFrom;
 	std::unordered_set<uint64_t> writesTo;
 	std::unordered_set<uint64_t> readers;
@@ -81,11 +80,9 @@ struct RegistrationHelper
 
 struct Node
 {
-	const SystemBase* system = nullptr;
-	std::unordered_set<uint64_t> exclusions;
-	std::unordered_set<uint64_t> implicitDependencies;
-	std::unordered_set<uint64_t> prunedDependencies;
-	uint64_t weight;
+	std::unordered_set<uint64_t> dependencies;
+	std::unordered_set<uint64_t> dependees;
+	uint64_t weight = 1;
 };
 
 // #############
@@ -102,12 +99,21 @@ struct Controller
 	void registerDependency(const SystemBase* sys, uint64_t target);
 	void registerSystem(const SystemBase* sys);
 private:
-	bool validateGraph = false;
-	std::unordered_map<uint64_t, SystemData> systems;
+	bool changed = false;
+	std::unordered_map<uint64_t, const SystemBase*> systems;
+	std::unordered_map<uint64_t, SystemData> systemsData;
 	std::unordered_map<uint64_t, Node> graph;
+	std::unordered_map<uint64_t, std::unordered_map<uint64_t, bool>> implicits;
 
 	void validate();
-	void addExclusion(uint64_t left, uint64_t right);
+	void testAcyclic();
+	void testComplete();
+	void cullDependencies();
+	void computeWeights();
+
+	bool implicitlyDependsOn(uint64_t sys, uint64_t other);
+	bool directlyDependsOn(uint64_t sys, uint64_t other);
+	bool dependencyExists(uint64_t sys, uint64_t other);
 	RegistrationHelper registerPair(const SystemBase* sys, uint64_t target);
 	void reg(uint64_t key);
 };
@@ -131,11 +137,7 @@ System<S>::System(Controller* ctrl)
 }
 
 template <typename S>
-System<S>::System()
-{
-	contoller = defaultController();
-	contoller->registerSystem(this);
-}
+System<S>::System() : System(defaultController()) {}
 
 template <typename S>
 Controller* System<S>::ctrl () const
@@ -219,6 +221,7 @@ std::string SystemBase::name() const
 struct TaskData
 {
 	uint64_t id;
+	uint64_t weight;
 	const SystemBase* system = nullptr;
 	const std::unordered_set<uint64_t>* dependencies;
 	std::unordered_map<uint64_t, czsf::Barrier>* fences;
@@ -243,125 +246,81 @@ void task(TaskData* data)
 
 void Controller::run()
 {
-	if (validateGraph)
+	if (changed)
 	{
 		validate();
-		validateGraph = false;
+		changed = false;
 	}
 
-	std::vector<TaskData> tasks;
-	std::unordered_map<uint64_t, uint64_t> deps;
 	std::unordered_map<uint64_t, czsf::Barrier> fences;
+	std::vector<TaskData> tasks;
 
-	auto comp = []( OrderedNode a, OrderedNode b ) { return a.value < b.value; };
-	std::priority_queue<OrderedNode, std::vector<OrderedNode>, decltype(comp)> que(comp);
-
-	for (auto& pair : systems)
+	for (auto& pair : systemsData)
 	{
-		if (pair.second.dependees.size() == 0)
-		{
-			que.push({
-				pair.first,
-				graph[pair.first].weight
-			});
-		}
-
-		deps[pair.first] = pair.second.dependees.size();
+		if (systems.find(pair.first) == systems.end()) continue;
 		fences.insert({pair.first, czsf::Barrier(1)});
+		auto& node = graph[pair.first];
+		tasks.push_back({
+			pair.first,
+			node.weight,
+			systems[pair.first],
+			&node.dependencies,
+			&fences
+		});
 	}
 
-	while(que.size() > 0)
-	{
-		OrderedNode node = que.top();
-		que.pop();
-		SystemData& data = systems[node.key];
-		for (auto dep : data.dependencies)
-		{
-			deps[dep]--;
-			if (deps[dep] == 0)
-			{
-				que.push({
-					dep,
-					graph[dep].weight
-				});
-			}
-		}
+	sort(tasks.begin(), tasks.end(), [] (const TaskData & a, const TaskData & b) -> bool
+	{ 
+		return a.weight > b.weight; 
+	});
 
-		if (data.system != nullptr)
-		{
-			tasks.push_back({
-				node.key,
-				data.system,
-				&graph[node.key].prunedDependencies,
-				&fences
-			});
-		}
-	}
-
-	std::reverse(tasks.begin(), tasks.end());
 	czsf::Barrier barrier(tasks.size());
 	czsf::run(task, tasks.data(), tasks.size(), &barrier);
 	barrier.wait();
 }
 
-void Controller::addExclusion(uint64_t left, uint64_t right)
+bool Controller::implicitlyDependsOn(uint64_t sys, uint64_t other)
 {
-	Node& l = graph[left];
-	Node& r = graph[right];
-	l.exclusions.insert(right);
-	r.exclusions.insert(left);
+	auto map = implicits[sys];
+	if (map.find(other) != map.end())
+		return map[other];
+
+	for (auto dep : systemsData[sys].dependencies)
+	{
+		if (directlyDependsOn(dep, other) || implicitlyDependsOn(dep, other))
+		{
+			map[other] = true;
+			return true;
+		}
+	}
+
+	map[other] = false;
+
+	return false;
 }
 
-void Controller::validate()
+bool Controller::directlyDependsOn(uint64_t sys, uint64_t other)
+{
+	return systemsData[sys].dependencies.find(other)
+		!= systemsData[sys].dependencies.end();
+}
+
+bool Controller::dependencyExists(uint64_t sys, uint64_t other)
+{
+	return sys == other
+		|| directlyDependsOn(sys, other)
+		|| directlyDependsOn(other, sys)
+		|| implicitlyDependsOn(sys, other)
+		|| implicitlyDependsOn(other, sys);
+}
+
+void Controller::testAcyclic()
 {
 	std::unordered_map<uint64_t, uint64_t> blockers;
 	std::deque<uint64_t> queue;
 
-	// Iterate through every node. For each system B that system A reads, if system C writes
-	// to system B, and no dependency between A and C exists, mark them exclusive. Similarly
-	// for system B that A writes to and C reads.
-	for (auto& pair : systems)
+	for (auto& pair : systemsData)
 	{
-		SystemData& data = pair.second;
-		for (auto key : data.readsFrom)
-		{
-			std::unordered_set<uint64_t>& writers = systems[key].writers;
-			for (auto conflict : writers)
-			{
-				if (conflict == pair.first) continue;
-				if (data.dependencies.find(conflict) == data.dependencies.end()
-					&& data.dependees.find(conflict) == data.dependencies.end())
-				{
-					addExclusion(pair.first, conflict);
-				}
-			}
-		}
-
-		for (auto key : data.writesTo)
-		{
-			std::unordered_set<uint64_t>& readers = systems[key].readers;
-			for (auto conflict : readers)
-			{
-				if (conflict == pair.first) continue;
-				if (data.dependencies.find(conflict) == data.dependencies.end()
-					&& data.dependees.find(conflict) == data.dependencies.end())
-				{
-					addExclusion(pair.first, conflict);
-				}
-			}
-
-			std::unordered_set<uint64_t>& writers = systems[key].writers;
-			for (auto conflict : writers)
-			{
-				if (conflict == pair.first) continue;
-				if (data.dependencies.find(conflict) == data.dependencies.end()
-					&& data.dependees.find(conflict) == data.dependencies.end())
-				{
-					addExclusion(pair.first, conflict);
-				}
-			}
-		}
-
 		if (pair.second.dependencies.size() == 0)
 		{
 			queue.push_back(pair.first);
@@ -370,76 +329,126 @@ void Controller::validate()
 		blockers.insert({pair.first, pair.second.dependencies.size()});
 	}
 
-	// BFS through tree to build a list of transitive dependencies
 	while(queue.size() > 0)
 	{
 		uint64_t key = queue.front();
 		queue.pop_front();
 
-		SystemData& data = systems[key];
-		Node& node = graph[key];
-
-		for (auto dep : data.dependencies)
+		for (auto dependee : systemsData[key].dependees)
 		{
-			SystemData& depData = systems[dep];
-			for(auto transitive : depData.dependencies)
+			blockers[dependee]--;
+			if (blockers[dependee] == 0)
 			{
-				node.implicitDependencies.insert(transitive);
+				queue.push_back(dependee);
 			}
 
-			Node& depNode = graph[dep];
-			for (auto transitive : depNode.implicitDependencies)
+			if (blockers[dependee] < 0)
 			{
-				node.implicitDependencies.insert(transitive);
-			}
-		}
-
-		for (auto dee : data.dependees)
-		{
-			blockers[dee]--;
-			if (blockers[dee] == 0)
-			{
-				queue.push_back(dee);
-			}
-
-			if (blockers[dee] < 0)
-			{
-				std::string errMsg = "[czss] Cyclical reference to " + std::to_string(dee);
+				std::string errMsg = "[czss] Cyclical reference to "
+					+ std::to_string(dependee);
 				throw std::logic_error(errMsg);
 			}
 		}
 	}
+}
 
-	// Ensure dependencies exist between all resources that read and write to a shared resource
-	// Calculate node weights for ordering
-	for (auto& pair : graph)
+void Controller::testComplete()
+{
+	implicits.clear();
+	for (auto& pair : systems)
+		implicits.insert({pair.first, {}});
+
+	for (auto& pair : systemsData)
 	{
-		Node& cur = pair.second;
-		for (auto conflict : pair.second.exclusions)
+		for (auto component : pair.second.writesTo)
 		{
-			Node& other = graph[conflict];
-			if (cur.implicitDependencies.find(conflict) == cur.implicitDependencies.end()
-				&& other.implicitDependencies.find(pair.first) == other.implicitDependencies.end())
+			std::unordered_set<uint64_t>& readers = systemsData[component].readers;
+			for (auto reader : readers)
 			{
-				std::string errMsg =
-					"[czss] No ordering between elements "
-					+ std::to_string(pair.first) + " and " + std::to_string(conflict)
+				if (!dependencyExists(pair.first, reader))
+				{
+					std::string errMsg = "[czss] No ordering between writer "
+					+ std::to_string(pair.first) + " and reader " + std::to_string(reader)
 					+ " accessing the same resource";
-				throw std::logic_error(errMsg);
+					throw std::logic_error(errMsg);
+				}
 			}
-		}
 
-		SystemData& data = systems[pair.first];
-		for (auto dep : data.dependencies)
-		{
-			if (cur.implicitDependencies.find(dep) == cur.implicitDependencies.end())
+			std::unordered_set<uint64_t>& writers = systemsData[component].writers;
+			for (auto writer : writers)
 			{
-				cur.prunedDependencies.insert(dep);
+				if (!dependencyExists(pair.first, writer))
+				{
+					std::string errMsg = "[czss] No ordering between writer "
+					+ std::to_string(pair.first) + " and writer " + std::to_string(writer)
+					+ " accessing the same resource";
+					throw std::logic_error(errMsg);
+				}
+			}
+		}
+	}
+}
+
+void Controller::cullDependencies()
+{
+	graph.clear();
+	for (auto& pair : systems)
+		graph[pair.first] = {};
+
+	for (auto& pair : systems)
+	{
+		auto& node = graph[pair.first];
+		for (auto dependency : systemsData[pair.first].dependencies)
+		{
+			if (!implicitlyDependsOn(pair.first, dependency))
+			{
+				node.dependencies.insert(dependency);
+				graph[dependency].dependees.insert(pair.first);
+			}
+		}
+	}
+}
+
+void Controller::computeWeights()
+{
+	std::unordered_map<uint64_t, uint64_t> blockers;
+	std::deque<uint64_t> queue;
+
+	for (auto& pair : systems)
+	{
+		uint64_t numDeps = graph[pair.first].dependencies.size();
+		blockers.insert({pair.first, numDeps});
+		if (numDeps == 0)
+			queue.push_back(pair.first);
+	}
+
+	while(queue.size() > 0)
+	{
+		uint64_t system = queue.front();
+		queue.pop_front();
+
+		for (auto dependency : graph[system].dependencies)
+		{
+			blockers[dependency]--;
+			if (blockers[dependency] == 0)
+			{
+				queue.push_back(dependency);
 			}
 		}
 
-		cur.weight = cur.implicitDependencies.size() + cur.prunedDependencies.size();
+		for (auto dependee : graph[system].dependees)
+		{
+			graph[system].weight += graph[dependee].weight;
+		}
 	}
+}
+
+void Controller::validate()
+{
+	testAcyclic();
+	testComplete();
+	cullDependencies();
+	computeWeights();
 }
 
 void Controller::registerReader(const SystemBase* sys, uint64_t target)
@@ -465,54 +474,26 @@ void Controller::registerDependency(const SystemBase* sys, uint64_t target)
 
 RegistrationHelper Controller::registerPair(const SystemBase* sys, uint64_t target)
 {
-	auto node = graph.find(sys->identity());
-	if (node == graph.end())
-	{
-		graph.insert({sys->identity(), {}});
-		graph[sys->identity()].system = sys;
-	} else
-	{
-		node->second.system = sys;
-	}
-
-	node = graph.find(target);
-	if (node == graph.end())
-	{
-		graph.insert({target, {}});
-	}
-
-	validateGraph = true;
+	changed = true;
 	RegistrationHelper ret = {};
-	uint64_t src = sys->identity();
-	registerSystem(sys);
 	reg(target);
 
-	ret.src = &systems.find(src)->second;
-	ret.tar = &systems.find(target)->second;
+	ret.src = &systemsData[sys->identity()];
+	ret.tar = &systemsData[target];
 	return ret;
 }
 
 void Controller::registerSystem(const SystemBase* sys)
 {
-	uint64_t key = sys->identity();
-	auto data = systems.find(key);
-	if (data == systems.end())
-	{
-		SystemData d = {};
-		d.system = sys;
-		systems.insert({key, d});
-	} else 
-	{
-		data->second.system = sys;
-	}
+	systems[sys->identity()] = sys;
 }
 
 void Controller::reg(uint64_t key)
 {
-	auto data = systems.find(key);
-	if (data == systems.end())
+	auto data = systemsData.find(key);
+	if (data == systemsData.end())
 	{
-		systems.insert({key, {}});
+		systemsData.insert({key, {}});
 	}
 }
 
@@ -524,7 +505,7 @@ SystemBase* Controller::get(uint64_t identifier)
 		return nullptr;
 	}
 
-	return const_cast<SystemBase*>(res->second.system); // todo
+	return const_cast<SystemBase*>(res->second); // todo
 }
 
 } // namespace czss
