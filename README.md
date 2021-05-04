@@ -147,7 +147,7 @@ struct B : czss::System<B>, czss::Writer<E>
 
 ```
 
-If `System`s `A` and `B` attempt to read and write, or both write, to the same `System`, then there must exist an implicit or explicit dependency between `A` and `B`. To declare dependencies, inherit from `Dependency<T>`:
+If `System`s `A` and `B` attempt to read and write, or both write, to the same `Component`, then there must exist an implicit or explicit dependency between `A` and `B`. To declare dependencies, inherit from `Dependency<T>`:
 
 ```c++
 struct D : czss::Component<D>;
@@ -176,6 +176,6 @@ Please see the [c-fiber example](https://github.com/chzesa/c-fiber/blob/master/e
 
 When `controller->run()` is called, the validity of the definitions and dependencies is checked once, and then again if another `System` is added to the controller (i.e. instantiated). Each `System` is run once per invocation of `controller->run()` as its own fiber task.
 
-When `System` `A`'s run function is called, all of its dependencies have finished executing and none of its dependencies begin execution until `A` is finished. Furthermore, no `System` `B` that reads from a `System` that `A` writes to, or writes to a `System` that `A` reads from or writes to, executes in parallel with `A`.
+When `System` `A`'s run function is called, all of its dependencies have finished executing and none of its dependencies begin execution until `A` is finished. Furthermore, no `System` `B` that reads from a `System` that `A` writes to, or writes to a `Component` that `A` reads from or writes to, executes in parallel with `A`.
 
-`System` `A` must only guarantee that it has finished reading and writing to all other `System`s by the time its `run` function returns. Thus, further parallelism can be achieved by diving the `System`'s work into their own fiber tasks if feasible.
+`System` `A` must only guarantee that it has finished reading and writing to all other `Component`s by the time its `run` function returns. Thus, further parallelism can be achieved by diving the `System`'s work into their own fiber tasks if feasible.
