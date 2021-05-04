@@ -155,6 +155,7 @@ private:
 	void computeWeights();
 
 	void generateTasks();
+	void prioritize();
 
 	bool implicitlyDependsOn(uint64_t sys, uint64_t other);
 	bool directlyDependsOn(uint64_t sys, uint64_t other);
@@ -343,6 +344,19 @@ void Controller::generateTasks()
 	}
 }
 
+void Controller::prioritize()
+{
+	for (auto& task : tasks)
+	{
+		task.weight = graph[task.id].weight;
+	}
+
+	sort(tasks.begin(), tasks.end(), [] (const TaskData & a, const TaskData & b) -> bool
+	{
+		return a.weight > b.weight;
+	});
+}
+
 void Controller::run()
 {
 	if (changed)
@@ -354,11 +368,7 @@ void Controller::run()
 
 	if (weightsChanged)
 	{
-		sort(tasks.begin(), tasks.end(), [] (const TaskData & a, const TaskData & b) -> bool
-		{
-			return a.weight > b.weight;
-		});
-
+		prioritize();
 		weightsChanged = false;
 	}
 
