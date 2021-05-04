@@ -1,6 +1,6 @@
 # cpp-ecsa
 
-Facilitates easy building of a coarsely parallelized ECS-architecture by defining read and write access, as well as dependencies between systems, using inheritance.
+Facilitates easy building of a coarsely parallelized ECS-architecture by defining read and write access to components, as well as dependencies between systems, using inheritance.
 
 ## Building the example
 
@@ -22,6 +22,8 @@ Add the following to a __single__ `.cpp` file (Note: usage requires [c-fiber](ht
 ### Systems and controllers
 
 The library provides means to create `System`s which are executed in parallel, whenever possible, by the `System`'s `Controller`. The `Controller` is either the static default `Controller`, or one passed to the `System` in its constructor.
+
+`System`s operate on `Component`s, which belong to `Controller`s similarly to `System`s.
 
 ### Defining systems
 
@@ -91,15 +93,41 @@ They can be used with different `Controller`s:
 	defaultController()->run() // calls c->run()
 ```
 
+### Defining components
+
+To define a component, inherit from `Component<T>`:
+
+```c++
+struct SomeComponent : czss::Component<SomeComponent> { /* ... */ };
+```
+
+Components belong to `Controller`s, similarly to `System`s:
+
+```c++
+struct C : czss::Component<C>
+{
+	C(Controller* ctrl) : Component<C>(ctrl) { /* ... */ }
+	/* ... */
+};
+
+/* ... */
+	Controller ctrl = {};
+	C cf(&first); // Accessible to all systems in ctrl
+	C c(czss::defaultController()); // Accessible to all systems in the default controller
+
+```
+
+Note that an object cannot be both a `System` and a `Component`.
+
 ### System dependencies
 
-To control access to shared data, `System`s can define read and write accesses other `System`s controlled by the same `Controller` by inheriting from `Reader<T>` or `Writer<T>`.
+To control access to shared data, `System`s can define read and write accesses to `Component`s controlled by the same `Controller` by inheriting from `Reader<T>` or `Writer<T>`.
 
 The object provided by a `Reader<T>` or `Writer<T>` must have been instantiated, and controlled by the same `Controller` as the reader or writer.
 
 ```c++
-struct D : czss::System<D> { /* ... */ };
-struct E : czss::System<E> { /* ... */ };
+struct D : czss::Component<D> { /* ... */ };
+struct E : czss::Component<E> { /* ... */ };
 
 struct A : czss::System<A>, czss::Reader<D>
 {
@@ -122,7 +150,7 @@ struct B : czss::System<B>, czss::Writer<E>
 If `System`s `A` and `B` attempt to read and write, or both write, to the same `System`, then there must exist an implicit or explicit dependency between `A` and `B`. To declare dependencies, inherit from `Dependency<T>`:
 
 ```c++
-struct D : czss::System<D>;
+struct D : czss::Component<D>;
 struct A : czss::System<A>, czss::Writer<D>;
 
 struct B : czss::System<B>, czss::Writer<D>, czss::Dependency<A>;
@@ -132,15 +160,15 @@ struct C : czss::System<C>, czss::Writer<D>, czsss::Dependency<B>;
 // Since C depends on B, and B depends on A, C implicitly depends on A
 ```
 
-The following will cause a `std::logic_error` due to missing dependencies:
+The following will cause a `std::logic_error` when `Controller->run()` is called due to missing dependencies:
 
 ```c++
-struct D : czss::System<D>;
+struct D : czss::Component<D>;
 struct A : czss::System<A>, czss::Reader<D>;
 struct B : czss::System<B>, czss::Writer<D>;
 ```
 
-__Note: The system object must inherit from `System<T>` before `Reader<T>`, `Writer<T>`, or `Dependency<T>`__
+__Note: The system object must inherit from `System<T>` before `Reader<U`, `Writer<U>`, or `Dependency<T>`__
 
 ### Guarantees and parallelism
 
