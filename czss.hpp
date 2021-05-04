@@ -32,8 +32,6 @@ struct System : SystemBase
 private:
 	System();
 	System(Controller* loc);
-
-private:
 	Controller* contoller;
 };
 
@@ -77,7 +75,6 @@ struct Dependency
 protected:
 	Dependency<T>();
 };
-
 
 // #############
 // Controller helper structs
@@ -297,12 +294,6 @@ std::string ComponentBase::name() const
 {
 	return "Unnamed Component";
 }
-
-struct OrderedNode
-{
-	uint64_t key;
-	uint64_t value;
-};
 
 void task(TaskData* data)
 {
