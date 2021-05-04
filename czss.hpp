@@ -36,6 +36,22 @@ private:
 	Controller* contoller;
 };
 
+struct ComponentBase
+{
+	virtual uint64_t identity() const = 0;
+	virtual std::string name() const;
+};
+
+template <typename C>
+struct Component : ComponentBase
+{
+	uint64_t identity() const override;
+	static uint64_t sidentity();
+protected:
+	Component();
+	Component(Controller* loc);
+};
+
 template <typename T>
 struct Reader
 {
@@ -68,16 +84,14 @@ struct SystemData
 {
 	std::unordered_set<uint64_t> readsFrom;
 	std::unordered_set<uint64_t> writesTo;
-	std::unordered_set<uint64_t> readers;
-	std::unordered_set<uint64_t> writers;
 	std::unordered_set<uint64_t> dependencies;
 	std::unordered_set<uint64_t> dependees;
 };
 
-struct RegistrationHelper
+struct ComponentData
 {
-	SystemData* src;
-	SystemData* tar;
+	std::unordered_set<uint64_t> readers;
+	std::unordered_set<uint64_t> writers;
 };
 
 struct Node
@@ -104,16 +118,20 @@ struct TaskData
 struct Controller
 {
 	void run();
-
-	SystemBase* get(uint64_t identifier);
-	void registerReader(const SystemBase* sys, uint64_t target);
-	void registerWriter(const SystemBase* sys, uint64_t target);
-	void registerDependency(const SystemBase* sys, uint64_t target);
-	void registerSystem(const SystemBase* sys);
+	ComponentBase* get(uint64_t identifier);
 
 	template<typename T>
 	void updateWeight(uint64_t value);
+
+	void registerReader(const SystemBase* sys, uint64_t target);
+	void registerWriter(const SystemBase* sys, uint64_t target);
+	void registerDependency(const SystemBase* sys, uint64_t target);
+	void registerSystem(const SystemBase* system);
+	void registerComponent(ComponentBase* component);
 private:
+	std::unordered_map<uint64_t, ComponentBase*> components;
+	std::unordered_map<uint64_t, ComponentData> componentsData;
+
 	std::unordered_map<uint64_t, const SystemBase*> systems;
 	std::unordered_map<uint64_t, SystemData> systemsData;
 
@@ -138,9 +156,6 @@ private:
 	bool implicitlyDependsOn(uint64_t sys, uint64_t other);
 	bool directlyDependsOn(uint64_t sys, uint64_t other);
 	bool dependencyExists(uint64_t sys, uint64_t other);
-
-	RegistrationHelper registerPair(const SystemBase* sys, uint64_t target);
-	void reg(uint64_t key);
 };
 
 Controller* defaultController();
@@ -148,15 +163,11 @@ Controller* defaultController();
 // #############
 // Template implementations
 // #############
-template <typename S>
-uint64_t System<S>::identity() const
-{
-	return (uint64_t)&typeid(S);
-}
 
 template <typename S>
 System<S>::System(Controller* ctrl)
 {
+	static_assert(!std::is_base_of<ComponentBase, S>::value, "[czss] A System cannot also be a Component");
 	contoller = ctrl;
 	contoller->registerSystem(this);
 }
@@ -171,14 +182,43 @@ Controller* System<S>::ctrl () const
 }
 
 template <typename S>
+uint64_t System<S>::identity() const
+{
+	return (uint64_t)&typeid(S);
+}
+
+template <typename S>
 uint64_t System<S>::sidentity()
 {
 	return (uint64_t)&typeid(S);
 }
 
+template <typename C>
+uint64_t Component<C>::identity() const
+{
+	return (uint64_t)&typeid(C);
+}
+
+template <typename C>
+uint64_t Component<C>::sidentity()
+{
+	return (uint64_t)&typeid(C);
+}
+
+template <typename C>
+Component<C>::Component(Controller* ctrl)
+{
+	static_assert(!std::is_base_of<SystemBase, C>::value, "[czss] A Component cannot also be a System");
+	ctrl->registerComponent(this);
+}
+
+template <typename C>
+Component<C>::Component() : Component(defaultController()) {}
+
 template <typename T>
 Reader<T>::Reader()
 {
+	static_assert(std::is_base_of<ComponentBase, T>::value, "[czss] Reader<T>: T must be a Component<U>");
 	const SystemBase* sys = reinterpret_cast<const SystemBase*>(this);
 	sys->ctrl()->registerReader(sys, T::sidentity());
 }
@@ -193,6 +233,7 @@ const T* Reader<T>::get() const
 template <typename T>
 Writer<T>::Writer()
 {
+	static_assert(std::is_base_of<ComponentBase, T>::value, "[czss] Writer<T>: T must be a Component<U>");
 	const SystemBase* sys = reinterpret_cast<const SystemBase*>(this);
 	sys->ctrl()->registerWriter(sys, T::sidentity());
 }
@@ -207,6 +248,7 @@ T* Writer<T>::get() const
 template <typename T>
 Dependency<T>::Dependency()
 {
+	static_assert(std::is_base_of<SystemBase, T>::value, "[czss] Dependency<T>: T must be a System<U>");
 	const SystemBase* sys = reinterpret_cast<const SystemBase*>(this);
 	sys->ctrl()->registerDependency(sys, T::sidentity());
 }
@@ -247,6 +289,10 @@ std::string SystemBase::name() const
 	return "Unnamed System";
 }
 
+std::string ComponentBase::name() const
+{
+	return "Unnamed Component";
+}
 
 struct OrderedNode
 {
@@ -406,7 +452,7 @@ void Controller::testComplete()
 	{
 		for (auto component : pair.second.writesTo)
 		{
-			std::unordered_set<uint64_t>& readers = systemsData[component].readers;
+			std::unordered_set<uint64_t>& readers = componentsData[component].readers;
 			for (auto reader : readers)
 			{
 				if (!dependencyExists(pair.first, reader))
@@ -418,7 +464,7 @@ void Controller::testComplete()
 				}
 			}
 
-			std::unordered_set<uint64_t>& writers = systemsData[component].writers;
+			std::unordered_set<uint64_t>& writers = componentsData[component].writers;
 			for (auto writer : writers)
 			{
 				if (!dependencyExists(pair.first, writer))
@@ -501,35 +547,26 @@ void Controller::validate()
 
 void Controller::registerReader(const SystemBase* sys, uint64_t target)
 {
-	RegistrationHelper helper = registerPair(sys, target);
-	helper.src->readsFrom.insert(target);
-	helper.tar->readers.insert(sys->identity());
+	changed = true;
+	weightsChanged = true;
+	systemsData[sys->identity()].readsFrom.insert(target);
+	componentsData[target].readers.insert(sys->identity());
 }
 
 void Controller::registerWriter(const SystemBase* sys, uint64_t target)
 {
-	RegistrationHelper helper = registerPair(sys, target);
-	helper.src->writesTo.insert(target);
-	helper.tar->writers.insert(sys->identity());
+	changed = true;
+	weightsChanged = true;
+	systemsData[sys->identity()].writesTo.insert(target);
+	componentsData[target].writers.insert(sys->identity());
 }
 
 void Controller::registerDependency(const SystemBase* sys, uint64_t target)
 {
-	RegistrationHelper helper = registerPair(sys, target);
-	helper.src->dependencies.insert(target);
-	helper.tar->dependees.insert(sys->identity());
-}
-
-RegistrationHelper Controller::registerPair(const SystemBase* sys, uint64_t target)
-{
 	changed = true;
 	weightsChanged = true;
-	RegistrationHelper ret = {};
-	reg(target);
-
-	ret.src = &systemsData[sys->identity()];
-	ret.tar = &systemsData[target];
-	return ret;
+	systemsData[sys->identity()].dependencies.insert(target);
+	systemsData[target].dependees.insert(sys->identity());
 }
 
 void Controller::registerSystem(const SystemBase* sys)
@@ -537,24 +574,14 @@ void Controller::registerSystem(const SystemBase* sys)
 	systems[sys->identity()] = sys;
 }
 
-void Controller::reg(uint64_t key)
+void Controller::registerComponent(ComponentBase* component)
 {
-	auto data = systemsData.find(key);
-	if (data == systemsData.end())
-	{
-		systemsData.insert({key, {}});
-	}
+	components[component->identity()] = component;
 }
 
-SystemBase* Controller::get(uint64_t identifier)
+ComponentBase* Controller::get(uint64_t identifier)
 {
-	auto res = systems.find(identifier);
-	if (res == systems.end())
-	{
-		return nullptr;
-	}
-
-	return const_cast<SystemBase*>(res->second); // todo
+	return components[identifier];
 }
 
 } // namespace czss

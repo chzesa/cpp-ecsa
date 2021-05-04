@@ -21,29 +21,29 @@ void print(string s)
 }
 
 struct Entities
-	: czss::System<Entities>
+	: czss::Component<Entities>
 { };
 
 struct PhysicsComponents
-	: czss::System<PhysicsComponents>
+	: czss::Component<PhysicsComponents>
 { };
 
 struct AnimationComponents
-	: czss::System<AnimationComponents>
+	: czss::Component<AnimationComponents>
 { };
 
 struct AnimationData
-	: czss::System<AnimationData>
+	: czss::Component<AnimationData>
 { };
 
 struct Input
-	: czss::System<Input>
+	: czss::Component<Input>
 {
 	char pressed_button;
 };
 
 struct RenderComponent
-	: czss::System<RenderComponent>
+	: czss::Component<RenderComponent>
 { };
 
 // Behaviour systems
