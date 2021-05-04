@@ -112,7 +112,7 @@ struct C : czss::Component<C>
 
 /* ... */
 	Controller ctrl = {};
-	C cf(&first); // Accessible to all systems in ctrl
+	C cf(&ctrl); // Accessible to all systems in ctrl
 	C c(czss::defaultController()); // Accessible to all systems in the default controller
 
 ```
