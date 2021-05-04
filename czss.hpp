@@ -28,7 +28,8 @@ struct System : SystemBase
 	static uint64_t sidentity();
 	Controller* ctrl() const override;
 
-protected:
+	friend S;
+private:
 	System();
 	System(Controller* loc);
 
@@ -47,7 +48,9 @@ struct Component : ComponentBase
 {
 	uint64_t identity() const override;
 	static uint64_t sidentity();
-protected:
+
+	friend C;
+private:
 	Component();
 	Component(Controller* loc);
 };
