@@ -6,6 +6,8 @@
 #include <unordered_set>
 #include <typeinfo>
 #include <string>
+#include <vector>
+#include <czsf.h>
 
 namespace czss
 {
@@ -85,6 +87,16 @@ struct Node
 	uint64_t weight = 1;
 };
 
+struct TaskData
+{
+	uint64_t id;
+	uint64_t weight;
+	const SystemBase* system = nullptr;
+	const std::unordered_set<uint64_t>* dependencies;
+	std::unordered_map<uint64_t, czsf::Barrier*>* fences;
+	czsf::Barrier* signal;
+};
+
 // #############
 // Controller
 // #############
@@ -98,12 +110,22 @@ struct Controller
 	void registerWriter(const SystemBase* sys, uint64_t target);
 	void registerDependency(const SystemBase* sys, uint64_t target);
 	void registerSystem(const SystemBase* sys);
+
+	template<typename T>
+	void updateWeight(uint64_t value);
 private:
-	bool changed = false;
 	std::unordered_map<uint64_t, const SystemBase*> systems;
 	std::unordered_map<uint64_t, SystemData> systemsData;
+
 	std::unordered_map<uint64_t, Node> graph;
 	std::unordered_map<uint64_t, std::unordered_map<uint64_t, bool>> implicits;
+
+	std::vector<czsf::Barrier> barriers;
+	std::unordered_map<uint64_t, czsf::Barrier*> barrierMap;
+	std::vector<TaskData> tasks;
+
+	bool changed = false;
+	bool weightsChanged = false;
 
 	void validate();
 	void testAcyclic();
@@ -111,9 +133,12 @@ private:
 	void cullDependencies();
 	void computeWeights();
 
+	void generateTasks();
+
 	bool implicitlyDependsOn(uint64_t sys, uint64_t other);
 	bool directlyDependsOn(uint64_t sys, uint64_t other);
 	bool dependencyExists(uint64_t sys, uint64_t other);
+
 	RegistrationHelper registerPair(const SystemBase* sys, uint64_t target);
 	void reg(uint64_t key);
 };
@@ -186,6 +211,13 @@ Dependency<T>::Dependency()
 	sys->ctrl()->registerDependency(sys, T::sidentity());
 }
 
+template <typename S>
+void Controller::updateWeight(uint64_t value)
+{
+	graph[S::sidentity()].weight = value;
+	weightsChanged = true;
+}
+
 } // namespace czss
 
 #endif // CZSS_HEADERS_H
@@ -195,11 +227,8 @@ Dependency<T>::Dependency()
 #define CZSS_IMPLEMENTATION_GUARD_
 
 #include <deque>
-#include <queue>
 #include <algorithm>
-#include <vector>
 #include <stdexcept>
-#include <czsf.h>
 
 namespace czss
 {
@@ -218,14 +247,6 @@ std::string SystemBase::name() const
 	return "Unnamed System";
 }
 
-struct TaskData
-{
-	uint64_t id;
-	uint64_t weight;
-	const SystemBase* system = nullptr;
-	const std::unordered_set<uint64_t>* dependencies;
-	std::unordered_map<uint64_t, czsf::Barrier>* fences;
-};
 
 struct OrderedNode
 {
@@ -237,11 +258,40 @@ void task(TaskData* data)
 {
 	for (auto dep : *data->dependencies)
 	{
-		data->fences->find(dep)->second.wait();
+		data->fences->find(dep)->second->wait();
 	}
 
 	data->system->run();
-	data->fences->find(data->id)->second.signal();
+	data->fences->find(data->id)->second->signal();
+}
+
+void Controller::generateTasks()
+{
+	barrierMap.clear();
+	barriers.clear();
+	barriers.reserve(systems.size());
+	tasks.clear();
+	tasks.reserve(systems.size());
+
+	uint64_t counter = 0;
+
+	for (auto& pair : systems)
+	{
+		barriers.push_back(czsf::Barrier(1));
+
+		barrierMap.insert({pair.first, &barriers[counter]});
+		auto& node = graph[pair.first];
+		tasks.push_back({
+			pair.first,
+			node.weight,
+			systems[pair.first],
+			&node.dependencies,
+			&barrierMap,
+			&barriers[counter]
+		});
+
+		counter++;
+	}
 }
 
 void Controller::run()
@@ -249,30 +299,24 @@ void Controller::run()
 	if (changed)
 	{
 		validate();
+		generateTasks();
 		changed = false;
 	}
 
-	std::unordered_map<uint64_t, czsf::Barrier> fences;
-	std::vector<TaskData> tasks;
-
-	for (auto& pair : systemsData)
+	if (weightsChanged)
 	{
-		if (systems.find(pair.first) == systems.end()) continue;
-		fences.insert({pair.first, czsf::Barrier(1)});
-		auto& node = graph[pair.first];
-		tasks.push_back({
-			pair.first,
-			node.weight,
-			systems[pair.first],
-			&node.dependencies,
-			&fences
+		sort(tasks.begin(), tasks.end(), [] (const TaskData & a, const TaskData & b) -> bool
+		{
+			return a.weight > b.weight;
 		});
+
+		weightsChanged = false;
 	}
 
-	sort(tasks.begin(), tasks.end(), [] (const TaskData & a, const TaskData & b) -> bool
-	{ 
-		return a.weight > b.weight; 
-	});
+	for (uint64_t i = 0; i < barriers.size(); i++)
+	{
+		barriers[i] = czsf::Barrier(1);
+	}
 
 	czsf::Barrier barrier(tasks.size());
 	czsf::run(task, tasks.data(), tasks.size(), &barrier);
@@ -440,6 +484,8 @@ void Controller::computeWeights()
 		{
 			graph[system].weight += graph[dependee].weight;
 		}
+
+		graph[system].dependees.clear();
 	}
 }
 
@@ -449,6 +495,8 @@ void Controller::validate()
 	testComplete();
 	cullDependencies();
 	computeWeights();
+
+	implicits.clear();
 }
 
 void Controller::registerReader(const SystemBase* sys, uint64_t target)
@@ -475,6 +523,7 @@ void Controller::registerDependency(const SystemBase* sys, uint64_t target)
 RegistrationHelper Controller::registerPair(const SystemBase* sys, uint64_t target)
 {
 	changed = true;
+	weightsChanged = true;
 	RegistrationHelper ret = {};
 	reg(target);
 
