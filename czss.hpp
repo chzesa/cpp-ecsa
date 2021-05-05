@@ -75,8 +75,11 @@ protected:
 	T* get() const;
 };
 
+template <typename T, typename ...U>
+struct Dependency : Dependency<T>, Dependency<U...> { };
+
 template <typename T>
-struct Dependency
+struct Dependency<T>
 {
 protected:
 	Dependency<T>();
