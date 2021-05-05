@@ -65,10 +65,7 @@ struct InputReader
 struct GameLoop
 	: czss::System<GameLoop>
 	, czss::Reader<Input>
-	, czss::Writer<AnimationComponents>
-	, czss::Writer<Entities>
-	, czss::Writer<PhysicsComponents>
-	, czss::Writer<RenderComponent>
+	, czss::Writer<AnimationComponents, Entities, PhysicsComponents, RenderComponent>
 	, czss::Dependency<InputReader>
 {
 	void run() const override
@@ -99,8 +96,7 @@ struct PhysicsUpdate
 
 struct Animator
 	: czss::System<Animator>
-	, czss::Reader<AnimationComponents>
-	, czss::Reader<Entities>
+	, czss::Reader<AnimationComponents, Entities>
 	, czss::Writer<AnimationData>
 	, czss::Dependency<GameLoop>
 {

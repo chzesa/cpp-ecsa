@@ -53,16 +53,22 @@ private:
 	Component(Controller* loc);
 };
 
+template <typename T, typename ...U>
+struct Reader : Reader<T>, Reader<U...> { };
+
 template <typename T>
-struct Reader
+struct Reader<T>
 {
 protected:
 	Reader<T>();
 	const T* get() const;
 };
 
+template <typename T, typename ...U>
+struct Writer : Writer<T>, Writer<U...> { };
+
 template <typename T>
-struct Writer
+struct Writer<T>
 {
 protected:
 	Writer<T>();
