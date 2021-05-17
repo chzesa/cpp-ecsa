@@ -1,273 +1,1775 @@
 #ifndef CZSS_HEADERS_H
 #define CZSS_HEADERS_H
 
-#include <stdint.h>
-#include <unordered_map>
-#include <unordered_set>
-#include <typeinfo>
-#include <string>
+#include <cstdint>
+#include <type_traits>
 #include <vector>
-#include <czsf.h>
+#include <queue>
+#include <unordered_map>
+#include "czsf.h"
 
 namespace czss
 {
-struct Controller;
 
-struct SystemBase
+struct Dummy
 {
-	virtual void run() const;
-	virtual uint64_t identity() const = 0;
-	virtual Controller* ctrl() const;
-	virtual std::string name() const;
+	using Cont = Dummy;
+	template <typename Return, typename Inspector>
+	constexpr static Return evaluate() { return 0; }
+
+	template <typename Inspector>
+	static void evaluate(Inspector* i) { }
 };
 
-template <typename S>
-struct System : SystemBase
+struct Root
 {
-	uint64_t identity() const override;
-	static uint64_t sidentity();
-	Controller* ctrl() const override;
+	template <typename U>
+	constexpr static bool baseContainsType() { return false; }
 
-	friend S;
+	template <typename U>
+	constexpr static bool containsType() { return false; }
+};
+
+template <typename Base, typename Value, typename ...Rest>
+struct Rbox : Rbox <Base, Value>, Rbox<Rbox <Base, Value>, Rest...>
+{
+	using Fwd = Rbox<Rbox <Base, Value>, Rest...>;
+	using Cont = Rbox <Base, Value, Rest...>;
+
+	template <typename Inspector>
+	static void evaluate(Inspector* i)
+	{
+		i->template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>();
+	}
+
+	template <typename Return, typename Inspector>
+	constexpr static Return evaluate()
+	{
+		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>();
+	}
+};
+
+template <typename Base, typename Value>
+struct Rbox <Base, Value>
+{
+	using Cont = Rbox <Base, Value>;
+	template <typename Inspector>
+	static void evaluate(Inspector* i)
+	{
+		i->template inspect<Base, Cont, Value, typename Value::Cont, Dummy>();
+	}
+
+	template <typename Return, typename Inspector>
+	constexpr static Return evaluate()
+	{
+		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>();
+	}
+};
+
+template <typename ...T>
+struct Container : Rbox<Root, T...> { };
+
+template <>
+struct Container<> : Dummy { };
+
+template <typename T>
+constexpr T min(T a, T b)
+{
+	return a < b ? a : b;
+}
+
+template <typename T>
+constexpr T max(T a, T b)
+{
+	return a > b ? a : b;
+}
+
+namespace inspect
+{
+
+template <typename Ret, typename Cont, typename Inspector>
+constexpr Ret cInspect()
+{
+	return Cont::template evaluate<Ret, Inspector>();
+}
+
+template <typename T>
+struct TypeCounter
+{
+	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	constexpr static uint64_t inspect()
+	{
+		return (std::is_same<T, Value>() ? 1 : 0)
+			+ Inner::template evaluate <uint64_t, TypeCounter<T>>()
+			+ Next::template evaluate <uint64_t, TypeCounter<T>>();
+	}
+};
+
+template <typename T>
+struct DerivativeCounter
+{
+	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	constexpr static uint64_t inspect()
+	{
+		return (std::is_base_of<T, Value>() ? 1 : 0)
+			+ Inner::template evaluate <uint64_t, DerivativeCounter<T>>()
+			+ Next::template evaluate <uint64_t, DerivativeCounter<T>>();
+	}
+};
+
+template <typename Cont, typename T>
+constexpr uint64_t numInstances()
+{
+	return cInspect<uint64_t, Cont, TypeCounter<T>>();
+}
+
+template <typename Cont>
+struct NumContained
+{
+	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	constexpr static uint64_t inspect()
+	{
+		return (numInstances<Cont, Value>() > 0 ? 1 : 0)
+			+ Next::template evaluate<uint64_t, NumContained<Cont>>();
+	}
+};
+
+template <typename Cont, typename ...T>
+constexpr bool containsAll()
+{
+	return Container<T...>::template evaluate<uint64_t, NumContained<Cont>>()
+		== sizeof...(T);
+}
+
+template <typename Cont, typename ...T>
+constexpr bool contains()
+{
+	return Container<T...>::template evaluate<uint64_t, NumContained<Cont>>() > 0;
+}
+
+template <typename Cont, typename T, typename Cat>
+constexpr uint64_t indexOf();
+
+template <typename A, typename B>
+constexpr bool branch()
+{
+	return !std::is_same<A, Dummy>() && !std::is_same<B, Dummy>();
+}
+
+template <typename Cont>
+struct ContentsChecker
+{
+	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	constexpr static uint64_t inspect()
+	{
+		return contains<Cont, Value>()
+			&& ( std::is_same<Next, Dummy>() ? true : Next::template evaluate <bool, ContentsChecker<Cont>>() )
+			&& ( std::is_same<Inner, Dummy>() ? true : Inner::template evaluate <bool, ContentsChecker<Cont>>() );
+	}
+};
+
+template<typename Left, typename Right>
+constexpr bool containsAllIn()
+{
+	return Right::template evaluate<bool, ContentsChecker<Left>>();
+}
+
+/*
+	Algorithm to uniquely number each type within a container.
+	Every time an item has both Next (in the "array"), and 
+	is itself a container and therefore can be recursed inside,
+	the path through the container splits.
+	On such a split, the Next type is folded into the current
+	root of the node and this becomes the new root of the Inner
+	branch.
+	This way the recursion in the Inner branch can test whether
+	the other branch already has an item. If the item exists in
+	the other branch, or if it exists further in the same
+	branch, it has already been counted and the counter is not
+	incremented.
+*/
+
+template <typename Root, typename T, typename Cat>
+struct IndexFinder
+{
+	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	constexpr static uint64_t inspect()
+	{
+		return (	branch<Inner, Next>()
+					? Inner::template evaluate <uint64_t, IndexFinder<Container<Root, Next>, T, Cat>>()
+					: Inner::template evaluate <uint64_t, IndexFinder<Root, T, Cat>>()
+			)
+			+ Next::template evaluate <uint64_t, IndexFinder<Root, T, Cat>>()
+			+ (
+				std::is_base_of<Cat, Value>()
+					? ( ( std::is_same<T, Value>() || contains<Next, Value, T>() || contains<Inner, Value, T>() || contains<Root, Value, T>() )
+						? 0 : 1
+					) : 0
+			);
+	}
+};
+
+template <typename Cont, typename Cat>
+struct UniquesCounter
+{
+	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	constexpr static uint64_t inspect()
+	{
+		return 	max(( std::is_base_of<Cat, Value>() ? indexOf<Cont, Value, Cat>() : 0 ),
+				max(Inner::template evaluate <uint64_t, UniquesCounter<Cont, Cat>>(),
+					Next::template evaluate <uint64_t, UniquesCounter<Cont, Cat>>() ));
+	}
+};
+
+template <typename Cont, typename Cat>
+constexpr uint64_t numUniques()
+{
+	return cInspect<uint64_t, Cont, UniquesCounter<Cont, Cat>>() +
+		(cInspect<uint64_t, Cont, DerivativeCounter<Cat>>() > 0 ? 1 : 0 );
+};
+
+template <typename Cont, typename T, typename Cat>
+constexpr uint64_t indexOf()
+{
+	return cInspect<uint64_t, Cont, IndexFinder<Dummy, T, Cat>>();
+}
+
+} // namespace inspect
+
+// #####################
+// Tags & Validation
+// #####################
+
+
+struct DisableConstructor {};
+struct DisableDestructor {};
+struct ThreadSafe {};
+
+struct ComponentBase {};
+struct IteratorBase {};
+struct EntityBase {};
+struct SystemBase {};
+struct ResourceBase {};
+struct PermissionsBase {};
+
+template <typename T>
+constexpr bool isValidType();
+
+template<typename B, typename T>
+constexpr bool isBaseType();
+
+template<typename T>
+constexpr bool isThreadSafe();
+
+template<typename T>
+constexpr bool isComponent();
+
+template<typename T>
+constexpr bool isIterator();
+
+template<typename T>
+constexpr bool isEntity();
+
+template<typename T>
+constexpr bool isSystem();
+
+template<typename T>
+constexpr bool isResource();
+
+template<typename T>
+constexpr bool isPermission();
+
+// #####################
+// Data Container
+// #####################
+
+struct Guid
+{
+	Guid(uint64_t id)
+	{
+		this->id = id;
+	}
+	uint64_t get() { return id; }
 private:
-	System();
-	System(Controller* loc);
-	Controller* contoller;
+	uint64_t id;
 };
 
-struct ComponentBase
+template <typename T>
+struct Padding
 {
-	virtual uint64_t identity() const = 0;
-	virtual std::string name() const;
+	Padding() { if (!std::is_base_of<DisableConstructor, T>()) *into() = T(); }
+	~Padding() { if (!std::is_base_of<DisableDestructor, T>()) into()->~T(); }
+	T* into() { return reinterpret_cast<T*>(d); }
+private:
+	char d[max(sizeof(T), uint64_t(1))];
 };
+
+template <typename T>
+struct SparseVec
+{
+	bool init = false;
+	std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> indices;
+
+	SparseVec();
+	uint64_t create();
+	void destroy(uint64_t i);
+
+	T* get(uint64_t id);
+	uint64_t size();
+
+	T* first();
+
+	std::vector<Padding<T>> items;
+private:
+	void expand(uint64_t by);
+};
+
+template <typename E>
+struct EntityStore
+{
+	bool init = false;
+	std::unordered_map<uint64_t, Padding<E>> map;
+	uint64_t key;
+	uint64_t nextId;
+
+	E* get(uint64_t id);
+
+	E* create(uint64_t& id);
+};
+
+// #####################
+// stubs for templates
+// #####################
+
+struct TemplateStubs
+{
+	template <typename T>
+	constexpr static bool isCompatible() { return false; }
+
+	template <typename T>
+	void setComponent(T* p) {}
+
+	template <typename T>
+	T* getComponent() { return nullptr; }
+
+	void setGuid(Guid guid);
+};
+
+// #####################
+// Primitives
+// #####################
 
 template <typename C>
-struct Component : ComponentBase
+struct Component : Dummy, ComponentBase, TemplateStubs
 {
-	uint64_t identity() const override;
-	static uint64_t sidentity();
+	using Cont = Dummy;
 
 	friend C;
 private:
-	Component();
-	Component(Controller* loc);
+	Component() {};
 };
 
-template <typename T, typename ...U>
-struct Reader : Reader<T>, Reader<U...> { };
-
-template <typename T>
-struct Reader<T>
+template<typename R>
+struct Resource : Dummy, ResourceBase, TemplateStubs
 {
-protected:
-	Reader<T>();
-	const T* get() const;
-};
+	using Cont = Dummy;
 
-template <typename T, typename ...U>
-struct Writer : Writer<T>, Writer<U...> { };
-
-template <typename T>
-struct Writer<T>
-{
-protected:
-	Writer<T>();
-	T* get() const;
-};
-
-template <typename T, typename ...U>
-struct Dependency : Dependency<T>, Dependency<U...> { };
-
-template <typename T>
-struct Dependency<T>
-{
-protected:
-	Dependency<T>();
-};
-
-// #############
-// Controller helper structs
-// #############
-
-struct SystemData
-{
-	std::unordered_set<uint64_t> readsFrom;
-	std::unordered_set<uint64_t> writesTo;
-	std::unordered_set<uint64_t> dependencies;
-	std::unordered_set<uint64_t> dependees;
-};
-
-struct ComponentData
-{
-	std::unordered_set<uint64_t> readers;
-	std::unordered_set<uint64_t> writers;
-};
-
-struct Node
-{
-	std::unordered_set<uint64_t> dependencies;
-	std::unordered_set<uint64_t> dependees;
-	uint64_t weight = 1;
-};
-
-struct TaskData
-{
-	uint64_t id;
-	uint64_t weight;
-	const SystemBase* system = nullptr;
-	const std::unordered_set<uint64_t>* dependencies;
-	std::unordered_map<uint64_t, czsf::Barrier*>* fences;
-	czsf::Barrier* signal;
-};
-
-// #############
-// Controller
-// #############
-
-struct Controller
-{
-	void run();
-	ComponentBase* get(uint64_t identifier);
-
-	template<typename T>
-	void updateWeight(uint64_t value);
-
-	void registerReader(const SystemBase* sys, uint64_t target);
-	void registerWriter(const SystemBase* sys, uint64_t target);
-	void registerDependency(const SystemBase* sys, uint64_t target);
-	void registerSystem(const SystemBase* system);
-	void registerComponent(ComponentBase* component);
+	friend R;
 private:
-	std::unordered_map<uint64_t, ComponentBase*> components;
-	std::unordered_map<uint64_t, ComponentData> componentsData;
-
-	std::unordered_map<uint64_t, const SystemBase*> systems;
-	std::unordered_map<uint64_t, SystemData> systemsData;
-
-	std::unordered_map<uint64_t, Node> graph;
-	std::unordered_map<uint64_t, std::unordered_map<uint64_t, bool>> implicits;
-
-	std::vector<czsf::Barrier> barriers;
-	std::unordered_map<uint64_t, czsf::Barrier*> barrierMap;
-	std::vector<TaskData> tasks;
-
-	bool changed = false;
-	bool weightsChanged = false;
-
-	void validate();
-	void testAcyclic();
-	void testComplete();
-	void cullDependencies();
-	void computeWeights();
-
-	void generateTasks();
-	void prioritize();
-
-	bool implicitlyDependsOn(uint64_t sys, uint64_t other);
-	bool directlyDependsOn(uint64_t sys, uint64_t other);
-	bool dependencyExists(uint64_t sys, uint64_t other);
+	Resource() {};
 };
 
-Controller* defaultController();
+// #####################
+// Component collection types
+// #####################
 
-// #############
-// Template implementations
-// #############
-
-template <typename S>
-System<S>::System(Controller* ctrl)
+template <typename ...Components>
+struct ComponentContainer : Container<Components...>
 {
-	static_assert(!std::is_base_of<ComponentBase, S>::value, "[czss] A System cannot also be a Component");
-	contoller = ctrl;
-	contoller->registerSystem(this);
-}
+	void* components[max(inspect::numUniques<Container<Components...>, ComponentBase>(), uint64_t(1))];
 
-template <typename S>
-System<S>::System() : System(defaultController()) {}
+	template <typename Component>
+	constexpr static bool containsComponent();
 
-template <typename S>
-Controller* System<S>::ctrl () const
+	template <typename Component>
+	constexpr static uint64_t componentIndex();
+
+	template <typename Component>
+	Component* getComponent();
+
+	template <typename Component>
+	void setComponent(Component* p);
+};
+
+template <typename ...Components>
+struct Iterator : ComponentContainer<Components...>, IteratorBase
 {
-	return contoller;
-}
+	using Cont = Container<Components...>;
 
-template <typename S>
-uint64_t System<S>::identity() const
+	template <typename Entity>
+	constexpr static bool isCompatible();
+};
+
+template <typename ...Components>
+struct Entity : ComponentContainer<Components...>, EntityBase
 {
-	return (uint64_t)&typeid(S);
-}
+	using Cont = Container<Components...>;
 
-template <typename S>
-uint64_t System<S>::sidentity()
+	template <typename Iterator>
+	constexpr static bool isCompatible();
+	uint64_t id;
+
+	void setGuid(Guid guid) { this->id = guid.get(); }
+};
+
+// #####################
+// Permissions
+// #####################
+
+template <typename ...T>
+struct Reader : Container<T...>, TemplateStubs
 {
-	return (uint64_t)&typeid(S);
-}
+	using Cont = Container<T...>;
 
-template <typename C>
-uint64_t Component<C>::identity() const
+	template <typename U>
+	constexpr static bool canRead();
+
+	template <typename U>
+	constexpr static bool canWrite();
+
+	template <typename Entity>
+	constexpr static bool canOrchestrate();
+};
+
+template <typename ...T>
+struct Writer : Container<T...>, TemplateStubs
 {
-	return (uint64_t)&typeid(C);
-}
+	using Cont = Container<T...>;
 
-template <typename C>
-uint64_t Component<C>::sidentity()
+	template <typename U>
+	constexpr static bool canWrite();
+
+	template <typename U>
+	constexpr static bool canRead();
+
+	template <typename Entity>
+	constexpr static bool canOrchestrate();
+};
+
+template <typename ...Entities>
+struct Orchestrator : Container<Entities...>, TemplateStubs
 {
-	return (uint64_t)&typeid(C);
-}
+	using Cont = Container<Entities...>;
 
-template <typename C>
-Component<C>::Component(Controller* ctrl)
+	template <typename U>
+	constexpr static bool canRead();
+
+	template <typename U>
+	constexpr static bool canWrite();
+
+	template <typename Entity>
+	constexpr static bool canOrchestrate();
+};
+
+// #####################
+// Graphs
+// #####################
+
+template <typename ...N>
+struct Dependency : Container<N...>
 {
-	static_assert(!std::is_base_of<SystemBase, C>::value, "[czss] A Component cannot also be a System");
-	ctrl->registerComponent(this);
-}
+	using Cont = Container<N...>;
 
-template <typename C>
-Component<C>::Component() : Component(defaultController()) {}
+	template <typename Node>
+	constexpr static bool transitivelyDependsOn();
+
+	template <typename Node>
+	constexpr static bool directlyDependsOn();
+
+	template <typename Node>
+	constexpr static bool dependsOn();
+
+private:
+	template <typename Node>
+	struct TransitiveDependencyInspector
+	{
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		constexpr static bool inspect();
+	};
+};
+
+template <>
+struct Dependency<> : Container<>
+{
+	template <typename Node>
+	constexpr static bool transitivelyDependsOn() { return false; }
+
+	template <typename Node>
+	constexpr static bool directlyDependsOn() { return false; }
+
+	template <typename Node>
+	constexpr static bool dependsOn() { return false; }
+};
+
+// #####################
+// System
+// #####################
+
+template <typename Dependencies, typename ...Permissions>
+struct System : Container<Permissions...>, SystemBase, TemplateStubs
+{
+	using This = System<Dependencies, Permissions...>;
+	using Cont = Container<Permissions...>;
+	using Dep = Dependencies;
+
+	template <typename Other>
+	constexpr static bool exclusiveWith();
+
+	template <typename Other>
+	constexpr static bool dependsOn();
+
+	template <typename T>
+	constexpr static bool canRead();
+
+	template <typename T>
+	constexpr static bool canWrite();
+
+	template <typename Entity>
+	constexpr static bool canOrchestrate();
+
+private:
+	template <typename Sys>
+	struct SysExclCheck
+	{
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		constexpr static bool inspect();
+	};
+
+	template <typename T>
+	struct ReadCheck
+	{
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		constexpr static bool inspect();
+	};
+
+	template <typename T>
+	struct WriteCheck
+	{
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		constexpr static bool inspect();
+	};
+
+	template <typename E>
+	struct OrchestrateCheck
+	{
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		constexpr static bool inspect();
+		
+	};
+};
+
+// #####################
+// Architectures
+// #####################
+
+struct VirtualArchitecture
+{
+	virtual void systemCallback(uint64_t id, czsf::Barrier* barriers) = 0;
+};
+
+struct RunTaskData
+{
+	VirtualArchitecture* arch;
+	czsf::Barrier* barriers;
+	uint64_t id;
+};
+
+void runSysCallback(RunTaskData* d);
+
+template <typename ...Systems>
+struct Architecture : VirtualArchitecture
+{
+	using Cont = Container<Systems...>;
+	using This = Architecture<Systems...>;
+
+	Architecture();
+
+	static constexpr uint64_t numSystems() { return inspect::numUniques<Cont, SystemBase>(); }
+
+	template <typename Resource>
+	void setResource(Resource* res);
+
+	template <typename Resource>
+	Resource* getResource();
+
+	template <typename Component>
+	SparseVec<Component>* getComponents();
+
+	template <typename Entity>
+	EntityStore<Entity>* getEntities();
+
+	template <typename Entity>
+	Entity* createEntity();
+
+	template <typename Entity>
+	void destroyEntity(uint64_t id);
+
+	void destroyEntity(Guid guid);
+
+	void run();
+
+	void systemCallback(uint64_t id, czsf::Barrier* barriers) override;
+
+	static const uint64_t typeKeyLength();
+	uint64_t typeKey(Guid guid);
+
+	~Architecture();
+
+private:
+	template <typename Component>
+	Component* createComponent();
+
+	void* resources[max(inspect::numUniques<Cont, ResourceBase>(), uint64_t(1))] = {0};
+	char components[max(inspect::numUniques<Cont, ComponentBase>(), uint64_t(1)) * sizeof(SparseVec<char>)] = {0};
+	char entities[max(inspect::numUniques<Cont, EntityBase>(), uint64_t(1)) * sizeof(EntityStore<uint64_t>)] = {0};
+
+	struct SystemRunner
+	{
+		uint64_t id;
+		czsf::Barrier* barriers;
+		This* arch;
+
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		void inspect();
+	};
+
+	template <typename Sys>
+	struct SystemBlocker
+	{
+		czsf::Barrier* barriers;
+
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		void inspect();
+	};
+
+	template <typename E>
+	struct ComponentCreator
+	{
+		This* arch;
+		E* entity;
+
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		void inspect();
+	};
+
+	template <typename E>
+	struct EntityDestructor
+	{
+		This* arch;
+		E* entity;
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		void inspect();
+	};
+
+	template<typename Component>
+	struct ComponentPointerFixup
+	{
+		This* arch;
+		Component* first;
+		Component* second;
+		bool* checks;
+
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		void inspect();
+	};
+
+	struct Constructor
+	{
+		This* arch;
+
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		void inspect();
+	};
+
+	struct Destructor
+	{
+		This* arch;
+
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		void inspect();
+	};
+
+	struct SystemsCompleteCheck
+	{
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		static constexpr bool inspect();
+	};
+
+	struct SystemDependencyIterator
+	{
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		static constexpr bool inspect();
+	};
+
+	template<typename Sys>
+	struct SystemsCompare
+	{
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		static constexpr bool inspect();
+	};
+
+	struct SystemDependencyMissingOuter
+	{
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		static constexpr bool inspect();
+	};
+
+};
+
+// #####################
+// Accessors
+// #####################
+
+template <typename Iter, typename Arch, typename Sys>
+struct IteratorAccessor;
+
+template <typename Iter, typename Arch, typename Sys>
+struct IterableStub;
+
+template <typename Iter, typename Arch, typename Sys>
+struct IteratorIterator;
+
+template<typename Arch, typename Sys>
+struct Accessor;
+
+template <typename Iter, typename Arch, typename Sys>
+struct IteratorAccessor
+{
+	IteratorAccessor(const IteratorAccessor<Iter, Arch, Sys>& other);
+
+	template<typename Component>
+	const Component* view();
+
+	template<typename Component>
+	Component* get();
+
+private:
+	friend IteratorIterator<Iter, Arch, Sys>;
+
+	IteratorAccessor();
+
+	template <typename Entity>
+	IteratorAccessor(Entity* ent);
+
+	Iter iter;
+
+	template<typename Entity>
+	struct Constructor
+	{
+		Iter* iter;
+		Entity* ent;
+
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		void inspect();
+	};
+};
+
+template <typename Iter, typename Arch, typename Sys>
+struct IteratorIterator
+{
+	using This = IteratorIterator<Iter, Arch, Sys>;
+	using U = IteratorAccessor<Iter, Arch, Sys>;
+
+	typedef uint64_t difference_type;
+	typedef U value_type;
+	typedef U& reference;
+	typedef U* pointer;
+	typedef std::forward_iterator_tag iterator_category;
+
+	IteratorIterator()
+	{
+		arch = nullptr;
+		iterator = {};
+	}
+
+	IteratorIterator(const IteratorIterator& other)
+	{
+		arch = other.arch;
+		typeKey = other.typeKey;
+		iterator = other.iterator;
+		hasValue = other.hasValue;
+		inner = other.inner;
+	}
+
+	U& operator* ()
+	{
+		return inner;
+	}
+
+	U* operator-> ()
+	{
+		return inner;
+	}
+
+	friend bool operator== (const This& a, const This& b)
+	{
+		return a.iterator == b.iterator;
+	}
+
+	friend bool operator!= (const This& a, const This& b)
+	{
+		return a.iterator != b.iterator;
+	};
+
+	This operator++(int)
+	{
+		This ret = *this;
+		++(*this);
+		return ret;
+	}
+	
+	This& operator++()
+	{
+		Incrementer inc = {this};
+
+		Arch::Cont::template evaluate(&inc);
+		while(!hasValue && typeKey < inspect::numUniques<typename Arch::Cont, EntityBase>())
+		{
+			typeKey++;
+			Arch::Cont::template evaluate(&inc);
+		}
+
+		return *this;
+	}
+
+private:
+	friend IterableStub<Iter, Arch, Sys>;
+
+	IteratorIterator(Arch* arch)
+	{
+		this->arch = arch;
+		typeKey = 0;
+		hasValue = false;
+		++(*this);
+	}
+
+	Arch* arch;
+	uint64_t typeKey;
+	typename std::unordered_map<uint64_t, Padding<uint64_t>>::iterator iterator;
+	bool hasValue;
+	U inner;
+
+	struct Incrementer
+	{
+		This* iterac;
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		void inspect();
+	};
+};
+
+template <typename Iter, typename Arch, typename Sys>
+struct IterableStub
+{
+	IteratorIterator<Iter, Arch, Sys> begin()
+	{
+		return IteratorIterator<Iter, Arch, Sys>(arch);
+	}
+
+	IteratorIterator<Iter, Arch, Sys> end()
+	{
+		return IteratorIterator<Iter, Arch, Sys>();
+	}
+
+private:
+	IterableStub(Arch* arch)
+	{
+		this ->arch = arch;
+	}
+	friend Accessor<Arch, Sys>;
+	Arch* arch;
+};
+
+template<typename Arch, typename Sys>
+struct Accessor
+{
+	template <typename Entity>
+	Entity* createEntity()
+	{
+		static_assert(Sys::template canOrchestrate<Entity>(), "System lacks permission to create the Entity.");
+		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
+		return arch->template createEntity<Entity>();
+	}
+
+	template <typename Entity>
+	void destroyEntity(uint64_t id)
+	{
+		static_assert(Sys::template canOrchestrate<Entity>(), "System lacks permission to destroy the Entity.");
+		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
+		arch-> template destroyEntity(id);
+	}
+
+	template <typename Entity>
+	void destroyEntity(Guid guid)
+	{
+		static_assert(Sys::template canOrchestrate<Entity>(), "System lacks permission to create the Entity.");
+		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
+		arch->template destroyEntity(guid);
+	}
+
+	template <typename Resource>
+	const Resource* viewResource()
+	{
+		static_assert(Sys::template canRead<Resource>(), "System lacks permission to read Resource.");
+		static_assert(inspect::contains<typename Arch::Cont, Resource>(), "Architecture doesn't contain the Resource.");
+		return arch->template getResource<Resource>();
+	}
+
+	template <typename Resource>
+	Resource* getResource()
+	{
+		static_assert(Sys::template canWrite<Resource>(), "System lacks permission to modify Resource.");
+		static_assert(inspect::contains<typename Arch::Cont, Resource>(), "Architecture doesn't contain the Resource.");
+		return arch->template getResource<Resource>();
+	}
+
+	template <typename Iterator>
+	IterableStub<Iterator, Arch, Sys> iterate()
+	{
+		static_assert(inspect::containsAllIn<Sys, Iterator>(), "System doesn't have access to all components of Iterator.");
+		static_assert(inspect::contains<typename Arch::Cont, Iterator>(), "Architecture doesn't contain the Iterator.");
+		return IterableStub<Iterator, Arch, Sys>(arch);
+	}
+
+private:
+	friend Arch;
+	Accessor(Arch* arch) { this->arch = arch; }
+	Arch* arch;
+};
+
+
+// #####################################################################
+// Implementation
+// #####################################################################
+
+// #####################
+// Type Validation
+// #####################
 
 template <typename T>
-Reader<T>::Reader()
+constexpr bool isValidType()
 {
-	static_assert(std::is_base_of<ComponentBase, T>::value, "[czss] Reader<T>: T must be a Component<U>");
-	const SystemBase* sys = reinterpret_cast<const SystemBase*>(this);
-	sys->ctrl()->registerReader(sys, T::sidentity());
+	return (1
+		<< std::is_base_of<ComponentBase, T>()
+		<< std::is_base_of<IteratorBase, T>()
+		<< std::is_base_of<EntityBase, T>()
+		<< std::is_base_of<SystemBase, T>()
+		<< std::is_base_of<ResourceBase, T>()
+		<< std::is_base_of<PermissionsBase, T>()
+	) == 2;
+}
+
+template<typename B, typename T>
+constexpr bool isBaseType()
+{
+	return isValidType<T>() && std::is_base_of<B, T>();
+}
+
+template<typename T>
+constexpr bool isThreadSafe()
+{
+	return isBaseType<ResourceBase, T>() && std::is_base_of<ThreadSafe, T>();
+}
+
+template<typename T>
+constexpr bool isComponent()
+{
+	return isBaseType<ComponentBase, T>();
+}
+
+template<typename T>
+constexpr bool isIterator()
+{
+	return isBaseType<IteratorBase, T>();
+}
+
+template<typename T>
+constexpr bool isEntity()
+{
+	return isBaseType<EntityBase, T>();
+}
+
+template<typename T>
+constexpr bool isSystem()
+{
+	return isBaseType<SystemBase, T>();
+}
+
+template<typename T>
+constexpr bool isResource()
+{
+	return isBaseType<ResourceBase, T>();
+}
+
+template<typename T>
+constexpr bool isPermission()
+{
+	return isBaseType<PermissionsBase, T>();
+}
+
+// #####################
+// Linked Vector
+// #####################
+template <typename T>
+SparseVec<T>::SparseVec()
+{
+	expand(64);
 }
 
 template <typename T>
-const T* Reader<T>::get() const
+uint64_t SparseVec<T>::create()
 {
-	const SystemBase* sys = reinterpret_cast<const SystemBase*>(this);
-	return reinterpret_cast<const T*>(sys->ctrl()->get(T::sidentity()));
+	if (indices.empty())
+		expand(items.size());
+
+	uint64_t i = indices.top();
+	indices.pop();
+
+	return i;
 }
 
 template <typename T>
-Writer<T>::Writer()
+T* SparseVec<T>::get(uint64_t i)
 {
-	static_assert(std::is_base_of<ComponentBase, T>::value, "[czss] Writer<T>: T must be a Component<U>");
-	const SystemBase* sys = reinterpret_cast<const SystemBase*>(this);
-	sys->ctrl()->registerWriter(sys, T::sidentity());
+	if (i >= items.size())
+		return nullptr;
+
+	return items[i].into();
 }
 
 template <typename T>
-T* Writer<T>::get() const
+T* SparseVec<T>::first()
 {
-	const SystemBase* sys = reinterpret_cast<const SystemBase*>(this);
-	return reinterpret_cast<T*>(sys->ctrl()->get(T::sidentity()));
+	return items[0].into();
 }
 
 template <typename T>
-Dependency<T>::Dependency()
+void SparseVec<T>::destroy(uint64_t i)
 {
-	static_assert(std::is_base_of<SystemBase, T>::value, "[czss] Dependency<T>: T must be a System<U>");
-	const SystemBase* sys = reinterpret_cast<const SystemBase*>(this);
-	sys->ctrl()->registerDependency(sys, T::sidentity());
+	if (i >= items.size())
+		return;
+
+	indices.push(i);
 }
 
-template <typename S>
-void Controller::updateWeight(uint64_t value)
+template <typename T>
+void SparseVec<T>::expand(uint64_t by)
 {
-	graph[S::sidentity()].weight = value;
-	weightsChanged = true;
+	uint64_t a = items.size();
+	items.resize(a + by);
+	for (int i = a + by - 1; i > a; i--)
+		indices.push(i);
+
+	indices.push(a);
+}
+
+template <typename T>
+uint64_t SparseVec<T>::size()
+{
+	return items.size() - indices.size();
+}
+
+
+template <typename E>
+E* EntityStore<E>::get(uint64_t id)
+{
+	if (map.find(id) == map.end())
+		return nullptr;
+
+	return map[id].into();
+}
+
+template <typename E>
+E* EntityStore<E>::create(uint64_t& id)
+{
+	id = key + (nextId++);
+	map.insert({id, {}});
+	return map[id].into();
+}
+
+// #####################
+// ComponentContainer
+// #####################
+template <typename ...Components>
+template <typename Component>
+constexpr bool ComponentContainer<Components...>::containsComponent()
+{
+	// assert(isComponent<Component>());
+	return inspect::contains <ComponentContainer<Components...>, Component>();
+}
+
+template <typename ...Components>
+template <typename Component>
+constexpr uint64_t ComponentContainer<Components...>::componentIndex()
+{
+	// assert(containsComponent<Component>());
+	return inspect::indexOf<ComponentContainer<Components...>, Component, ComponentBase>();
+}
+
+template <typename ...Components>
+template <typename Component>
+Component* ComponentContainer<Components...>::getComponent()
+{
+	// assert(containsComponent<Component>());
+	if (!containsComponent<Component>())
+	{
+		return nullptr;
+	}
+	return reinterpret_cast<Component*>(components[componentIndex<Component>()]);
+}
+
+template <typename ...Components>
+template <typename Component>
+void ComponentContainer<Components...>::setComponent(Component* p)
+{
+	if (containsComponent<Component>())
+	{
+		components[componentIndex<Component>()] = p;
+	}
+}
+
+// #####################
+// Iterator
+// #####################
+
+template <typename ...Components>
+template <typename Entity>
+constexpr bool Iterator<Components...>::isCompatible()
+{
+	// assert(isEntity<Entity>());
+	return inspect::containsAll<Entity, Components...>();
+};
+
+// #####################
+// Entity
+// #####################
+
+template <typename ...Components>
+template <typename Iterator>
+constexpr bool Entity<Components...>::isCompatible()
+{
+	// assert(isIterator<Iterator>());
+	return Iterator::template isCompatible <Entity<Components...>>();
+}
+
+// #####################
+// Permission Objects
+// #####################
+
+// Reader
+
+template <typename ...T> 
+template <typename U>
+constexpr bool Reader<T...>::canRead()
+{
+	return inspect::contains<Reader<T...>, U>();
+}
+
+template <typename ...T> 
+template <typename U>
+constexpr bool Reader<T...>::canWrite()
+{
+	return false;
+}
+
+template <typename ...T> 
+template <typename Entity>
+constexpr bool Reader<T...>::canOrchestrate()
+{
+	return false;
+}
+
+// Writer
+
+template <typename ...T> 
+template <typename U>
+constexpr bool Writer<T...>::canRead()
+{
+	return canWrite<U>();
+}
+
+template <typename ...T> 
+template <typename U>
+constexpr bool Writer<T...>::canWrite()
+{
+	return inspect::contains<Writer<T...>, U>();
+}
+
+template <typename ...T> 
+template <typename Entity>
+constexpr bool Writer<T...>::canOrchestrate()
+{
+	return false;
+}
+
+// Orhcestrator
+
+template <typename ...Entities> 
+template <typename U>
+constexpr bool Orchestrator<Entities...>::canRead()
+{
+	return canWrite<U>();
+}
+
+template <typename ...Entities> 
+template <typename U>
+constexpr bool Orchestrator<Entities...>::canWrite()
+{
+	return inspect::contains<Orchestrator<Entities...>, U>();
+}
+
+template <typename ...Entities>
+template <typename Entity>
+constexpr bool Orchestrator<Entities...>::canOrchestrate()
+{
+	return inspect::contains<Orchestrator<Entities...>, Entity>();
+}
+
+// #####################
+// Graph
+// #####################
+
+template<typename ...N>
+template <typename Node>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+constexpr bool Dependency<N...>::TransitiveDependencyInspector<Node>::inspect()
+{
+	return Value::template dependsOn<Node>()
+		|| Next::template evaluate<bool, TransitiveDependencyInspector<Node>>();
+}
+
+template <typename ...N>
+template <typename Node>
+constexpr bool Dependency<N...>::transitivelyDependsOn()
+{
+	return inspect::cInspect<bool, Dependency<N...>, TransitiveDependencyInspector<Node>>();
+}
+
+template <typename ...N>
+template <typename Node>
+constexpr bool Dependency<N...>::directlyDependsOn()
+{
+	return inspect::contains<Dependency<N...>, Node>();
+}
+
+template <typename ...N>
+template <typename Node>
+constexpr bool Dependency<N...>::dependsOn()
+{
+	return directlyDependsOn<Node>() || transitivelyDependsOn<Node>();
+}
+
+// #####################
+// System
+// #####################
+
+template <typename Dependencies, typename ...Permissions>
+template <typename Sys>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+constexpr bool System<Dependencies, Permissions...>::SysExclCheck<Sys>::inspect()
+{
+	// return (isComponent<Value>() && Sys::template canWrite<Value>())
+	return (!isResource<Value>() && Sys::template canWrite<Value>())
+		|| (isResource<Value>() && !isThreadSafe<Value>() && Sys::template canWrite<Value>())
+		|| Next::template evaluate<bool, SysExclCheck<Sys>>()
+		|| Inner::template evaluate<bool, SysExclCheck<Sys>>();
+}
+
+template <typename Dependencies, typename ...Permissions>
+template <typename Other>
+constexpr bool System<Dependencies, Permissions...>::exclusiveWith()
+{
+	return Cont::template evaluate<bool, SysExclCheck<Other>>()
+		|| Other::Cont::template evaluate<bool, SysExclCheck<This>>() ;
+}
+
+template <typename Dependencies, typename ...Permissions>
+template <typename Other>
+constexpr bool System<Dependencies, Permissions...>::dependsOn()
+{
+	return Dependencies::template dependsOn<Other>();
+}
+
+template <typename Dependencies, typename ...Permissions>
+template <typename T>
+constexpr bool System<Dependencies, Permissions...>::canRead()
+{
+	return Container<Permissions... >::template evaluate<bool, ReadCheck<T>>();
+}
+
+template <typename Dependencies, typename ...Permissions>
+template <typename T>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+constexpr bool System<Dependencies, Permissions...>::ReadCheck<T>::inspect()
+{
+	return Value::template canRead<T>() || Next::template evaluate<bool, ReadCheck<T>>();
+}
+
+template <typename Dependencies, typename ...Permissions>
+template <typename T>
+constexpr bool System<Dependencies, Permissions...>::canWrite()
+{
+	return Container<Permissions...>::template evaluate <bool, WriteCheck<T>>();
+}
+
+template <typename Dependencies, typename ...Permissions>
+template <typename T>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+constexpr bool System<Dependencies, Permissions...>::WriteCheck<T>::inspect()
+{
+	return Value::template canWrite<T>() || Next::template evaluate<bool, WriteCheck<T>>();
+}
+
+template <typename Dependencies, typename ...Permissions>
+template <typename Entity>
+constexpr bool System<Dependencies, Permissions...>::canOrchestrate()
+{
+	return Container<Permissions...>::template evaluate<bool, OrchestrateCheck<Entity>>();
+}
+
+template <typename Dependencies, typename ...Permissions>
+template <typename E>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+constexpr bool System<Dependencies, Permissions...>::OrchestrateCheck<E>::inspect()
+{
+	return Value::template canOrchestrate<E>() || Next::template evaluate<bool, OrchestrateCheck<E>>();
+}
+
+// #####################
+// Architecture Validation
+// #####################
+
+template<typename ...Systems>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+constexpr bool Architecture<Systems...>::SystemsCompleteCheck::inspect()
+{
+	return isSystem<Value>() && !inspect::contains<Cont, Value>()
+		|| Next::template evaluate<bool, SystemsCompleteCheck>()
+		|| Inner::template evaluate<bool, SystemsCompleteCheck>();
+}
+
+template<typename ...Systems>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+constexpr bool Architecture<Systems...>::SystemDependencyIterator::inspect()
+{
+	return (Value::Dep::template evaluate<bool, SystemsCompleteCheck>())
+		|| Next::template evaluate<bool, SystemDependencyIterator>();
+}
+
+template<typename ...Systems>
+template<typename Sys>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+constexpr bool Architecture<Systems...>::SystemsCompare<Sys>::inspect()
+{
+	return (isSystem<Value>()
+		&& !std::is_same<Sys, Value>()
+		&& Sys::template exclusiveWith<Value>()
+		&& !Sys::template dependsOn<Value>()
+		&& !Value::template dependsOn<Sys>())
+		|| Next::template evaluate<bool, SystemsCompare<Sys>>();
+}
+
+template<typename ...Systems>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+constexpr bool Architecture<Systems...>::SystemDependencyMissingOuter::inspect()
+{
+	return Cont::template evaluate<bool, SystemsCompare<Value>>()
+		|| Next::template evaluate <bool, SystemDependencyMissingOuter>();
+}
+
+template <typename ...Systems>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+void  Architecture<Systems...>::Constructor::inspect()
+{
+	if (isComponent<Value>())
+	{
+		auto p = arch->template getComponents<Value>();
+		if (!p->init)
+		{
+			*p = SparseVec<Value>();
+			p->init = true;
+		}
+	}
+
+	if (isEntity<Value>())
+	{
+		auto p = arch->template getEntities<Value>();
+		if(!p->init)
+		{
+			*p = EntityStore<Value>();
+			p->key = (inspect::indexOf<Cont, Value, EntityBase>() + uint64_t(1)) << (63 - typeKeyLength());
+			p->init = true;
+		}
+	}
+
+	Inner::template evaluate(this);
+	Next::template evaluate(this);
+}
+
+// #####################
+// Architecture
+// #####################
+
+template <typename ...Systems>
+Architecture<Systems...>::Architecture()
+{
+	// TODO assert all components are used in at least one entity
+	// TODO assert every entity can be instantiated
+	static_assert(!Cont::template evaluate<bool, SystemDependencyIterator>(), "Some System A depends on some System B which is not included in Architecture.");
+	static_assert(!Cont::template evaluate<bool, SystemDependencyMissingOuter>(), "An explicit dependency is missing between two systems.");
+
+	Constructor conh = {this};
+	Cont::template evaluate(&conh);
+}
+
+template <typename ...Systems>
+template <typename Resource>
+void Architecture<Systems...>::setResource(Resource* res)
+{
+	static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
+	static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
+	uint64_t index = inspect::indexOf<Container<Systems...>, Resource, ResourceBase>();
+	resources[index] = res;
+}
+
+template <typename ...Systems>
+template <typename Resource>
+Resource* Architecture<Systems...>::getResource()
+{
+	static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
+	static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
+	uint64_t index = inspect::indexOf<Container<Systems...>, Resource, ResourceBase>();
+	return reinterpret_cast<Resource*>(resources[index]);
+}
+
+template <typename ...Systems>
+template <typename Component>
+SparseVec<Component>* Architecture<Systems...>::getComponents()
+{
+	// static_assert(isComponent<Component>(), "Template parameter must be a Component.");
+
+	uint64_t index = inspect::indexOf<Cont, Component, ComponentBase>();
+	return reinterpret_cast<SparseVec<Component>*>(&components[0]) + index;
+}
+
+template <typename ...Systems>
+template <typename Entity>
+EntityStore<Entity>* Architecture<Systems...>::getEntities()
+{
+	// assert(isEntity<Entity>());
+
+	uint64_t index = inspect::indexOf<Cont, Entity, EntityBase>();
+	return reinterpret_cast<EntityStore<Entity>*>(&entities[0]) + index;
+}
+
+template <typename ...Systems>
+template <typename E>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+void Architecture<Systems...>::ComponentCreator<E>::inspect()
+{
+	if (isComponent<Value>())
+	{
+		Value* p = arch->template createComponent<Value>();
+		entity->template setComponent<Value>(p);
+	}
+	Next::template evaluate<ComponentCreator<E>>(this);
+}
+
+template <typename ...Systems>
+template<typename Component>
+template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+void Architecture<Systems...>::ComponentPointerFixup<Component>::inspect()
+{
+	if (isEntity<Value>() && inspect::contains<Value, Component>())
+	{
+		uint64_t index = inspect::indexOf<Cont, Value, EntityBase>();
+		if (!checks[index])
+		{
+			checks[index] = true;
+			auto ents = arch->template getEntities<Value>();
+			for (auto& ent : ents->map)
+			{
+				ent.second.into()->template setComponent<Component>(
+					ent.second.into()->template getComponent<Component>() - first + second
+				);
+			}
+		}
+	}
+
+	Inner::template evaluate(this);
+	Next::template evaluate(this);
+}
+
+template <typename ...Systems>
+template <typename Component>
+Component* Architecture<Systems...>::createComponent()
+{
+	static_assert(isComponent<Component>(), "Template parameter must be a Component");
+
+	auto components = this->getComponents<Component>();
+	auto first = components->first();
+	uint64_t index = components->create();
+	auto second = components->first();
+
+	if (first != second)
+	{
+		static const uint64_t numEntities = inspect::numUniques<Cont, EntityBase>();
+		bool checks[numEntities] = {false};
+		ComponentPointerFixup<Component> fix = { this, first, second, checks };
+		Cont::template evaluate(&fix);
+	}
+
+	return components->get(index);
+}
+
+template <typename ...Systems>
+template <typename Entity>
+Entity* Architecture<Systems...>::createEntity()
+{
+	static_assert(isEntity<Entity>(), "Template parameter must be an Entity.");
+
+	auto entities = getEntities<Entity>();
+
+	uint64_t guid;
+	auto ent = entities->create(guid);
+	ent->setGuid(Guid(guid));
+
+	ComponentCreator<Entity> cc = {this, ent};
+	Entity::template evaluate(&cc);
+
+	return ent;
+}
+
+template <typename ...Systems>
+template <typename E>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+void Architecture<Systems...>::EntityDestructor<E>::inspect()
+{
+	uint64_t index = entity->template getComponent<Value>()
+		- reinterpret_cast<Value*>(arch->template getComponents<Value>()->items.data());
+	arch->template getComponents<Value>()->destroy(index);
+
+	Next::template evaluate(this);
+}
+
+template <typename ...Systems>
+template <typename Entity>
+void Architecture<Systems...>::destroyEntity(uint64_t id)
+{
+	static_assert(isEntity<Entity>(), "Non-Entity type passed to destroyEntity.");
+
+	auto entities = getEntities<Entity>();
+	if (id >= entities->items.size()) return;
+
+
+	EntityDestructor<Entity> ds = {this, entities->get(id)};
+	Entity::template evaluate(&ds);
+
+	entities->destroy(id);
+}
+
+template <typename ...Systems>
+void Architecture<Systems...>::run()
+{
+	uint64_t sysCount = inspect::numUniques<Container<Systems...>, SystemBase>();
+	czsf::Barrier barriers[sysCount];
+	RunTaskData taskData[sysCount];
+
+	for (uint64_t i = 0; i < sysCount; i++)
+	{
+		taskData[i].arch = this;
+		taskData[i].barriers = barriers;
+		taskData[i].id = i;
+	}
+
+	czsf::Barrier wait(sysCount);
+	czsf::run(runSysCallback, taskData, sysCount, &wait);
+	wait.wait();
+}
+
+template <typename ...Systems>
+template <typename Sys>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+void Architecture<Systems...>::SystemBlocker<Sys>::inspect()
+{
+	if (Sys::Dep::template directlyDependsOn<Value>() && !Sys::Dep::template transitivelyDependsOn<Value>())
+	{
+		barriers[inspect::indexOf<Cont, Value, SystemBase>()].wait();
+	}
+
+	Next::template evaluate(this);
+}
+
+template <typename ...Systems>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+void Architecture<Systems...>::SystemRunner::inspect()
+{
+	if (inspect::indexOf<Cont, Value, SystemBase>() != id)
+	{
+		Next::template evaluate(this);
+		return;
+	}
+
+	SystemBlocker<Value> blocker = {barriers};
+	Cont::template evaluate(&blocker);
+	Value::run(Accessor<Architecture<Systems...>, Value>(arch));
+	barriers[id].signal();
+}
+
+template <typename ...Systems>
+void Architecture<Systems...>::systemCallback(uint64_t id, czsf::Barrier* barriers)
+{
+	SystemRunner runner = {id, barriers, this};
+	Cont::evaluate(&runner);
+}
+
+template<typename ...Systems>
+const uint64_t Architecture<Systems...>::typeKeyLength()
+{
+	uint64_t m = inspect::numUniques<Cont, EntityBase>();
+	uint64_t len = 0;
+
+	for (uint64_t i = 0; i < 64; i++)
+		if (m & (uint64_t(1) << i))
+			len = i;
+
+	return len + 1;
+}
+
+template<typename ...Systems>
+uint64_t Architecture<Systems...>::typeKey(Guid guid)
+{
+	uint64_t klen = typeKeyLength();
+	uint64_t mask = ((uint64_t(1) << (klen + 1)) - 1) << (63 - klen);
+	return (guid.get() & mask) >> (63 - klen);
+}
+
+template <typename ...Systems>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+void Architecture<Systems...>::Destructor::inspect()
+{
+	if (isComponent<Value>())
+	{
+		auto comp = arch->template getComponents<Value>();
+		if (comp->init)
+		{
+			comp->init = false;
+			comp->~SparseVec<Value>();
+		}
+	}
+
+	if (isEntity<Value>())
+	{
+		auto ent = arch->template getEntities<Value>();
+		if(ent->init)
+		{
+			ent->init = false;
+			ent->~EntityStore<Value>();
+		}
+	}
+
+	Inner::template evaluate(this);
+	Next::template evaluate(this);
+}
+
+template<typename ...Systems>
+Architecture<Systems...>::~Architecture()
+{
+	Destructor dest = {this};
+	Cont::evaluate(&dest);
+}
+
+// #####################
+// Accessors
+// #####################
+
+template <typename Iter, typename Arch, typename Sys>
+IteratorAccessor<Iter, Arch, Sys>::IteratorAccessor() {}
+
+template <typename Iter,typename Arch, typename Sys>
+template <typename Entity>
+IteratorAccessor<Iter,Arch, Sys>::IteratorAccessor(Entity* ent)
+{
+	Constructor<Entity> constructor = {&iter, ent};
+	Iter::template evaluate(&constructor);
+}
+
+template <typename Iter,typename Arch, typename Sys>
+IteratorAccessor<Iter,Arch, Sys>::IteratorAccessor(const IteratorAccessor<Iter, Arch, Sys>& other)
+{
+	this->iter = other.iter;
+}
+
+template <typename Iter,typename Arch, typename Sys>
+template <typename Component>
+const Component* IteratorAccessor<Iter,Arch, Sys>::view()
+{
+	static_assert(Iter::template containsComponent<Component>(), "Iterator doesn't contain the requested component.");
+	static_assert(Sys::template canRead<Component>(), "System lacks read permissions for the Iterator's components.");
+	return iter.template getComponent<Component>();
+}
+
+template <typename Iter,typename Arch, typename Sys>
+template <typename Component>
+Component* IteratorAccessor<Iter,Arch, Sys>::get()
+{
+	static_assert(Iter::template containsComponent<Component>(), "Iterator doesn't contain the requested component.");
+	static_assert(Sys::template canWrite<Component>(), "System lacks write permissions for the Iterator's components.");
+	return iter.template getComponent<Component>();
+}
+
+template <typename Iter,typename Arch, typename Sys>
+template <typename Entity>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+void IteratorAccessor<Iter, Arch, Sys>::Constructor<Entity>::inspect()
+{
+	iter->template setComponent<Value>( ent->template getComponent<Value>() );
+	Next::template evaluate(this);
+}
+
+template <typename Iter, typename Arch, typename Sys>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+void IteratorIterator<Iter, Arch, Sys>::Incrementer::inspect()
+{
+	if ( isEntity<Value>() && Value::template isCompatible<Iter>()
+		&& inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
+	{
+		auto p = reinterpret_cast<typename std::unordered_map<uint64_t, Padding<Value>>::iterator*>(&iterac->iterator);
+
+		if (!iterac->hasValue)
+		{
+			*p = iterac->arch->template getEntities<Value>()->map.begin();
+			iterac->hasValue = true;
+		}
+		else
+		{
+			(*p)++;
+		}
+
+		if (*p == iterac->arch->template getEntities<Value>()->map.end())
+		{
+			iterac->hasValue = false;
+		}
+
+		if (iterac->hasValue)
+		{
+			iterac->inner = U(reinterpret_cast<Value*>(&(**p).second));
+		}
+	}
+	else
+	{
+		Next::template evaluate(this);
+		Inner::template evaluate(this);
+	}
 }
 
 } // namespace czss
@@ -275,334 +1777,22 @@ void Controller::updateWeight(uint64_t value)
 #endif // CZSS_HEADERS_H
 
 #ifdef CZSS_IMPLEMENTATION
+
 #ifndef CZSS_IMPLEMENTATION_GUARD_
 #define CZSS_IMPLEMENTATION_GUARD_
 
-#include <deque>
-#include <algorithm>
-#include <stdexcept>
-
 namespace czss
 {
-static Controller DEFAULT_CONTROLLER = {};
-Controller* defaultController() { return &DEFAULT_CONTROLLER; }
 
-void SystemBase::run() const { }
+void TemplateStubs::setGuid(Guid guid) { }
 
-Controller* SystemBase::ctrl () const
+void runSysCallback(RunTaskData* d)
 {
-	return defaultController();
-}
-
-std::string SystemBase::name() const
-{
-	return "Unnamed System";
-}
-
-std::string ComponentBase::name() const
-{
-	return "Unnamed Component";
-}
-
-void task(TaskData* data)
-{
-	for (auto dep : *data->dependencies)
-	{
-		data->fences->find(dep)->second->wait();
-	}
-
-	data->system->run();
-	data->fences->find(data->id)->second->signal();
-}
-
-void Controller::generateTasks()
-{
-	barrierMap.clear();
-	barriers.clear();
-	barriers.reserve(systems.size());
-	tasks.clear();
-	tasks.reserve(systems.size());
-
-	uint64_t counter = 0;
-
-	for (auto& pair : systems)
-	{
-		barriers.push_back(czsf::Barrier(1));
-
-		barrierMap.insert({pair.first, &barriers[counter]});
-		auto& node = graph[pair.first];
-		tasks.push_back({
-			pair.first,
-			node.weight,
-			systems[pair.first],
-			&node.dependencies,
-			&barrierMap,
-			&barriers[counter]
-		});
-
-		counter++;
-	}
-}
-
-void Controller::prioritize()
-{
-	for (auto& task : tasks)
-	{
-		task.weight = graph[task.id].weight;
-	}
-
-	sort(tasks.begin(), tasks.end(), [] (const TaskData & a, const TaskData & b) -> bool
-	{
-		return a.weight > b.weight;
-	});
-}
-
-void Controller::run()
-{
-	if (changed)
-	{
-		validate();
-		generateTasks();
-		changed = false;
-	}
-
-	if (weightsChanged)
-	{
-		prioritize();
-		weightsChanged = false;
-	}
-
-	for (uint64_t i = 0; i < barriers.size(); i++)
-	{
-		barriers[i] = czsf::Barrier(1);
-	}
-
-	czsf::Barrier barrier(tasks.size());
-	czsf::run(task, tasks.data(), tasks.size(), &barrier);
-	barrier.wait();
-}
-
-bool Controller::implicitlyDependsOn(uint64_t sys, uint64_t other)
-{
-	auto map = implicits[sys];
-	if (map.find(other) != map.end())
-		return map[other];
-
-	for (auto dep : systemsData[sys].dependencies)
-	{
-		if (directlyDependsOn(dep, other) || implicitlyDependsOn(dep, other))
-		{
-			map[other] = true;
-			return true;
-		}
-	}
-
-	map[other] = false;
-
-	return false;
-}
-
-bool Controller::directlyDependsOn(uint64_t sys, uint64_t other)
-{
-	return systemsData[sys].dependencies.find(other)
-		!= systemsData[sys].dependencies.end();
-}
-
-bool Controller::dependencyExists(uint64_t sys, uint64_t other)
-{
-	return sys == other
-		|| directlyDependsOn(sys, other)
-		|| directlyDependsOn(other, sys)
-		|| implicitlyDependsOn(sys, other)
-		|| implicitlyDependsOn(other, sys);
-}
-
-void Controller::testAcyclic()
-{
-	std::unordered_map<uint64_t, uint64_t> blockers;
-	std::deque<uint64_t> queue;
-
-	for (auto& pair : systemsData)
-	{
-		if (pair.second.dependencies.size() == 0)
-		{
-			queue.push_back(pair.first);
-		}
-
-		blockers.insert({pair.first, pair.second.dependencies.size()});
-	}
-
-	while(queue.size() > 0)
-	{
-		uint64_t key = queue.front();
-		queue.pop_front();
-
-		for (auto dependee : systemsData[key].dependees)
-		{
-			blockers[dependee]--;
-			if (blockers[dependee] == 0)
-			{
-				queue.push_back(dependee);
-			}
-
-			if (blockers[dependee] < 0)
-			{
-				std::string errMsg = "[czss] Cyclical reference to "
-					+ systems[dependee]->name()
-					+ " (" +std::to_string(dependee) + ")";
-				throw std::logic_error(errMsg);
-			}
-		}
-	}
-}
-
-void Controller::testComplete()
-{
-	implicits.clear();
-	for (auto& pair : systems)
-		implicits.insert({pair.first, {}});
-
-	for (auto& pair : systemsData)
-	{
-		for (auto component : pair.second.writesTo)
-		{
-			std::unordered_set<uint64_t>& readers = componentsData[component].readers;
-			for (auto reader : readers)
-			{
-				if (!dependencyExists(pair.first, reader))
-				{
-					std::string errMsg = "[czss] No ordering between writer "
-					+ systems[pair.first]->name() + " (" + std::to_string(pair.first)
-					+ ") and reader "
-					+ systems[reader]->name() + " ("+ std::to_string(reader)
-					+ ") accessing the same resource";
-					throw std::logic_error(errMsg);
-				}
-			}
-
-			std::unordered_set<uint64_t>& writers = componentsData[component].writers;
-			for (auto writer : writers)
-			{
-				if (!dependencyExists(pair.first, writer))
-				{
-					std::string errMsg = "[czss] No ordering between writer "
-					+ systems[pair.first]->name() + " (" + std::to_string(pair.first)
-					+ ") and writer "
-					+ systems[writer]->name() + " ("+ std::to_string(writer)
-					+ ") accessing the same resource";
-					throw std::logic_error(errMsg);
-				}
-			}
-		}
-	}
-}
-
-void Controller::cullDependencies()
-{
-	graph.clear();
-	for (auto& pair : systems)
-		graph[pair.first] = {};
-
-	for (auto& pair : systems)
-	{
-		auto& node = graph[pair.first];
-		for (auto dependency : systemsData[pair.first].dependencies)
-		{
-			if (!implicitlyDependsOn(pair.first, dependency))
-			{
-				node.dependencies.insert(dependency);
-				graph[dependency].dependees.insert(pair.first);
-			}
-		}
-	}
-}
-
-void Controller::computeWeights()
-{
-	std::unordered_map<uint64_t, uint64_t> blockers;
-	std::deque<uint64_t> queue;
-
-	for (auto& pair : systems)
-	{
-		uint64_t numDeps = graph[pair.first].dependencies.size();
-		blockers.insert({pair.first, numDeps});
-		if (numDeps == 0)
-			queue.push_back(pair.first);
-	}
-
-	while(queue.size() > 0)
-	{
-		uint64_t system = queue.front();
-		queue.pop_front();
-
-		for (auto dependency : graph[system].dependencies)
-		{
-			blockers[dependency]--;
-			if (blockers[dependency] == 0)
-			{
-				queue.push_back(dependency);
-			}
-		}
-
-		for (auto dependee : graph[system].dependees)
-		{
-			graph[system].weight += graph[dependee].weight;
-		}
-
-		graph[system].dependees.clear();
-	}
-}
-
-void Controller::validate()
-{
-	testAcyclic();
-	testComplete();
-	cullDependencies();
-	computeWeights();
-
-	implicits.clear();
-}
-
-void Controller::registerReader(const SystemBase* sys, uint64_t target)
-{
-	changed = true;
-	weightsChanged = true;
-	systemsData[sys->identity()].readsFrom.insert(target);
-	componentsData[target].readers.insert(sys->identity());
-}
-
-void Controller::registerWriter(const SystemBase* sys, uint64_t target)
-{
-	changed = true;
-	weightsChanged = true;
-	systemsData[sys->identity()].writesTo.insert(target);
-	componentsData[target].writers.insert(sys->identity());
-}
-
-void Controller::registerDependency(const SystemBase* sys, uint64_t target)
-{
-	changed = true;
-	weightsChanged = true;
-	systemsData[sys->identity()].dependencies.insert(target);
-	systemsData[target].dependees.insert(sys->identity());
-}
-
-void Controller::registerSystem(const SystemBase* sys)
-{
-	systems[sys->identity()] = sys;
-}
-
-void Controller::registerComponent(ComponentBase* component)
-{
-	components[component->identity()] = component;
-}
-
-ComponentBase* Controller::get(uint64_t identifier)
-{
-	return components[identifier];
+	d->arch->systemCallback(d->id, d->barriers);
 }
 
 } // namespace czss
 
-#endif // CZSS_IMPLEMENTATION_GUARD_
+#endif	// CZSS_IMPLEMENTATION_GUARD_
+
 #endif // CZSS_IMPLEMENTATION

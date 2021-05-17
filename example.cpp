@@ -2,174 +2,81 @@
 #include "czss.hpp"
 
 #define CZSF_IMPLEMENTATION
-#include <czsf.h>
+#include "czsf.h"
 
-#include <thread>
 #include <iostream>
 #include <chrono>
+#include <thread>
 
+using namespace czss;
 using namespace std;
+using namespace chrono;
 
-static bool EXITING = false;
+void fmain();
 
-void print(string s)
+int main()
 {
-	static czsf::Semaphore sem(1);
-	sem.wait();
-	cout << s << endl;
-	sem.signal();
+	czsf::Barrier b;
+	czsf::run(fmain, &b);
+	b.wait();
 }
 
-struct Entities
-	: czss::Component<Entities>
-{ };
-
-struct PhysicsComponents
-	: czss::Component<PhysicsComponents>
-{ };
-
-struct AnimationComponents
-	: czss::Component<AnimationComponents>
-{ };
-
-struct AnimationData
-	: czss::Component<AnimationData>
-{ };
-
-struct Input
-	: czss::Component<Input>
+struct Resa : Resource<Resa>
 {
-	char pressed_button;
+	uint64_t sum = 0;
 };
 
-struct RenderComponent
-	: czss::Component<RenderComponent>
-{ };
-
-// Behaviour systems
-
-struct InputReader
-	: czss::System<InputReader>
-	, czss::Writer<Input>
+struct A : Component<A>
 {
-	void run() const override
+	uint64_t value;
+};
+
+struct B : Component<B> {};
+struct Iter : Iterator<A> {};
+struct Enta : Entity<A, B> {};
+struct Entb : Entity<A> {};
+
+struct Sysa : System <Dependency<>, Orchestrator<Enta>, Writer <Resa>>
+{
+	template<typename Arch>
+	static void run(Arch arch)
 	{
-		print("Reading OS input");
-		Input* input = czss::Writer<Input>::get();
-		input->pressed_button = 'A';
-		this_thread::sleep_for(1s);
-		print("OS input written");
+		auto ent = arch.template createEntity<Enta>();
+		ent->template getComponent<A>()->value = rand()%10000;
+	};
+}; 
+
+struct Sysb : System <Dependency<Sysa>, Reader<Iter, Entb>, Writer<Resa>>
+{
+	template<typename Arch>
+	static void run(Arch arch)
+	{
+		auto res = arch.template getResource<Resa>();
+		for (auto& iter : arch.template iterate<Iter>())
+		{
+			res->sum += iter.template view<A>()->value;
+		}
 	}
 };
 
-struct GameLoop
-	: czss::System<GameLoop>
-	, czss::Reader<Input>
-	, czss::Writer<AnimationComponents, Entities, PhysicsComponents, RenderComponent>
-	, czss::Dependency<InputReader>
-{
-	void run() const override
-	{
-		print("Running game loop");
-
-		const Input* input = Reader<Input>::get();
-		string s = "Player pressed button ";
-		s += input->pressed_button;
-		print(s);
-		this_thread::sleep_for(1s);
-		print("Game update finished");
-	}
-};
-
-struct PhysicsUpdate
-	: czss::System<PhysicsUpdate>
-	, czss::Writer<PhysicsComponents>
-	, czss::Dependency<GameLoop>
-{
-	void run() const override
-	{
-		print("Calculating physics");
-		this_thread::sleep_for(3s);
-		print("Finished physics update");
-	}
-};
-
-struct Animator
-	: czss::System<Animator>
-	, czss::Reader<AnimationComponents, Entities>
-	, czss::Writer<AnimationData>
-	, czss::Dependency<GameLoop>
-{
-	void run() const override
-	{
-		print("Updating animations");
-		this_thread::sleep_for(1s);
-		print("Animation update finished");
-	}
-};
-
-struct Renderer
-	: czss::System<Renderer>
-	, czss::Reader<AnimationData>
-	, czss::Dependency<Animator>
-{
-	void run() const override
-	{
-		print("Rendering");
-		this_thread::sleep_for(1s);
-		print("Rendering finished");
-	}
-};
+struct MyArch : Architecture <Sysb, Sysa> {};
 
 void fmain()
 {
-	// Instantiation order of systems doesn't matter
+	srand(time(0));
 
-	// Instantiate data containers
-	Entities ents = {};
-	PhysicsComponents physComp = {};
-	AnimationComponents animComp = {};
-	AnimationData animData = {};
-	Input inputData = {};
-	RenderComponent rendComp = {};
+	MyArch arch = {};
+	Resa res = {};
+	arch.setResource(&res);
 
-	// Instantiate behaviour systems
-	GameLoop gloop = {};
-	InputReader input = {};
-	PhysicsUpdate physics = {};
-	Animator anim = {};
-	Renderer rend = {};
+	std::cout << "Running 5000 iterations" << std::endl;
+	auto start = high_resolution_clock::now();
+	for (int i = 0; i < 5000; i++)
+		arch.run();
 
-	// Get pointer to default system controller and
-	// run all associated systems once.
-	// Note: Controller->run() must be called from a
-	// fiber, see https://github.com/chzesa/c-fiber
-	czss::defaultController()->run();
-	EXITING = true;
+	auto stop = high_resolution_clock::now();
+	auto duration = duration_cast<microseconds>(stop - start);
+	std::cout << "Total duration " << double(duration.count())/1000000 << "s" << std::endl;
+
+	std::cout << "Result: " << res.sum << std::endl;
 }
-
-int main(int argc, char** argv)
-{
-	czsf::run(fmain);
-
-	thread t1 ([] { while(!EXITING) { czsf_yield(); } });
-	thread t2 ([] { while(!EXITING) { czsf_yield(); } });
-	while(!EXITING) { czsf_yield(); }
-
-	t1.join();
-	t2.join();
-}
-
-/* Sample output:
-	Reading OS input
-	OS input written
-	Running game loop
-	Player pressed button A
-	Game update finished
-	Calculating physics
-	Updating animations
-	Animation update finished
-	Rendering
-	Rendering finished
-	Finished physics update
-*/
