@@ -719,7 +719,7 @@ private:
 		uint64_t typeKey;
 		uint64_t id;
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		void inspect();
+		bool inspect();
 	};
 
 	template<typename Component>
@@ -1627,16 +1627,16 @@ void Architecture<Systems...>::destroyEntity(uint64_t id)
 
 template <typename ...Systems>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-void Architecture<Systems...>::EntityDestructor::inspect()
+bool Architecture<Systems...>::EntityDestructor::inspect()
 {
 	if(isEntity<Value>() && inspect::contains<Cont, Value>() && inspect::indexOf<Cont, Value, EntityBase>() == typeKey)
 	{
 		arch->template destroyEntity<Value>(id);
+		return true;
 	}
 	else
 	{
-		Next::template evaluate(this);
-		Inner::template evaluate(this);
+		return Next::template evaluate<bool>(this) || Inner::template evaluate<bool>(this);
 	}
 }
 
