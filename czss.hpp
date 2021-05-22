@@ -344,7 +344,6 @@ struct EntityStore
 {
 	bool init = false;
 	std::unordered_map<uint64_t, Padding<E>> map;
-	uint64_t key;
 	uint64_t nextId;
 
 	E* get(uint64_t id);
@@ -1106,7 +1105,7 @@ E* EntityStore<E>::get(uint64_t id)
 template <typename E>
 E* EntityStore<E>::create(uint64_t& id)
 {
-	id = key + (nextId++);
+	id = nextId++;
 	map.insert({id, {}});
 	return map[id].into();
 }
@@ -1421,7 +1420,6 @@ void  Architecture<Systems...>::Constructor::inspect()
 		if(!p->init)
 		{
 			*p = EntityStore<Value>();
-			p->key = (inspect::indexOf<Cont, Value, EntityBase>() + uint64_t(1)) << (63 - typeKeyLength());
 			p->init = true;
 		}
 	}
@@ -1554,8 +1552,10 @@ Entity* Architecture<Systems...>::createEntity()
 
 	auto entities = getEntities<Entity>();
 
+
 	uint64_t guid;
 	auto ent = entities->create(guid);
+	guid += (inspect::indexOf<Cont, Entity, EntityBase>()) << (63 - typeKeyLength());
 	ent->setGuid(Guid(guid));
 
 	ComponentCreator<Entity> cc = {this, ent};
