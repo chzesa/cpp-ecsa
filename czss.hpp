@@ -947,6 +947,7 @@ struct Accessor
 	template <typename Entity>
 	Entity* createEntity()
 	{
+		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
 		static_assert(Sys::template canOrchestrate<Entity>(), "System lacks permission to create the Entity.");
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template createEntity<Entity>();
@@ -963,6 +964,7 @@ struct Accessor
 	template <typename Resource>
 	const Resource* viewResource()
 	{
+		static_assert(isResource<Resource>(), "Attempted to read non-resource.");
 		static_assert(Sys::template canRead<Resource>(), "System lacks permission to read Resource.");
 		static_assert(inspect::contains<typename Arch::Cont, Resource>(), "Architecture doesn't contain the Resource.");
 		return arch->template getResource<Resource>();
@@ -971,6 +973,7 @@ struct Accessor
 	template <typename Resource>
 	Resource* getResource()
 	{
+		static_assert(isResource<Resource>(), "Attempted to write to non-resource.");
 		static_assert(Sys::template canWrite<Resource>(), "System lacks permission to modify Resource.");
 		static_assert(inspect::contains<typename Arch::Cont, Resource>(), "Architecture doesn't contain the Resource.");
 		return arch->template getResource<Resource>();
@@ -979,6 +982,7 @@ struct Accessor
 	template <typename Iterator>
 	IterableStub<Iterator, Arch, Sys> iterate()
 	{
+		static_assert(isIterator<Iterator>(), "Attempted to iterate non-iterator.");
 		static_assert(inspect::containsAllIn<Sys, Iterator>(), "System doesn't have access to all components of Iterator.");
 		static_assert(inspect::contains<typename Arch::Cont, Iterator>(), "Architecture doesn't contain the Iterator.");
 		return IterableStub<Iterator, Arch, Sys>(arch);
