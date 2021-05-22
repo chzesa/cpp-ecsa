@@ -19,6 +19,9 @@ struct Dummy
 
 	template <typename Inspector>
 	static void evaluate(Inspector* i) { }
+
+	template <typename Ret, typename Inspector>
+	static Ret evaluate(Inspector* i) { return 0; }
 };
 
 struct Root
@@ -47,6 +50,12 @@ struct Rbox : Rbox <Base, Value>, Rbox<Rbox <Base, Value>, Rest...>
 	{
 		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>();
 	}
+
+	template <typename Return, typename Inspector>
+	static Return evaluate(Inspector* i)
+	{
+		return i->template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>();
+	}
 };
 
 template <typename Base, typename Value>
@@ -63,6 +72,12 @@ struct Rbox <Base, Value>
 	constexpr static Return evaluate()
 	{
 		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>();
+	}
+
+	template <typename Return, typename Inspector>
+	static Return evaluate(Inspector* i)
+	{
+		return i->template inspect<Base, Cont, Value, typename Value::Cont, Dummy>();
 	}
 };
 
@@ -831,12 +846,11 @@ struct IteratorIterator
 	This& operator++()
 	{
 		Incrementer inc = {this};
-
-		Arch::Cont::template evaluate(&inc);
+		Arch::Cont::template evaluate<bool>(&inc);
 		while(!hasValue && typeKey < inspect::numUniques<typename Arch::Cont, EntityBase>())
 		{
 			typeKey++;
-			Arch::Cont::template evaluate(&inc);
+			Arch::Cont::template evaluate<bool>(&inc);
 		}
 
 		return *this;
@@ -863,7 +877,7 @@ private:
 	{
 		This* iterac;
 		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		void inspect();
+		bool inspect();
 	};
 };
 
@@ -1481,7 +1495,7 @@ void Architecture<Systems...>::ComponentCreator<E>::inspect()
 		Value* p = arch->template createComponent<Value>();
 		entity->template setComponent<Value>(p);
 	}
-	Next::template evaluate<ComponentCreator<E>>(this);
+	Next::template evaluate(this);
 }
 
 template <typename ...Systems>
@@ -1738,7 +1752,7 @@ void IteratorAccessor<Iter, Arch, Sys>::Constructor<Entity>::inspect()
 
 template <typename Iter, typename Arch, typename Sys>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-void IteratorIterator<Iter, Arch, Sys>::Incrementer::inspect()
+bool IteratorIterator<Iter, Arch, Sys>::Incrementer::inspect()
 {
 	if ( isEntity<Value>() && Value::template isCompatible<Iter>()
 		&& inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
@@ -1764,11 +1778,12 @@ void IteratorIterator<Iter, Arch, Sys>::Incrementer::inspect()
 		{
 			iterac->inner = U(reinterpret_cast<Value*>(&(**p).second));
 		}
+
+		return true;
 	}
 	else
 	{
-		Next::template evaluate(this);
-		Inner::template evaluate(this);
+		return Next::template evaluate<bool>(this) || Inner::template evaluate<bool>(this);
 	}
 }
 
