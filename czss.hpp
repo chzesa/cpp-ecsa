@@ -17,6 +17,9 @@ struct Dummy
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate() { return 0; }
 
+	template <typename Return, typename Inspector>
+	constexpr static Return evaluate(uint64_t value) { return 0; }
+
 	template <typename Inspector>
 	static void evaluate(Inspector* i) { }
 
@@ -52,6 +55,12 @@ struct Rbox : Rbox <Base, Value>, Rbox<Rbox <Base, Value>, Rest...>
 	}
 
 	template <typename Return, typename Inspector>
+	constexpr static Return evaluate(uint64_t value)
+	{
+		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(value);
+	}
+
+	template <typename Return, typename Inspector>
 	static Return evaluate(Inspector* i)
 	{
 		return i->template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>();
@@ -72,6 +81,12 @@ struct Rbox <Base, Value>
 	constexpr static Return evaluate()
 	{
 		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>();
+	}
+
+	template <typename Return, typename Inspector>
+	constexpr static Return evaluate(uint64_t value)
+	{
+		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(value);
 	}
 
 	template <typename Return, typename Inspector>
@@ -690,10 +705,19 @@ private:
 	};
 
 	template <typename E>
-	struct EntityDestructor
+	struct EntityComponentDestructor
 	{
 		This* arch;
 		E* entity;
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		void inspect();
+	};
+
+	struct EntityDestructor
+	{
+		This* arch;
+		uint64_t typeKey;
+		uint64_t id;
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
 		void inspect();
 	};
@@ -928,20 +952,12 @@ struct Accessor
 		return arch->template createEntity<Entity>();
 	}
 
-	template <typename Entity>
-	void destroyEntity(uint64_t id)
-	{
-		static_assert(Sys::template canOrchestrate<Entity>(), "System lacks permission to destroy the Entity.");
-		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
-		arch-> template destroyEntity(id);
-	}
-
-	template <typename Entity>
 	void destroyEntity(Guid guid)
 	{
-		static_assert(Sys::template canOrchestrate<Entity>(), "System lacks permission to create the Entity.");
-		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
-		arch->template destroyEntity(guid);
+		if (Arch::Cont::template evaluate<bool, EntityDestructionPermission>(Arch::typeKey(guid)))
+		{
+			arch->destroyEntity(guid);
+		}
 	}
 
 	template <typename Resource>
@@ -972,6 +988,12 @@ private:
 	friend Arch;
 	Accessor(Arch* arch) { this->arch = arch; }
 	Arch* arch;
+
+	struct EntityDestructionPermission
+	{
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		static constexpr bool inspect(uint64_t key);
+	};
 };
 
 
@@ -1581,7 +1603,7 @@ Entity* Architecture<Systems...>::createEntity()
 template <typename ...Systems>
 template <typename E>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-void Architecture<Systems...>::EntityDestructor<E>::inspect()
+void Architecture<Systems...>::EntityComponentDestructor<E>::inspect()
 {
 	uint64_t index = entity->template getComponent<Value>()
 		- reinterpret_cast<Value*>(arch->template getComponents<Value>()->items.data());
@@ -1594,16 +1616,35 @@ template <typename ...Systems>
 template <typename Entity>
 void Architecture<Systems...>::destroyEntity(uint64_t id)
 {
-	static_assert(isEntity<Entity>(), "Non-Entity type passed to destroyEntity.");
-
 	auto entities = getEntities<Entity>();
-	if (id >= entities->items.size()) return;
+	if (entities->map.find(id) == entities->map.end()) return;
 
-
-	EntityDestructor<Entity> ds = {this, entities->get(id)};
+	EntityComponentDestructor<Entity> ds = {this, entities->get(id)};
 	Entity::template evaluate(&ds);
 
-	entities->destroy(id);
+	entities->map.erase(id);
+}
+
+template <typename ...Systems>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+void Architecture<Systems...>::EntityDestructor::inspect()
+{
+	if(isEntity<Value>() && inspect::contains<Cont, Value>() && inspect::indexOf<Cont, Value, EntityBase>() == typeKey)
+	{
+		arch->template destroyEntity<Value>(id);
+	}
+	else
+	{
+		Next::template evaluate(this);
+		Inner::template evaluate(this);
+	}
+}
+
+template <typename ...Systems>
+void Architecture<Systems...>::destroyEntity(Guid guid)
+{
+	EntityDestructor ds {this, typeKey(guid), guidId(guid)};
+	Cont::template evaluate(&ds);
 }
 
 template <typename ...Systems>
@@ -1816,6 +1857,18 @@ bool IteratorIterator<Iter, Arch, Sys>::Incrementer::inspect()
 	{
 		return Next::template evaluate<bool>(this) || Inner::template evaluate<bool>(this);
 	}
+}
+
+
+template<typename Arch, typename Sys>
+template <typename Base, typename This, typename Value, typename Inner, typename Next>
+constexpr bool Accessor<Arch, Sys>::EntityDestructionPermission::inspect(uint64_t value)
+{
+	return isEntity<Value>()
+		&& inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == value
+		&& Sys::template canOrchestrate<Value>()
+		|| Inner::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(value)
+		|| Next::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(value);
 }
 
 } // namespace czss
