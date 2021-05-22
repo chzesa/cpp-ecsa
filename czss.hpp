@@ -1656,7 +1656,7 @@ const uint64_t Architecture<Systems...>::typeKeyLength()
 		if (m & (uint64_t(1) << i))
 			len = i;
 
-	return len + 1;
+	return len;
 }
 
 template<typename ...Systems>
