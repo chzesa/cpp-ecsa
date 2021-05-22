@@ -635,8 +635,9 @@ struct Architecture : VirtualArchitecture
 
 	void systemCallback(uint64_t id, czsf::Barrier* barriers) override;
 
-	static const uint64_t typeKeyLength();
-	uint64_t typeKey(Guid guid);
+	static uint64_t typeKeyLength();
+	static uint64_t typeKey(Guid guid);
+	static uint64_t guidId(Guid guid);
 
 	~Architecture();
 
@@ -1647,7 +1648,7 @@ void Architecture<Systems...>::systemCallback(uint64_t id, czsf::Barrier* barrie
 }
 
 template<typename ...Systems>
-const uint64_t Architecture<Systems...>::typeKeyLength()
+uint64_t Architecture<Systems...>::typeKeyLength()
 {
 	uint64_t m = inspect::numUniques<Cont, EntityBase>();
 	uint64_t len = 0;
@@ -1665,6 +1666,15 @@ uint64_t Architecture<Systems...>::typeKey(Guid guid)
 	uint64_t klen = typeKeyLength();
 	uint64_t mask = ((uint64_t(1) << (klen + 1)) - 1) << (63 - klen);
 	return (guid.get() & mask) >> (63 - klen);
+}
+
+template<typename ...Systems>
+uint64_t Architecture<Systems...>::guidId(Guid guid)
+{
+	uint64_t klen = typeKeyLength();
+	uint64_t key = typeKey(guid) << (63 - klen);
+
+	return guid.get() - key;
 }
 
 template <typename ...Systems>
