@@ -300,6 +300,8 @@ constexpr bool isPermission();
 
 struct Guid
 {
+	Guid();
+
 	Guid(uint64_t id)
 	{
 		this->id = id;
@@ -367,6 +369,7 @@ struct TemplateStubs
 	T* getComponent() { return nullptr; }
 
 	void setGuid(Guid guid);
+	Guid getGuid();
 };
 
 // #####################
@@ -422,6 +425,12 @@ struct Iterator : ComponentContainer<Components...>, IteratorBase
 
 	template <typename Entity>
 	constexpr static bool isCompatible();
+
+	void setGuid(Guid guid) { this->id = guid; }
+	Guid getGuid() { return id; }
+
+private:
+	Guid id;
 };
 
 template <typename ...Components>
@@ -431,9 +440,12 @@ struct Entity : ComponentContainer<Components...>, EntityBase
 
 	template <typename Iterator>
 	constexpr static bool isCompatible();
-	uint64_t id;
 
 	void setGuid(Guid guid) { this->id = guid.get(); }
+	Guid getGuid() { return {id}; }
+
+private:
+	uint64_t id;
 };
 
 // #####################
@@ -767,6 +779,8 @@ struct IteratorAccessor
 
 	template<typename Component>
 	Component* get();
+
+	Guid guid();
 
 private:
 	friend IteratorIterator<Iter, Arch, Sys>;
@@ -1723,6 +1737,7 @@ template <typename Iter,typename Arch, typename Sys>
 template <typename Entity>
 IteratorAccessor<Iter,Arch, Sys>::IteratorAccessor(Entity* ent)
 {
+	iter.setGuid(ent->getGuid());
 	Constructor<Entity> constructor = {&iter, ent};
 	Iter::template evaluate(&constructor);
 }
@@ -1749,6 +1764,12 @@ Component* IteratorAccessor<Iter,Arch, Sys>::get()
 	static_assert(Iter::template containsComponent<Component>(), "Iterator doesn't contain the requested component.");
 	static_assert(Sys::template canWrite<Component>(), "System lacks write permissions for the Iterator's components.");
 	return iter.template getComponent<Component>();
+}
+
+template <typename Iter,typename Arch, typename Sys>
+Guid IteratorAccessor<Iter,Arch, Sys>::guid()
+{
+	return iter.getGuid();
 }
 
 template <typename Iter,typename Arch, typename Sys>
@@ -1808,6 +1829,8 @@ bool IteratorIterator<Iter, Arch, Sys>::Incrementer::inspect()
 
 namespace czss
 {
+
+Guid::Guid(){ }
 
 void TemplateStubs::setGuid(Guid guid) { }
 
