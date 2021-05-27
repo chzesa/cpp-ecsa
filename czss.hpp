@@ -316,12 +316,8 @@ constexpr bool isPermission();
 struct Guid
 {
 	Guid();
-
-	Guid(uint64_t id)
-	{
-		this->id = id;
-	}
-	uint64_t get() { return id; }
+	Guid(uint64_t id);
+	uint64_t get();
 private:
 	uint64_t id;
 };
@@ -1887,7 +1883,17 @@ constexpr bool Accessor<Arch, Sys>::EntityDestructionPermission::inspect(uint64_
 namespace czss
 {
 
-Guid::Guid(){ }
+Guid::Guid() { }
+
+Guid::Guid(uint64_t id)
+{
+	this->id = id;
+}
+
+uint64_t Guid::get()
+{
+	return id;
+}
 
 void TemplateStubs::setGuid(Guid guid) { }
 Guid TemplateStubs::getGuid() { return Guid(0); }
