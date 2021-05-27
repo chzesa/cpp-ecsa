@@ -1890,6 +1890,7 @@ namespace czss
 Guid::Guid(){ }
 
 void TemplateStubs::setGuid(Guid guid) { }
+Guid TemplateStubs::getGuid() { return Guid(0); }
 
 void runSysCallback(RunTaskData* d)
 {
