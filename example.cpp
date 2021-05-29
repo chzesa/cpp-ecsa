@@ -69,9 +69,9 @@ void fmain()
 	Resa res = {};
 	arch.setResource(&res);
 
-	std::cout << "Running 5000 iterations" << std::endl;
+	std::cout << "Running 50000 iterations" << std::endl;
 	auto start = high_resolution_clock::now();
-	for (int i = 0; i < 5000; i++)
+	for (int i = 0; i < 50000; i++)
 		arch.run();
 
 	auto stop = high_resolution_clock::now();
