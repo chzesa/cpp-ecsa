@@ -43,7 +43,7 @@ struct Rbox : Rbox <Base, Value>, Rbox<Rbox <Base, Value>, Rest...>
 	using Cont = Rbox <Base, Value, Rest...>;
 
 	template <typename Inspector>
-	static void evaluate(Inspector* i)
+	static inline void evaluate(Inspector* i)
 	{
 		i->template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>();
 	}
@@ -61,7 +61,7 @@ struct Rbox : Rbox <Base, Value>, Rbox<Rbox <Base, Value>, Rest...>
 	}
 
 	template <typename Return, typename Inspector>
-	static Return evaluate(Inspector* i)
+	static inline Return evaluate(Inspector* i)
 	{
 		return i->template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>();
 	}
@@ -72,7 +72,7 @@ struct Rbox <Base, Value>
 {
 	using Cont = Rbox <Base, Value>;
 	template <typename Inspector>
-	static void evaluate(Inspector* i)
+	static inline void evaluate(Inspector* i)
 	{
 		i->template inspect<Base, Cont, Value, typename Value::Cont, Dummy>();
 	}
@@ -90,7 +90,7 @@ struct Rbox <Base, Value>
 	}
 
 	template <typename Return, typename Inspector>
-	static Return evaluate(Inspector* i)
+	static inline Return evaluate(Inspector* i)
 	{
 		return i->template inspect<Base, Cont, Value, typename Value::Cont, Dummy>();
 	}
@@ -678,7 +678,7 @@ private:
 		This* arch;
 
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		void inspect();
+		inline void inspect();
 	};
 
 	template <typename Sys>
@@ -687,7 +687,7 @@ private:
 		czsf::Barrier* barriers;
 
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		void inspect();
+		inline void inspect();
 	};
 
 	template <typename E>
@@ -697,7 +697,7 @@ private:
 		E* entity;
 
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		void inspect();
+		inline void inspect();
 	};
 
 	template <typename E>
@@ -706,7 +706,7 @@ private:
 		This* arch;
 		E* entity;
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		void inspect();
+		inline void inspect();
 	};
 
 	struct EntityDestructor
@@ -715,7 +715,7 @@ private:
 		uint64_t typeKey;
 		uint64_t id;
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		bool inspect();
+		inline bool inspect();
 	};
 
 	template<typename Component>
@@ -727,7 +727,7 @@ private:
 		bool* checks;
 
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		void inspect();
+		inline void inspect();
 	};
 
 	struct Constructor
@@ -735,7 +735,7 @@ private:
 		This* arch;
 
 		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		void inspect();
+		inline void inspect();
 	};
 
 	struct Destructor
@@ -743,7 +743,7 @@ private:
 		This* arch;
 
 		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		void inspect();
+		inline void inspect();
 	};
 
 	struct SystemsCompleteCheck
@@ -819,7 +819,7 @@ private:
 		Entity* ent;
 
 		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		void inspect();
+		inline void inspect();
 	};
 };
 
@@ -911,7 +911,7 @@ private:
 	{
 		This* iterac;
 		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		bool inspect();
+		inline bool inspect();
 	};
 };
 
