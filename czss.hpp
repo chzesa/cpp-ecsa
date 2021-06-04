@@ -655,6 +655,9 @@ struct Architecture : VirtualArchitecture
 
 	void run();
 
+	template <typename Sys>
+	void run();
+
 	void systemCallback(uint64_t id, czsf::Barrier* barriers) override;
 
 	static uint64_t typeKeyLength();
@@ -1664,6 +1667,13 @@ void Architecture<Systems...>::run()
 	czsf::Barrier wait(sysCount);
 	czsf::run(runSysCallback, taskData, sysCount, &wait);
 	wait.wait();
+}
+
+template <typename ...Systems>
+template <typename Sys>
+void Architecture<Systems...>::run()
+{
+	Sys::run(Accessor<Architecture<Systems...>, Sys>(this));
 }
 
 template <typename ...Systems>
