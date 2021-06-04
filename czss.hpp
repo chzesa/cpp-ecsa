@@ -325,7 +325,7 @@ private:
 template <typename T>
 struct Padding
 {
-	Padding() { if (!std::is_base_of<DisableConstructor, T>()) *into() = T(); }
+	Padding() { if (!std::is_base_of<DisableConstructor, T>()) new(into()) T(); }
 	~Padding() { if (!std::is_base_of<DisableDestructor, T>()) into()->~T(); }
 	T* into() { return reinterpret_cast<T*>(d); }
 private:
