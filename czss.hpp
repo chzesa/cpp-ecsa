@@ -187,21 +187,39 @@ constexpr bool branch()
 }
 
 template <typename Cont>
-struct ContentsChecker
+struct ContentsCheckerAll
 {
 	template <typename Base, typename This, typename Value, typename Inner, typename Next>
 	constexpr static uint64_t inspect()
 	{
 		return contains<Cont, Value>()
-			&& ( std::is_same<Next, Dummy>() ? true : Next::template evaluate <bool, ContentsChecker<Cont>>() )
-			&& ( std::is_same<Inner, Dummy>() ? true : Inner::template evaluate <bool, ContentsChecker<Cont>>() );
+			&& ( std::is_same<Next, Dummy>() ? true : Next::template evaluate <bool, ContentsCheckerAll<Cont>>() )
+			&& ( std::is_same<Inner, Dummy>() ? true : Inner::template evaluate <bool, ContentsCheckerAll<Cont>>() );
+	}
+};
+
+template <typename Cont>
+struct ContentsCheckerAny
+{
+	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	constexpr static uint64_t inspect()
+	{
+		return contains<Cont, Value>()
+			|| ( std::is_same<Next, Dummy>() ? true : Next::template evaluate <bool, ContentsCheckerAny<Cont>>() )
+			|| ( std::is_same<Inner, Dummy>() ? true : Inner::template evaluate <bool, ContentsCheckerAny<Cont>>() );
 	}
 };
 
 template<typename Left, typename Right>
 constexpr bool containsAllIn()
 {
-	return Right::template evaluate<bool, ContentsChecker<Left>>();
+	return Right::template evaluate<bool, ContentsCheckerAll<Left>>();
+}
+
+template<typename Left, typename Right>
+constexpr bool containsAnyIn()
+{
+	return Right::template evaluate<bool, ContentsCheckerAny<Left>>();
 }
 
 /*
@@ -646,6 +664,12 @@ struct Architecture : VirtualArchitecture
 	EntityStore<Entity>* getEntities();
 
 	template <typename Entity>
+	Entity* getEntity(Guid guid);
+
+	template <typename Entity>
+	Entity* getEntity(uint64_t id);
+
+	template <typename Entity>
 	Entity* createEntity();
 
 	template <typename Entity>
@@ -950,6 +974,15 @@ struct Accessor
 		static_assert(Sys::template canOrchestrate<Entity>(), "System lacks permission to create the Entity.");
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template createEntity<Entity>();
+	}
+
+	template <typename Entity>
+	Entity* getEntity(Guid guid)
+	{
+		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
+		static_assert(inspect::containsAnyIn<Entity, typename Sys::Cont>(), "System cannot access any component of the entity.");
+		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
+		return arch->template getEntity<Entity>(guid);
 	}
 
 	void destroyEntity(Guid guid)
@@ -1521,6 +1554,23 @@ EntityStore<Entity>* Architecture<Systems...>::getEntities()
 
 	uint64_t index = inspect::indexOf<Cont, Entity, EntityBase>();
 	return reinterpret_cast<EntityStore<Entity>*>(&entities[0]) + index;
+}
+
+
+template <typename ...Systems>
+template <typename Entity>
+Entity* Architecture<Systems...>::getEntity(Guid guid)
+{
+	return inspect::indexOf<Cont, Entity, EntityBase>() == typeKey(guid)
+		? getEntity<Entity>(guidId(guid))
+		: nullptr;
+}
+
+template <typename ...Systems>
+template <typename Entity>
+Entity* Architecture<Systems...>::getEntity(uint64_t id)
+{
+	return getEntities<Entity>()->get(id);
 }
 
 template <typename ...Systems>
