@@ -1679,12 +1679,15 @@ template <typename Entity>
 void Architecture<Desc, Systems...>::destroyEntity(uint64_t id)
 {
 	auto entities = getEntities<Entity>();
-	if (entities->map.find(id) == entities->map.end()) return;
+
+	auto ent = entities->map.find(id);
+	if (ent == entities->map.end())
+		return;
 
 	EntityComponentDestructor<Entity> ds = {this, entities->get(id)};
 	Entity::template evaluate(&ds);
 
-	entities->map.erase(id);
+	entities->map.erase(ent);
 }
 
 template <typename Desc, typename ...Systems>
