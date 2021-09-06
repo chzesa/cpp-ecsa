@@ -343,7 +343,8 @@ private:
 template <typename T>
 struct Padding
 {
-	Padding() { if (!std::is_base_of<DisableConstructor, T>()) new(into()) T(); }
+	Padding() : Padding(true) {  }
+	Padding(bool init) { if (init && !std::is_base_of<DisableConstructor, T>()) new(into()) T(); }
 	~Padding() { if (!std::is_base_of<DisableDestructor, T>()) into()->~T(); }
 	T* into() { return reinterpret_cast<T*>(d); }
 private:
@@ -1184,7 +1185,7 @@ template <typename E>
 E* EntityStore<E>::create(uint64_t& id)
 {
 	id = nextId++;
-	map.insert({id, {}});
+	map.emplace(id, false);
 	return map[id].into();
 }
 
@@ -1648,14 +1649,15 @@ Entity* Architecture<Desc, Systems...>::createEntity()
 
 	auto entities = getEntities<Entity>();
 
-
 	uint64_t guid;
 	auto ent = entities->create(guid);
 	guid += (inspect::indexOf<Cont, Entity, EntityBase>()) << (63 - typeKeyLength());
 	ent->setGuid(Guid(guid));
-
 	ComponentCreator<Entity> cc = {this, ent};
 	Entity::template evaluate(&cc);
+
+	if (!std::is_base_of<DisableConstructor, Entity>())
+		new(ent) Entity();
 
 	return ent;
 }
