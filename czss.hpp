@@ -641,11 +641,17 @@ struct RunTaskData
 
 void runSysCallback(RunTaskData* d);
 
-template <typename ...Systems>
+template <typename Arch, typename Entity>
+struct EntityId
+{
+	uint64_t id;
+};
+
+template <typename Desc, typename ...Systems>
 struct Architecture : VirtualArchitecture
 {
 	using Cont = Container<Systems...>;
-	using This = Architecture<Systems...>;
+	using This = Architecture<Desc, Systems...>;
 
 	Architecture();
 
@@ -1434,27 +1440,27 @@ constexpr bool System<Dependencies, Permissions...>::OrchestrateCheck<E>::inspec
 // Architecture Validation
 // #####################
 
-template<typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-constexpr bool Architecture<Systems...>::SystemsCompleteCheck::inspect()
+constexpr bool Architecture<Desc, Systems...>::SystemsCompleteCheck::inspect()
 {
 	return isSystem<Value>() && !inspect::contains<Cont, Value>()
 		|| Next::template evaluate<bool, SystemsCompleteCheck>()
 		|| Inner::template evaluate<bool, SystemsCompleteCheck>();
 }
 
-template<typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-constexpr bool Architecture<Systems...>::SystemDependencyIterator::inspect()
+constexpr bool Architecture<Desc, Systems...>::SystemDependencyIterator::inspect()
 {
 	return (Value::Dep::template evaluate<bool, SystemsCompleteCheck>())
 		|| Next::template evaluate<bool, SystemDependencyIterator>();
 }
 
-template<typename ...Systems>
-template<typename Sys>
+template <typename Desc, typename ...Systems>
+template <typename Sys>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-constexpr bool Architecture<Systems...>::SystemsCompare<Sys>::inspect()
+constexpr bool Architecture<Desc, Systems...>::SystemsCompare<Sys>::inspect()
 {
 	return (isSystem<Value>()
 		&& !std::is_same<Sys, Value>()
@@ -1464,17 +1470,17 @@ constexpr bool Architecture<Systems...>::SystemsCompare<Sys>::inspect()
 		|| Next::template evaluate<bool, SystemsCompare<Sys>>();
 }
 
-template<typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-constexpr bool Architecture<Systems...>::SystemDependencyMissingOuter::inspect()
+constexpr bool Architecture<Desc, Systems...>::SystemDependencyMissingOuter::inspect()
 {
 	return Cont::template evaluate<bool, SystemsCompare<Value>>()
 		|| Next::template evaluate <bool, SystemDependencyMissingOuter>();
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-void  Architecture<Systems...>::Constructor::inspect()
+void  Architecture<Desc, Systems...>::Constructor::inspect()
 {
 	if (isComponent<Value>())
 	{
@@ -1504,8 +1510,8 @@ void  Architecture<Systems...>::Constructor::inspect()
 // Architecture
 // #####################
 
-template <typename ...Systems>
-Architecture<Systems...>::Architecture()
+template <typename Desc, typename ...Systems>
+Architecture<Desc, Systems...>::Architecture()
 {
 	// TODO assert all components are used in at least one entity
 	// TODO assert every entity can be instantiated
@@ -1516,9 +1522,9 @@ Architecture<Systems...>::Architecture()
 	Cont::template evaluate(&conh);
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Resource>
-void Architecture<Systems...>::setResource(Resource* res)
+void Architecture<Desc, Systems...>::setResource(Resource* res)
 {
 	static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
 	static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
@@ -1526,9 +1532,9 @@ void Architecture<Systems...>::setResource(Resource* res)
 	resources[index] = res;
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Resource>
-Resource* Architecture<Systems...>::getResource()
+Resource* Architecture<Desc, Systems...>::getResource()
 {
 	static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
 	static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
@@ -1536,9 +1542,9 @@ Resource* Architecture<Systems...>::getResource()
 	return reinterpret_cast<Resource*>(resources[index]);
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Component>
-SparseVec<Component>* Architecture<Systems...>::getComponents()
+SparseVec<Component>* Architecture<Desc, Systems...>::getComponents()
 {
 	// static_assert(isComponent<Component>(), "Template parameter must be a Component.");
 
@@ -1546,9 +1552,9 @@ SparseVec<Component>* Architecture<Systems...>::getComponents()
 	return reinterpret_cast<SparseVec<Component>*>(&components[0]) + index;
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Entity>
-EntityStore<Entity>* Architecture<Systems...>::getEntities()
+EntityStore<Entity>* Architecture<Desc, Systems...>::getEntities()
 {
 	// assert(isEntity<Entity>());
 
@@ -1557,26 +1563,26 @@ EntityStore<Entity>* Architecture<Systems...>::getEntities()
 }
 
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Entity>
-Entity* Architecture<Systems...>::getEntity(Guid guid)
+Entity* Architecture<Desc, Systems...>::getEntity(Guid guid)
 {
 	return inspect::indexOf<Cont, Entity, EntityBase>() == typeKey(guid)
 		? getEntity<Entity>(guidId(guid))
 		: nullptr;
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Entity>
-Entity* Architecture<Systems...>::getEntity(uint64_t id)
+Entity* Architecture<Desc, Systems...>::getEntity(uint64_t id)
 {
 	return getEntities<Entity>()->get(id);
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename E>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-void Architecture<Systems...>::ComponentCreator<E>::inspect()
+void Architecture<Desc, Systems...>::ComponentCreator<E>::inspect()
 {
 	if (isComponent<Value>())
 	{
@@ -1586,10 +1592,10 @@ void Architecture<Systems...>::ComponentCreator<E>::inspect()
 	Next::template evaluate(this);
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template<typename Component>
 template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-void Architecture<Systems...>::ComponentPointerFixup<Component>::inspect()
+void Architecture<Desc, Systems...>::ComponentPointerFixup<Component>::inspect()
 {
 	if (isEntity<Value>() && inspect::contains<Value, Component>())
 	{
@@ -1611,9 +1617,9 @@ void Architecture<Systems...>::ComponentPointerFixup<Component>::inspect()
 	Next::template evaluate(this);
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Component>
-Component* Architecture<Systems...>::createComponent()
+Component* Architecture<Desc, Systems...>::createComponent()
 {
 	static_assert(isComponent<Component>(), "Template parameter must be a Component");
 
@@ -1633,9 +1639,9 @@ Component* Architecture<Systems...>::createComponent()
 	return components->get(index);
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Entity>
-Entity* Architecture<Systems...>::createEntity()
+Entity* Architecture<Desc, Systems...>::createEntity()
 {
 	static_assert(isEntity<Entity>(), "Template parameter must be an Entity.");
 
@@ -1653,10 +1659,10 @@ Entity* Architecture<Systems...>::createEntity()
 	return ent;
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename E>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-void Architecture<Systems...>::EntityComponentDestructor<E>::inspect()
+void Architecture<Desc, Systems...>::EntityComponentDestructor<E>::inspect()
 {
 	uint64_t index = entity->template getComponent<Value>()
 		- reinterpret_cast<Value*>(arch->template getComponents<Value>()->items.data());
@@ -1665,9 +1671,9 @@ void Architecture<Systems...>::EntityComponentDestructor<E>::inspect()
 	Next::template evaluate(this);
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Entity>
-void Architecture<Systems...>::destroyEntity(uint64_t id)
+void Architecture<Desc, Systems...>::destroyEntity(uint64_t id)
 {
 	auto entities = getEntities<Entity>();
 	if (entities->map.find(id) == entities->map.end()) return;
@@ -1678,9 +1684,9 @@ void Architecture<Systems...>::destroyEntity(uint64_t id)
 	entities->map.erase(id);
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-bool Architecture<Systems...>::EntityDestructor::inspect()
+bool Architecture<Desc, Systems...>::EntityDestructor::inspect()
 {
 	if(isEntity<Value>() && inspect::contains<Cont, Value>() && inspect::indexOf<Cont, Value, EntityBase>() == typeKey)
 	{
@@ -1693,15 +1699,15 @@ bool Architecture<Systems...>::EntityDestructor::inspect()
 	}
 }
 
-template <typename ...Systems>
-void Architecture<Systems...>::destroyEntity(Guid guid)
+template <typename Desc, typename ...Systems>
+void Architecture<Desc, Systems...>::destroyEntity(Guid guid)
 {
 	EntityDestructor ds {this, typeKey(guid), guidId(guid)};
 	Cont::template evaluate(&ds);
 }
 
-template <typename ...Systems>
-void Architecture<Systems...>::run()
+template <typename Desc, typename ...Systems>
+void Architecture<Desc, Systems...>::run()
 {
 	uint64_t sysCount = inspect::numUniques<Container<Systems...>, SystemBase>();
 	czsf::Barrier barriers[sysCount];
@@ -1719,17 +1725,17 @@ void Architecture<Systems...>::run()
 	wait.wait();
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Sys>
-void Architecture<Systems...>::run()
+void Architecture<Desc, Systems...>::run()
 {
-	Sys::run(Accessor<Architecture<Systems...>, Sys>(this));
+	Sys::run(Accessor<Architecture<Desc, Systems...>, Sys>(this));
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Sys>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-void Architecture<Systems...>::SystemBlocker<Sys>::inspect()
+void Architecture<Desc, Systems...>::SystemBlocker<Sys>::inspect()
 {
 	if (Sys::Dep::template directlyDependsOn<Value>() && !Sys::Dep::template transitivelyDependsOn<Value>())
 	{
@@ -1739,9 +1745,9 @@ void Architecture<Systems...>::SystemBlocker<Sys>::inspect()
 	Next::template evaluate(this);
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-void Architecture<Systems...>::SystemRunner::inspect()
+void Architecture<Desc, Systems...>::SystemRunner::inspect()
 {
 	if (inspect::indexOf<Cont, Value, SystemBase>() != id)
 	{
@@ -1751,19 +1757,19 @@ void Architecture<Systems...>::SystemRunner::inspect()
 
 	SystemBlocker<Value> blocker = {barriers};
 	Cont::template evaluate(&blocker);
-	Value::run(Accessor<Architecture<Systems...>, Value>(arch));
+	Value::run(Accessor<Architecture<Desc, Systems...>, Value>(arch));
 	barriers[id].signal();
 }
 
-template <typename ...Systems>
-void Architecture<Systems...>::systemCallback(uint64_t id, czsf::Barrier* barriers)
+template <typename Desc, typename ...Systems>
+void Architecture<Desc, Systems...>::systemCallback(uint64_t id, czsf::Barrier* barriers)
 {
 	SystemRunner runner = {id, barriers, this};
 	Cont::evaluate(&runner);
 }
 
-template<typename ...Systems>
-uint64_t Architecture<Systems...>::typeKeyLength()
+template <typename Desc, typename ...Systems>
+uint64_t Architecture<Desc, Systems...>::typeKeyLength()
 {
 	uint64_t m = inspect::numUniques<Cont, EntityBase>();
 	uint64_t len = 0;
@@ -1775,16 +1781,16 @@ uint64_t Architecture<Systems...>::typeKeyLength()
 	return len;
 }
 
-template<typename ...Systems>
-uint64_t Architecture<Systems...>::typeKey(Guid guid)
+template <typename Desc, typename ...Systems>
+uint64_t Architecture<Desc, Systems...>::typeKey(Guid guid)
 {
 	uint64_t klen = typeKeyLength();
 	uint64_t mask = ((uint64_t(1) << (klen + 1)) - 1) << (63 - klen);
 	return (guid.get() & mask) >> (63 - klen);
 }
 
-template<typename ...Systems>
-uint64_t Architecture<Systems...>::guidId(Guid guid)
+template <typename Desc, typename ...Systems>
+uint64_t Architecture<Desc, Systems...>::guidId(Guid guid)
 {
 	uint64_t klen = typeKeyLength();
 	uint64_t key = typeKey(guid) << (63 - klen);
@@ -1792,9 +1798,9 @@ uint64_t Architecture<Systems...>::guidId(Guid guid)
 	return guid.get() - key;
 }
 
-template <typename ...Systems>
+template <typename Desc, typename ...Systems>
 template <typename Base, typename This, typename Value, typename Inner, typename Next>
-void Architecture<Systems...>::Destructor::inspect()
+void Architecture<Desc, Systems...>::Destructor::inspect()
 {
 	if (isComponent<Value>())
 	{
@@ -1820,8 +1826,8 @@ void Architecture<Systems...>::Destructor::inspect()
 	Next::template evaluate(this);
 }
 
-template<typename ...Systems>
-Architecture<Systems...>::~Architecture()
+template <typename Desc, typename ...Systems>
+Architecture<Desc, Systems...>::~Architecture()
 {
 	Destructor dest = {this};
 	Cont::evaluate(&dest);
