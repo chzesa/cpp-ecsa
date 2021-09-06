@@ -36,13 +36,14 @@ struct Iter : Iterator<A> {};
 struct Enta : Entity<A, B> {};
 struct Entb : Entity<A> {};
 
+struct MyArch;
+
 struct Sysa : System <Dependency<>, Orchestrator<Enta>, Writer <Resa>>
 {
-	template<typename Arch>
-	static void run(Arch arch)
+	static void run(Accessor<MyArch, Sysa> arch)
 	{
-		auto ent = arch.template createEntity<Enta>();
-		ent->template getComponent<A>()->value = rand()%10000;
+		auto ent = arch.createEntity<Enta>();
+		ent->getComponent<A>()->value = rand()%10000;
 	};
 }; 
 
