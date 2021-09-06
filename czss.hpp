@@ -1513,6 +1513,7 @@ void  Architecture<Desc, Systems...>::Constructor::inspect()
 template <typename Desc, typename ...Systems>
 Architecture<Desc, Systems...>::Architecture()
 {
+	static_assert(!isSystem<Desc>(), "The first template parameter for Architecture must be the inheriting object");
 	// TODO assert all components are used in at least one entity
 	// TODO assert every entity can be instantiated
 	static_assert(!Cont::template evaluate<bool, SystemDependencyIterator>(), "Some System A depends on some System B which is not included in Architecture.");
@@ -1729,7 +1730,7 @@ template <typename Desc, typename ...Systems>
 template <typename Sys>
 void Architecture<Desc, Systems...>::run()
 {
-	Sys::run(Accessor<Architecture<Desc, Systems...>, Sys>(this));
+	Sys::run(Accessor<Desc, Sys>(reinterpret_cast<Desc*>(this)));
 }
 
 template <typename Desc, typename ...Systems>
@@ -1757,7 +1758,7 @@ void Architecture<Desc, Systems...>::SystemRunner::inspect()
 
 	SystemBlocker<Value> blocker = {barriers};
 	Cont::template evaluate(&blocker);
-	Value::run(Accessor<Architecture<Desc, Systems...>, Value>(arch));
+	Value::run(Accessor<Desc, Value>(reinterpret_cast<Desc*>(arch)));
 	barriers[id].signal();
 }
 
