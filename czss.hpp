@@ -716,6 +716,46 @@ struct Architecture : VirtualArchitecture
 	template <typename Entity>
 	Entity* createEntity();
 
+	template <typename Entity, typename A>
+	Entity* createEntity(A a)
+	{
+		auto ent = initializeEntity<Entity>();
+		new (ent) Entity(a);
+		return ent;
+	}
+
+	template <typename Entity, typename A, typename B>
+	Entity* createEntity(A a, B b)
+	{
+		auto ent = initializeEntity<Entity>();
+		new (ent) Entity(a, b);
+		return ent;
+	}
+
+	template <typename Entity, typename A, typename B, typename C>
+	Entity* createEntity(A a, B b, C c)
+	{
+		auto ent = initializeEntity<Entity>();
+		new (ent) Entity(a, b, c);
+		return ent;
+	}
+
+	template <typename Entity, typename A, typename B, typename C, typename D>
+	Entity* createEntity(A a, B b, C c, D d)
+	{
+		auto ent = initializeEntity<Entity>();
+		new (ent) Entity(a, b, c, d);
+		return ent;
+	}
+
+	template <typename Entity, typename A, typename B, typename C, typename D, typename E>
+	Entity* createEntity(A a, B b, C c, D d, E e)
+	{
+		auto ent = initializeEntity<Entity>();
+		new (ent) Entity(a, b, c, d, e);
+		return ent;
+	}
+
 	template <typename Entity>
 	static Guid getEntityGuid(Entity* ent)
 	{
@@ -756,6 +796,9 @@ struct Architecture : VirtualArchitecture
 private:
 	template <typename Component>
 	Component* createComponent();
+
+	template <typename Entity>
+	Entity* initializeEntity();
 
 	void* resources[max(inspect::numUniques<Cont, ResourceBase>(), uint64_t(1))] = {0};
 	char components[max(inspect::numUniques<Cont, ComponentBase>(), uint64_t(1)) * sizeof(SparseVec<char>)] = {0};
@@ -1033,10 +1076,43 @@ struct Accessor
 	template <typename Entity>
 	Entity* createEntity()
 	{
-		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		static_assert(Sys::template canOrchestrate<Entity>(), "System lacks permission to create the Entity.");
-		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
+		entityPermission<Entity>();
 		return arch->template createEntity<Entity>();
+	}
+
+	template <typename Entity, typename A >
+	Entity* createEntity(A a)
+	{
+		entityPermission<Entity>();
+		return arch->template createEntity<Entity>(a);
+	}
+
+	template <typename Entity, typename A, typename B>
+	Entity* createEntity(A a, B b)
+	{
+		entityPermission<Entity>();
+		return arch->template createEntity<Entity>(a, b);
+	}
+
+	template <typename Entity, typename A, typename B, typename C>
+	Entity* createEntity(A a, B b, C c)
+	{
+		entityPermission<Entity>();
+		return arch->template createEntity<Entity>(a, b, c);
+	}
+
+	template <typename Entity, typename A, typename B, typename C, typename D>
+	Entity* createEntity(A a, B b, C c, D d)
+	{
+		entityPermission<Entity>();
+		return arch->template createEntity<Entity>(a, b, c, d);
+	}
+
+	template <typename Entity, typename A, typename B, typename C, typename D, typename E>
+	Entity* createEntity(A a, B b, C c, D d, E e)
+	{
+		entityPermission<Entity>();
+		return arch->template createEntity<Entity>(a, b, c, d, e);
 	}
 
 	template <typename Entity>
@@ -1105,6 +1181,15 @@ struct Accessor
 	// friend Arch;
 	Accessor(Arch* arch) { this->arch = arch; }
 	Arch* arch;
+
+private:
+	template <typename Entity>
+	void entityPermission()
+	{
+		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
+		static_assert(Sys::template canOrchestrate<Entity>(), "System lacks permission to create the Entity.");
+		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
+	}
 
 	struct EntityDestructionPermission
 	{
@@ -1722,7 +1807,7 @@ Component* Architecture<Desc, Systems...>::createComponent()
 
 template <typename Desc, typename ...Systems>
 template <typename Entity>
-Entity* Architecture<Desc, Systems...>::createEntity()
+Entity* Architecture<Desc, Systems...>::initializeEntity()
 {
 	static_assert(isEntity<Entity>(), "Template parameter must be an Entity.");
 
@@ -1734,6 +1819,14 @@ Entity* Architecture<Desc, Systems...>::createEntity()
 	ComponentCreator<Entity> cc = {this, ent};
 	Entity::template evaluate(&cc);
 
+	return ent;
+}
+
+template <typename Desc, typename ...Systems>
+template <typename Entity>
+Entity* Architecture<Desc, Systems...>::createEntity()
+{
+	auto ent = initializeEntity<Entity>();
 	if (std::is_base_of<EnableConstructor, Entity>())
 		new(ent) Entity();
 
