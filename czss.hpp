@@ -1,6 +1,7 @@
 #ifndef CZSS_HEADERS_H
 #define CZSS_HEADERS_H
 
+#include <cstring>
 #include <cstdint>
 #include <type_traits>
 #include <vector>
@@ -362,11 +363,10 @@ struct SparseVec
 	void destroy(uint64_t i);
 
 	T* get(uint64_t id);
-	uint64_t size();
-
 	T* first();
 
-	std::vector<Padding<T>> items;
+	Padding<T>* items;
+	uint64_t size;
 private:
 	void expand(uint64_t by);
 };
@@ -1118,17 +1118,24 @@ constexpr bool isPermission()
 template <typename T>
 SparseVec<T>::SparseVec()
 {
-	expand(64);
+	static const uint64_t n = 64;
+	items = (Padding<T>*) malloc(sizeof (Padding<T>) * n);
+
+	for (int i = n; i > 0; i--)
+		indices.push(i - 1);
+
+	size = n;
 }
 
 template <typename T>
 uint64_t SparseVec<T>::create()
 {
 	if (indices.empty())
-		expand(items.size());
+		expand(size);
 
 	uint64_t i = indices.top();
 	indices.pop();
+	new(&items[i]) Padding<T>();
 
 	return i;
 }
@@ -1136,7 +1143,7 @@ uint64_t SparseVec<T>::create()
 template <typename T>
 T* SparseVec<T>::get(uint64_t i)
 {
-	if (i >= items.size())
+	if (i >= size)
 		return nullptr;
 
 	return items[i].into();
@@ -1151,8 +1158,10 @@ T* SparseVec<T>::first()
 template <typename T>
 void SparseVec<T>::destroy(uint64_t i)
 {
-	if (i >= items.size())
+	if (i >= size)
 		return;
+
+	items[i].~Padding<T>();
 
 	indices.push(i);
 }
@@ -1160,20 +1169,16 @@ void SparseVec<T>::destroy(uint64_t i)
 template <typename T>
 void SparseVec<T>::expand(uint64_t by)
 {
-	uint64_t a = items.size();
-	items.resize(a + by);
-	for (int i = a + by - 1; i > a; i--)
-		indices.push(i);
+	Padding<T>* next = (Padding<T>*) malloc(sizeof (Padding<T>) * (size + by));
+	memcpy(next, items, sizeof (Padding<T>) * size);
+	free(items);
+	items = next;
 
-	indices.push(a);
+	for (int i = size + by; i > size; i--)
+		indices.push(i - 1);
+
+	size += by;
 }
-
-template <typename T>
-uint64_t SparseVec<T>::size()
-{
-	return items.size() - indices.size();
-}
-
 
 template <typename E>
 E* EntityStore<E>::get(uint64_t id)
