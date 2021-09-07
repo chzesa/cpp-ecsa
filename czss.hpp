@@ -446,6 +446,9 @@ struct ComponentContainer : Container<Components...>
 
 	template <typename Component>
 	void setComponent(Component* p);
+
+	ComponentContainer() {}
+	~ComponentContainer() {}
 };
 
 template <typename ...Components>
