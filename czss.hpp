@@ -1027,8 +1027,8 @@ struct Accessor
 		return IterableStub<Iterator, Arch, Sys>(arch);
 	}
 
-private:
-	friend Arch;
+// private:
+	// friend Arch;
 	Accessor(Arch* arch) { this->arch = arch; }
 	Arch* arch;
 
