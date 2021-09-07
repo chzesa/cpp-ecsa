@@ -466,6 +466,8 @@ private:
 	Guid id;
 };
 
+struct VirtualArchitecture;
+
 template <typename ...Components>
 struct Entity : ComponentContainer<Components...>, EntityBase
 {
@@ -474,10 +476,10 @@ struct Entity : ComponentContainer<Components...>, EntityBase
 	template <typename Iterator>
 	constexpr static bool isCompatible();
 
+private:
 	void setGuid(Guid guid) { this->id = guid.get(); }
 	Guid getGuid() { return {id}; }
-
-private:
+	friend VirtualArchitecture;
 	uint64_t id;
 };
 
@@ -631,9 +633,47 @@ private:
 // Architectures
 // #####################
 
+template <typename Arch, typename Entity>
+struct EntityId
+{
+private:
+	friend VirtualArchitecture;
+	uint64_t id;
+
+	EntityId(uint64_t id)
+	{
+		this->id = id;
+	}
+};
+
 struct VirtualArchitecture
 {
 	virtual void systemCallback(uint64_t id, czsf::Barrier* barriers) = 0;
+
+protected:
+	template<typename Entity>
+	static void setEntityId(Entity* ent, uint64_t id)
+	{
+		ent->setGuid(Guid(id));
+	}
+
+	template<typename Entity>
+	static uint64_t getEntityId(Entity* ent)
+	{
+		return ent->getGuid().get();
+	}
+
+	template <typename Arch, typename Entity>
+	static EntityId<Arch, Entity> getEntityId(Entity* ent)
+	{
+		return EntityId<Arch, Entity>(VirtualArchitecture::getEntityId(ent));
+	}
+
+	template <typename Arch, typename Entity>
+	static uint64_t getEntityId(EntityId<Arch, Entity> key)
+	{
+		return key.id;
+	}
 };
 
 struct RunTaskData
@@ -644,12 +684,6 @@ struct RunTaskData
 };
 
 void runSysCallback(RunTaskData* d);
-
-template <typename Arch, typename Entity>
-struct EntityId
-{
-	uint64_t id;
-};
 
 template <typename Desc, typename ...Systems>
 struct Architecture : VirtualArchitecture
@@ -683,9 +717,28 @@ struct Architecture : VirtualArchitecture
 	Entity* createEntity();
 
 	template <typename Entity>
+	static Guid getEntityGuid(Entity* ent)
+	{
+		return Guid(VirtualArchitecture::getEntityId(ent)
+			+ (inspect::indexOf<Cont, Entity, EntityBase>()) << (63 - typeKeyLength()));
+	}
+
+	template <typename Entity>
+	static EntityId<Desc, Entity> getEntityId(Entity* ent)
+	{
+		return VirtualArchitecture::getEntityId<Desc, Entity>(ent);
+	}
+
+	template <typename Entity>
 	void destroyEntity(uint64_t id);
 
 	void destroyEntity(Guid guid);
+
+	template <typename Entity>
+	void destroyEntity(EntityId<Desc, Entity> key)
+	{
+		destroyEntity<Entity>(This::getEntityId(key));
+	}
 
 	void run();
 
@@ -1001,6 +1054,24 @@ struct Accessor
 		{
 			arch->destroyEntity(guid);
 		}
+	}
+
+	template <typename Entity>
+	void destroyEntity(EntityId<Arch, Entity> key)
+	{
+		arch->destroyEntity(key);
+	}
+
+	template <typename Entity>
+	Guid getEntityGuid(Entity* ent)
+	{
+		return Arch::getEntityGuid(ent);
+	}
+
+	template <typename Entity>
+	EntityId<Arch, Entity> getEntityId(Entity* ent)
+	{
+		return Arch::getEntityId(ent);
 	}
 
 	template <typename Resource>
@@ -1657,10 +1728,9 @@ Entity* Architecture<Desc, Systems...>::createEntity()
 
 	auto entities = getEntities<Entity>();
 
-	uint64_t guid;
-	auto ent = entities->create(guid);
-	guid += (inspect::indexOf<Cont, Entity, EntityBase>()) << (63 - typeKeyLength());
-	ent->setGuid(Guid(guid));
+	uint64_t id;
+	auto ent = entities->create(id);
+	setEntityId(ent, id);
 	ComponentCreator<Entity> cc = {this, ent};
 	Entity::template evaluate(&cc);
 
@@ -1856,9 +1926,9 @@ IteratorAccessor<Iter, Arch, Sys>::IteratorAccessor() {}
 
 template <typename Iter,typename Arch, typename Sys>
 template <typename Entity>
-IteratorAccessor<Iter,Arch, Sys>::IteratorAccessor(Entity* ent)
+IteratorAccessor<Iter, Arch, Sys>::IteratorAccessor(Entity* ent)
 {
-	iter.setGuid(ent->getGuid());
+	iter.setGuid(Arch::getEntityGuid(ent));
 	Constructor<Entity> constructor = {&iter, ent};
 	Iter::template evaluate(&constructor);
 }
