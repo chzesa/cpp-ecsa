@@ -289,7 +289,7 @@ constexpr uint64_t indexOf()
 // Tags & Validation
 // #####################
 
-
+struct EnableConstructor {};
 struct DisableConstructor {};
 struct DisableDestructor {};
 struct ThreadSafe {};
@@ -1734,7 +1734,7 @@ Entity* Architecture<Desc, Systems...>::createEntity()
 	ComponentCreator<Entity> cc = {this, ent};
 	Entity::template evaluate(&cc);
 
-	if (!std::is_base_of<DisableConstructor, Entity>())
+	if (std::is_base_of<EnableConstructor, Entity>())
 		new(ent) Entity();
 
 	return ent;
