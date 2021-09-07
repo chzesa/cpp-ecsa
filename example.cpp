@@ -60,7 +60,7 @@ struct Sysb : System <Dependency<Sysa>, Reader<Iter, Entb>, Writer<Resa>>
 	}
 };
 
-struct MyArch : Architecture <Sysb, Sysa> {};
+struct MyArch : Architecture <MyArch, Sysb, Sysa> {};
 
 void fmain()
 {
