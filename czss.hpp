@@ -8,6 +8,7 @@
 #include <queue>
 #include <unordered_map>
 #include "czsf.h"
+#include <math.h>
 
 namespace czss
 {
@@ -787,7 +788,7 @@ struct Architecture : VirtualArchitecture
 
 	void systemCallback(uint64_t id, czsf::Barrier* barriers) override;
 
-	static uint64_t typeKeyLength();
+	static constexpr uint64_t typeKeyLength();
 	static uint64_t typeKey(Guid guid);
 	static uint64_t guidId(Guid guid);
 
@@ -1946,16 +1947,9 @@ void Architecture<Desc, Systems...>::systemCallback(uint64_t id, czsf::Barrier* 
 }
 
 template <typename Desc, typename ...Systems>
-uint64_t Architecture<Desc, Systems...>::typeKeyLength()
+constexpr uint64_t Architecture<Desc, Systems...>::typeKeyLength()
 {
-	uint64_t m = inspect::numUniques<Cont, EntityBase>();
-	uint64_t len = 0;
-
-	for (uint64_t i = 0; i < 64; i++)
-		if (m & (uint64_t(1) << i))
-			len = i;
-
-	return len;
+	return ceil(log2(inspect::numUniques<Cont, EntityBase>()));
 }
 
 template <typename Desc, typename ...Systems>
