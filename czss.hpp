@@ -1136,6 +1136,7 @@ struct Accessor
 	template <typename Entity>
 	void destroyEntity(EntityId<Arch, Entity> key)
 	{
+		static_assert(Sys::template canOrchestrate<Entity>(), "System does not have the permission to destroy this entity.");
 		arch->destroyEntity(key);
 	}
 
