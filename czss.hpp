@@ -1436,6 +1436,28 @@ struct Accessor
 		return IterableStub<Iterator, Arch, Sys>(arch);
 	}
 
+	template <typename Component>
+	uint64_t componentIndex(Component* component)
+	{
+		static_assert(Sys::template canRead<Component>());
+		return arch->template getComponents<Component>()->first() - component;
+	}
+
+	template <typename Component>
+	const Component* viewComponent(uint64_t index)
+	{
+		static_assert(Sys::template canRead<Component>());
+		return arch->template getComponents<Component>()->get(index);
+	}
+
+	template <typename Component>
+	Component* getComponent(uint64_t index)
+	{
+		static_assert(Sys::template canRead<Component>());
+		return arch->template getComponents<Component>()->get(index);
+	}
+
+
 // private:
 	// friend Arch;
 	Accessor(Arch* arch) { this->arch = arch; }
