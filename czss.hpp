@@ -423,7 +423,6 @@ struct Resource : Dummy, ResourceBase, TemplateStubs
 	using Cont = Dummy;
 
 	friend R;
-private:
 	Resource() {};
 };
 
