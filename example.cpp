@@ -2,7 +2,7 @@
 #include "czss.hpp"
 
 #define CZSF_IMPLEMENTATION
-#include "czsf.h"
+#include "external/c-fiber/czsf.h"
 
 #include <iostream>
 #include <chrono>
