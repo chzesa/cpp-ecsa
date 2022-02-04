@@ -75,7 +75,11 @@ void fmain()
 	std::cout << "Running 50000 iterations" << std::endl;
 	auto start = high_resolution_clock::now();
 	for (int i = 0; i < 50000; i++)
+	{
+		if (i % 1000 == 0)
+			std::cout << "iter #" << i << std::endl;
 		arch.run();
+	}
 
 	auto stop = high_resolution_clock::now();
 	auto duration = duration_cast<microseconds>(stop - start);
