@@ -12,13 +12,15 @@ using namespace czss;
 using namespace std;
 using namespace chrono;
 
+volatile static bool EXITING = false;
+
 void fmain();
 
 int main()
 {
-	czsf::Barrier b;
-	czsf::run(fmain, &b);
-	b.wait();
+	czsf::run(fmain);
+	while (!EXITING) { czsf_yield(); }
+
 }
 
 struct Resa : Resource<Resa>
@@ -80,4 +82,5 @@ void fmain()
 	std::cout << "Total duration " << double(duration.count())/1000000 << "s" << std::endl;
 
 	std::cout << "Result: " << res.sum << std::endl;
+	EXITING = true;
 }
