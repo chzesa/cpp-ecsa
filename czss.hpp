@@ -22,29 +22,17 @@ struct Dummy
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate(uint64_t value) { return 0; }
 
-	template <typename Inspector>
-	static void evaluate(Inspector* i) { }
-
-	template <typename Ret, typename Inspector>
-	static Ret evaluate(Inspector* i) { return 0; }
-
 	template <typename Inspector, typename A>
-	static void evaluate(A a) { }
+	inline static void evaluate(A a) { }
 
 	template <typename Inspector, typename A, typename B>
-	static void evaluate(A a, B b) { }
+	inline static void evaluate(A a, B b) { }
 
 	template <typename Inspector, typename A, typename B, typename C>
-	static void evaluate(A a, B b, C c) { }
+	inline static void evaluate(A a, B b, C c) { }
 
 	template <typename Return, typename Inspector, typename A>
 	static Return evaluate(A a) { return 0; }
-
-	template <typename Return, typename Inspector, typename A, typename B>
-	static Return evaluate(A a, B b) { return 0; }
-
-	template <typename Return, typename Inspector, typename A, typename B, typename C>
-	static Return evaluate(A a, B b, C c) { return 0; }
 };
 
 struct Root
@@ -62,12 +50,6 @@ struct Rbox : Rbox <Base, Value>, Rbox<Rbox <Base, Value>, Rest...>
 	using Fwd = Rbox<Rbox <Base, Value>, Rest...>;
 	using Cont = Rbox <Base, Value, Rest...>;
 
-	template <typename Inspector>
-	static inline void evaluate(Inspector* i)
-	{
-		i->template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>();
-	}
-
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate()
 	{
@@ -80,46 +62,28 @@ struct Rbox : Rbox <Base, Value>, Rbox<Rbox <Base, Value>, Rest...>
 		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(value);
 	}
 
-	template <typename Return, typename Inspector>
-	static inline Return evaluate(Inspector* i)
-	{
-		return i->template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>();
-	}
-
 	template <typename Inspector, typename A>
-	static void evaluate(A a)
+	inline static void evaluate(A* a)
 	{
 		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(a);
 	}
 
 	template <typename Inspector, typename A, typename B>
-	static void evaluate(A a, B b)
+	inline static void evaluate(A* a, B* b)
 	{
 		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(a, b);
 	}
 
 	template <typename Inspector, typename A, typename B, typename C>
-	static void evaluate(A a, B b, C c)
+	inline static void evaluate(A* a, B* b, C* c)
 	{
 		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(a, b, c);
 	}
 
 	template <typename Return, typename Inspector, typename A>
-	static Return evaluate(A a)
+	static Return evaluate(A* a)
 	{
 		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(a);
-	}
-
-	template <typename Return, typename Inspector, typename A, typename B>
-	static Return evaluate(A a, B b)
-	{
-		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(a, b);
-	}
-
-	template <typename Return, typename Inspector, typename A, typename B, typename C>
-	static Return evaluate(A a, B b, C c)
-	{
-		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(a, b, c);
 	}
 };
 
@@ -127,11 +91,6 @@ template <typename Base, typename Value>
 struct Rbox <Base, Value>
 {
 	using Cont = Rbox <Base, Value>;
-	template <typename Inspector>
-	static inline void evaluate(Inspector* i)
-	{
-		i->template inspect<Base, Cont, Value, typename Value::Cont, Dummy>();
-	}
 
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate()
@@ -145,46 +104,28 @@ struct Rbox <Base, Value>
 		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(value);
 	}
 
-	template <typename Return, typename Inspector>
-	static inline Return evaluate(Inspector* i)
-	{
-		return i->template inspect<Base, Cont, Value, typename Value::Cont, Dummy>();
-	}
-
 	template <typename Inspector, typename A>
-	static void evaluate(A a)
+	inline static void evaluate(A* a)
 	{
 		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(a);
 	}
 
 	template <typename Inspector, typename A, typename B>
-	static void evaluate(A a, B b)
+	inline static void evaluate(A* a, B* b)
 	{
 		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(a, b);
 	}
 
 	template <typename Inspector, typename A, typename B, typename C>
-	static void evaluate(A a, B b, C c)
+	inline static void evaluate(A* a, B* b, C* c)
 	{
 		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(a, b, c);
 	}
 
 	template <typename Return, typename Inspector, typename A>
-	static Return evaluate(A a)
+	static Return evaluate(A* a)
 	{
 		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(a);
-	}
-
-	template <typename Return, typename Inspector, typename A, typename B>
-	static Return evaluate(A a, B b)
-	{
-		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(a, b);
-	}
-
-	template <typename Return, typename Inspector, typename A, typename B, typename C>
-	static Return evaluate(A a, B b, C c)
-	{
-		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(a, b, c);
 	}
 };
 
@@ -789,8 +730,7 @@ struct Architecture : VirtualArchitecture
 		static_assert(!Cont::template evaluate<bool, SystemDependencyIterator>(), "Some System A depends on some System B which is not included in Architecture.");
 		static_assert(!Cont::template evaluate<bool, SystemDependencyMissingOuter>(), "An explicit dependency is missing between two systems.");
 
-		Constructor conh = {this};
-		Cont::template evaluate(&conh);
+		Cont::template evaluate<Constructor>(this);
 	}
 
 	static constexpr uint64_t numSystems() { return inspect::numUniques<Cont, SystemBase>(); }
@@ -956,8 +896,7 @@ struct Architecture : VirtualArchitecture
 
 	void systemCallback(uint64_t id, czsf::Barrier* barriers) override
 	{
-		SystemRunner runner = {id, barriers, this};
-		Cont::evaluate(&runner);
+		Cont::template evaluate<SystemRunner>(&id, barriers, this);
 	}
 
 	static constexpr uint64_t typeKeyLength()
@@ -981,8 +920,7 @@ struct Architecture : VirtualArchitecture
 
 	~Architecture()
 	{
-		Destructor dest = {this};
-		Cont::evaluate(&dest);
+		Cont::template evaluate<Destructor>(this);
 	}
 
 private:
@@ -1002,10 +940,7 @@ private:
 
 		if (first != second)
 		{
-			static const uint64_t numEntities = inspect::numUniques<Cont, EntityBase>();
-			bool checks[numEntities] = {false};
-			ComponentPointerFixup<Component> fix = { this, first, second, checks };
-			Cont::template evaluate(&fix);
+			Cont::template evaluate<ComponentPointerFixup<Component>>(this, first, second);
 		}
 
 		return components->get(index);
@@ -1021,54 +956,44 @@ private:
 		uint64_t id;
 		auto ent = entities->create(id);
 		setEntityId(ent, id);
-		ComponentCreator<Entity> cc = {this, ent};
-		Entity::template evaluate(&cc);
+		Entity::template evaluate<ComponentCreator<Entity>>(this, ent);
 
 		return ent;
 	}
 
 	struct SystemRunner
 	{
-		uint64_t id;
-		czsf::Barrier* barriers;
-		This* arch;
-
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline void inspect();
+		inline static void inspect(uint64_t* id, czsf::Barrier* barriers, This* arch);
 	};
 
 	template <typename Sys>
 	struct SystemBlocker
 	{
-		czsf::Barrier* barriers;
-
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline void inspect()
+		inline static void inspect(czsf::Barrier* barriers)
 		{
 			if (Sys::Dep::template directlyDependsOn<Value>() && !Sys::Dep::template transitivelyDependsOn<Value>())
 			{
 				barriers[inspect::indexOf<Cont, Value, SystemBase>()].wait();
 			}
 
-			Next::template evaluate(this);
+			Next::template evaluate<SystemBlocker<Sys>>(barriers);
 		}
 	};
 
 	template <typename E>
 	struct ComponentCreator
 	{
-		This* arch;
-		E* entity;
-
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline void inspect()
+		inline static void inspect(This* arch, E* entity)
 		{
 			if (isComponent<Value>())
 			{
 				Value* p = arch->template createComponent<Value>();
 				entity->template setComponent<Value>(p);
 			}
-			Next::template evaluate(this);
+			Next::template evaluate<ComponentCreator<E>>(arch, entity);
 		}
 	};
 
@@ -1111,42 +1036,33 @@ private:
 	template<typename Component>
 	struct ComponentPointerFixup
 	{
-		This* arch;
-		Component* first;
-		Component* second;
-		bool* checks;
-
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline void inspect()
+		inline static void inspect(This* arch, Component* first, Component* second)
 		{
-			if (isEntity<Value>() && inspect::contains<Value, Component>())
+			if (isEntity<Value>()
+				&& inspect::contains<Value, Component>()
+				&& !inspect::contains<Inner, Value>()
+				&& !inspect::contains<Next, Value>())
 			{
-				uint64_t index = inspect::indexOf<Cont, Value, EntityBase>();
-				if (!checks[index])
+				auto ents = arch->template getEntities<Value>();
+				for (auto& ent : ents->map)
 				{
-					checks[index] = true;
-					auto ents = arch->template getEntities<Value>();
-					for (auto& ent : ents->map)
-					{
-						ent.second.into()->template setComponent<Component>(
-							ent.second.into()->template getComponent<Component>() - first + second
-						);
-					}
+					ent.second.into()->template setComponent<Component>(
+						ent.second.into()->template getComponent<Component>() - first + second
+					);
 				}
 			}
 
-			Inner::template evaluate(this);
-			Next::template evaluate(this);
+			Inner::template evaluate<ComponentPointerFixup<Component>>(arch, first, second);
+			Next::template evaluate<ComponentPointerFixup<Component>>(arch, first, second);
 		}
 	};
 
 	// Used to initialize the architecture itself
 	struct Constructor
 	{
-		This* arch;
-
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		inline void inspect()
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		static inline void inspect(This* arch)
 		{
 			if (isComponent<Value>())
 			{
@@ -1168,18 +1084,16 @@ private:
 				}
 			}
 
-			Inner::template evaluate(this);
-			Next::template evaluate(this);
+			Inner::template evaluate<Constructor>(arch);
+			Next::template evaluate<Constructor>(arch);
 		}
 	};
 
 	// Used to destruct the architecture itself
 	struct Destructor
 	{
-		This* arch;
-
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		inline void inspect()
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		inline static void inspect(This* arch)
 		{
 			if (isComponent<Value>())
 			{
@@ -1201,14 +1115,14 @@ private:
 				}
 			}
 
-			Inner::template evaluate(this);
-			Next::template evaluate(this);
+			Inner::template evaluate<Destructor>(arch);
+			Next::template evaluate<Destructor>(arch);
 		}
 	};
 
 	struct SystemsCompleteCheck
 	{
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
 		static constexpr bool inspect()
 		{
 			return isSystem<Value>() && !inspect::contains<Cont, Value>()
@@ -1219,7 +1133,7 @@ private:
 
 	struct SystemDependencyIterator
 	{
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
 		static constexpr bool inspect()
 		{
 			return (Value::Dep::template evaluate<bool, SystemsCompleteCheck>())
@@ -1230,7 +1144,7 @@ private:
 	template<typename Sys>
 	struct SystemsCompare
 	{
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
 		static constexpr bool inspect()
 		{
 			return (isSystem<Value>()
@@ -1244,7 +1158,7 @@ private:
 
 	struct SystemDependencyMissingOuter
 	{
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
 		static constexpr bool inspect()
 		{
 			return Cont::template evaluate<bool, SystemsCompare<Value>>()
@@ -1285,24 +1199,25 @@ struct IteratorAccessor
 private:
 	friend IteratorIterator<Iter, Arch, Sys>;
 
-	IteratorAccessor();
+	IteratorAccessor() {}
 
 	template <typename Entity>
-	IteratorAccessor(Entity* ent);
+	IteratorAccessor(Entity* ent)
+	{
+		iter.setGuid(Arch::getEntityGuid(ent));
+		Iter::template evaluate<Constructor<Entity>>(&iter, ent);
+	}
 
 	Iter iter;
 
 	template<typename Entity>
 	struct Constructor
 	{
-		Iter* iter;
-		Entity* ent;
-
 		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		inline void inspect()
+		inline static void inspect(Iter* iter, Entity* ent)
 		{
 			iter->template setComponent<Value>( ent->template getComponent<Value>() );
-			Next::template evaluate(this);
+			Next::template evaluate<Constructor<Entity>>(iter, ent);
 		}
 	};
 };
@@ -1363,12 +1278,11 @@ struct IteratorIterator
 	
 	This& operator++()
 	{
-		Incrementer inc = {this};
-		Arch::Cont::template evaluate<bool>(&inc);
-		while(!hasValue && typeKey < inspect::numUniques<typename Arch::Cont, EntityBase>())
+		Arch::Cont::template evaluate<bool, Incrementer>(this);
+		while(!hasValue && typeKey<inspect::numUniques<typename Arch::Cont, EntityBase>())
 		{
 			typeKey++;
-			Arch::Cont::template evaluate<bool>(&inc);
+			Arch::Cont::template evaluate<bool, Incrementer>(this);
 		}
 
 		return *this;
@@ -1393,9 +1307,8 @@ private:
 
 	struct Incrementer
 	{
-		This* iterac;
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		inline bool inspect()
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		inline static bool inspect(This* iterac)
 		{
 			if ( isEntity<Value>() && Value::template isCompatible<Iter>()
 				&& inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
@@ -1426,7 +1339,7 @@ private:
 			}
 			else
 			{
-				return Next::template evaluate<bool>(this) || Inner::template evaluate<bool>(this);
+				return Next::template evaluate<bool, Incrementer>(iterac) || Inner::template evaluate<bool, Incrementer>(iterac);
 			}
 		}
 	};
@@ -2027,37 +1940,24 @@ void Architecture<Desc, Systems...>::run()
 }
 
 template <typename Desc, typename ...Systems>
-template <typename Base, typename This, typename Value, typename Inner, typename Next>
-void Architecture<Desc, Systems...>::SystemRunner::inspect()
+template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+void Architecture<Desc, Systems...>::SystemRunner::inspect(uint64_t* id, czsf::Barrier* barriers, This* arch)
 {
-	if (inspect::indexOf<Cont, Value, SystemBase>() != id)
+	if (inspect::indexOf<Cont, Value, SystemBase>() != *id)
 	{
-		Next::template evaluate(this);
+		Next::template evaluate<SystemRunner>(id, barriers, arch);
 		return;
 	}
 
-	SystemBlocker<Value> blocker = {barriers};
-	Cont::template evaluate(&blocker);
+	Cont::template evaluate<SystemBlocker<Value>>(barriers);
 	Value::run(Accessor<Desc, Value>(reinterpret_cast<Desc*>(arch)));
-	barriers[id].signal();
+	barriers[*id].signal();
 }
 
 
 // #####################
 // Accessors
 // #####################
-
-template <typename Iter, typename Arch, typename Sys>
-IteratorAccessor<Iter, Arch, Sys>::IteratorAccessor() {}
-
-template <typename Iter,typename Arch, typename Sys>
-template <typename Entity>
-IteratorAccessor<Iter, Arch, Sys>::IteratorAccessor(Entity* ent)
-{
-	iter.setGuid(Arch::getEntityGuid(ent));
-	Constructor<Entity> constructor = {&iter, ent};
-	Iter::template evaluate(&constructor);
-}
 
 template <typename Iter,typename Arch, typename Sys>
 IteratorAccessor<Iter,Arch, Sys>::IteratorAccessor(const IteratorAccessor<Iter, Arch, Sys>& other)
