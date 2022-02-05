@@ -1209,7 +1209,11 @@ private:
 		Entity* ent;
 
 		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		inline void inspect();
+		inline void inspect()
+		{
+			iter->template setComponent<Value>( ent->template getComponent<Value>() );
+			Next::template evaluate(this);
+		}
 	};
 };
 
@@ -1301,7 +1305,40 @@ private:
 	{
 		This* iterac;
 		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		inline bool inspect();
+		inline bool inspect()
+		{
+			if ( isEntity<Value>() && Value::template isCompatible<Iter>()
+				&& inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
+			{
+				auto p = reinterpret_cast<typename std::unordered_map<uint64_t, Padding<Value>>::iterator*>(&iterac->iterator);
+
+				if (!iterac->hasValue)
+				{
+					*p = iterac->arch->template getEntities<Value>()->map.begin();
+					iterac->hasValue = true;
+				}
+				else
+				{
+					(*p)++;
+				}
+
+				if (*p == iterac->arch->template getEntities<Value>()->map.end())
+				{
+					iterac->hasValue = false;
+				}
+
+				if (iterac->hasValue)
+				{
+					iterac->inner = U(reinterpret_cast<Value*>(&(**p).second));
+				}
+
+				return true;
+			}
+			else
+			{
+				return Next::template evaluate<bool>(this) || Inner::template evaluate<bool>(this);
+			}
+		}
 	};
 };
 
@@ -1474,7 +1511,14 @@ private:
 	struct EntityDestructionPermission
 	{
 		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		static constexpr bool inspect(uint64_t key);
+		static constexpr bool inspect(uint64_t key)
+		{
+			return isEntity<Value>()
+				&& inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == key
+				&& Sys::template canOrchestrate<Value>()
+				|| Inner::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(key)
+				|| Next::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(key);
+		}
 	};
 };
 
@@ -1953,64 +1997,6 @@ template <typename Iter,typename Arch, typename Sys>
 Guid IteratorAccessor<Iter,Arch, Sys>::guid()
 {
 	return iter.getGuid();
-}
-
-template <typename Iter,typename Arch, typename Sys>
-template <typename Entity>
-template <typename Base, typename This, typename Value, typename Inner, typename Next>
-void IteratorAccessor<Iter, Arch, Sys>::Constructor<Entity>::inspect()
-{
-	iter->template setComponent<Value>( ent->template getComponent<Value>() );
-	Next::template evaluate(this);
-}
-
-template <typename Iter, typename Arch, typename Sys>
-template <typename Base, typename This, typename Value, typename Inner, typename Next>
-bool IteratorIterator<Iter, Arch, Sys>::Incrementer::inspect()
-{
-	if ( isEntity<Value>() && Value::template isCompatible<Iter>()
-		&& inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
-	{
-		auto p = reinterpret_cast<typename std::unordered_map<uint64_t, Padding<Value>>::iterator*>(&iterac->iterator);
-
-		if (!iterac->hasValue)
-		{
-			*p = iterac->arch->template getEntities<Value>()->map.begin();
-			iterac->hasValue = true;
-		}
-		else
-		{
-			(*p)++;
-		}
-
-		if (*p == iterac->arch->template getEntities<Value>()->map.end())
-		{
-			iterac->hasValue = false;
-		}
-
-		if (iterac->hasValue)
-		{
-			iterac->inner = U(reinterpret_cast<Value*>(&(**p).second));
-		}
-
-		return true;
-	}
-	else
-	{
-		return Next::template evaluate<bool>(this) || Inner::template evaluate<bool>(this);
-	}
-}
-
-
-template<typename Arch, typename Sys>
-template <typename Base, typename This, typename Value, typename Inner, typename Next>
-constexpr bool Accessor<Arch, Sys>::EntityDestructionPermission::inspect(uint64_t value)
-{
-	return isEntity<Value>()
-		&& inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == value
-		&& Sys::template canOrchestrate<Value>()
-		|| Inner::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(value)
-		|| Next::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(value);
 }
 
 } // namespace czss
