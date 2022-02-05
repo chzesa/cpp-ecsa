@@ -1439,7 +1439,7 @@ struct Accessor
 	uint64_t componentIndex(Component* component)
 	{
 		static_assert(Sys::template canRead<Component>(), "System doesn't have read access to component.");
-		return arch->template getComponents<Component>()->first() - component;
+		return component - arch->template getComponents<Component>()->first();
 	}
 
 	template <typename Component>
