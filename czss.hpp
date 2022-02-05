@@ -1438,21 +1438,21 @@ struct Accessor
 	template <typename Component>
 	uint64_t componentIndex(Component* component)
 	{
-		static_assert(Sys::template canRead<Component>());
+		static_assert(Sys::template canRead<Component>(), "System doesn't have read access to component.");
 		return arch->template getComponents<Component>()->first() - component;
 	}
 
 	template <typename Component>
 	const Component* viewComponent(uint64_t index)
 	{
-		static_assert(Sys::template canRead<Component>());
+		static_assert(Sys::template canRead<Component>(), "System doesn't have read access to component.");
 		return arch->template getComponents<Component>()->get(index);
 	}
 
 	template <typename Component>
 	Component* getComponent(uint64_t index)
 	{
-		static_assert(Sys::template canWrite<Component>());
+		static_assert(Sys::template canWrite<Component>(), "System doesn't have write access to component.");
 		return arch->template getComponents<Component>()->get(index);
 	}
 
