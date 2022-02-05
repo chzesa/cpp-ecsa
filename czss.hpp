@@ -387,7 +387,6 @@ private:
 template <typename T>
 struct SparseVec
 {
-	bool init = false;
 	std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> indices;
 
 	SparseVec();
@@ -406,7 +405,6 @@ private:
 template <typename E>
 struct EntityStore
 {
-	bool init = false;
 	std::unordered_map<uint64_t, Padding<E>> map;
 	uint64_t nextId;
 
@@ -730,7 +728,7 @@ struct Architecture : VirtualArchitecture
 		static_assert(!Cont::template evaluate<bool, SystemDependencyIterator>(), "Some System A depends on some System B which is not included in Architecture.");
 		static_assert(!Cont::template evaluate<bool, SystemDependencyMissingOuter>(), "An explicit dependency is missing between two systems.");
 
-		Cont::template evaluate<Constructor>(this);
+		Cont::template evaluate<Constructor<Dummy>>(this);
 	}
 
 	static constexpr uint64_t numSystems() { return inspect::numUniques<Cont, SystemBase>(); }
@@ -920,7 +918,7 @@ struct Architecture : VirtualArchitecture
 
 	~Architecture()
 	{
-		Cont::template evaluate<Destructor>(this);
+		Cont::template evaluate<Destructor<Dummy>>(this);
 	}
 
 private:
@@ -1059,64 +1057,60 @@ private:
 	};
 
 	// Used to initialize the architecture itself
+	template <typename Fold>
 	struct Constructor
 	{
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
 		static inline void inspect(This* arch)
 		{
-			if (isComponent<Value>())
+			if (!inspect::contains<Inner, Value>()
+				&& !inspect::contains<Next, Value>()
+				&& !inspect::contains<Fold, Value>())
 			{
-				auto p = arch->template getComponents<Value>();
-				if (!p->init)
+				if (isComponent<Value>())
 				{
+					auto p = arch->template getComponents<Value>();
 					*p = SparseVec<Value>();
-					p->init = true;
 				}
-			}
 
-			if (isEntity<Value>())
-			{
-				auto p = arch->template getEntities<Value>();
-				if(!p->init)
+				if (isEntity<Value>())
 				{
+					auto p = arch->template getEntities<Value>();
 					*p = EntityStore<Value>();
-					p->init = true;
 				}
 			}
 
-			Inner::template evaluate<Constructor>(arch);
-			Next::template evaluate<Constructor>(arch);
+			Inner::template evaluate<Constructor<Rbox<Fold, Next, Value>>>(arch);
+			Next::template evaluate<Constructor<Dummy>>(arch);
 		}
 	};
 
 	// Used to destruct the architecture itself
+	template <typename Fold>
 	struct Destructor
 	{
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
 		inline static void inspect(This* arch)
 		{
-			if (isComponent<Value>())
+			if (!inspect::contains<Inner, Value>()
+				&& !inspect::contains<Next, Value>()
+				&& !inspect::contains<Fold, Value>())
 			{
-				auto comp = arch->template getComponents<Value>();
-				if (comp->init)
+				if (isComponent<Value>())
 				{
-					comp->init = false;
+					auto comp = arch->template getComponents<Value>();
 					comp->~SparseVec<Value>();
 				}
-			}
 
-			if (isEntity<Value>())
-			{
-				auto ent = arch->template getEntities<Value>();
-				if(ent->init)
+				if (isEntity<Value>())
 				{
-					ent->init = false;
+					auto ent = arch->template getEntities<Value>();
 					ent->~EntityStore<Value>();
 				}
 			}
 
-			Inner::template evaluate<Destructor>(arch);
-			Next::template evaluate<Destructor>(arch);
+			Inner::template evaluate<Destructor<Rbox<Fold, Next, Value>>>(arch);
+			Next::template evaluate<Destructor<Dummy>>(arch);
 		}
 	};
 
