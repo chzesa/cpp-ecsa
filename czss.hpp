@@ -1452,7 +1452,7 @@ struct Accessor
 	template <typename Component>
 	Component* getComponent(uint64_t index)
 	{
-		static_assert(Sys::template canRead<Component>());
+		static_assert(Sys::template canWrite<Component>());
 		return arch->template getComponents<Component>()->get(index);
 	}
 
