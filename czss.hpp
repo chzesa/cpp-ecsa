@@ -806,7 +806,7 @@ struct Architecture : VirtualArchitecture
 		static_assert(!Cont::template evaluate<bool, SystemDependencyIterator>(), "Some System A depends on some System B which is not included in Architecture.");
 		static_assert(!Cont::template evaluate<bool, SystemDependencyMissingOuter>(), "An explicit dependency is missing between two systems.");
 
-		Cont::template evaluate<Constructor<Dummy>>(this);
+		Cont::template evaluate<OncePerType<Dummy, ConstructorCallback>>(this);
 	}
 
 	static constexpr uint64_t numSystems() { return inspect::numUniques<Cont, SystemBase>(); }
@@ -996,7 +996,7 @@ struct Architecture : VirtualArchitecture
 
 	~Architecture()
 	{
-		Cont::template evaluate<Destructor<Dummy>>(this);
+		Cont::template evaluate<OncePerType<Dummy, DestructorCallback>>(this);
 	}
 
 private:
@@ -1134,61 +1134,41 @@ private:
 		}
 	};
 
-	// Used to initialize the architecture itself
-	template <typename Fold>
-	struct Constructor
+	struct ConstructorCallback
 	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		static inline void inspect(This* arch)
+		template <typename Value>
+		static inline void callback(This* arch)
 		{
-			if (!inspect::contains<Inner, Value>()
-				&& !inspect::contains<Next, Value>()
-				&& !inspect::contains<Fold, Value>())
+			if (isComponent<Value>())
 			{
-				if (isComponent<Value>())
-				{
-					auto p = arch->template getComponents<Value>();
-					*p = SparseVec<Value>();
-				}
-
-				if (isEntity<Value>())
-				{
-					auto p = arch->template getEntities<Value>();
-					*p = EntityStore<Value>();
-				}
+				auto p = arch->template getComponents<Value>();
+				*p = SparseVec<Value>();
 			}
 
-			Inner::template evaluate<Constructor<Rbox<Fold, Next, Value>>>(arch);
-			Next::template evaluate<Constructor<Dummy>>(arch);
+			if (isEntity<Value>())
+			{
+				auto p = arch->template getEntities<Value>();
+				*p = EntityStore<Value>();
+			}
 		}
 	};
 
-	// Used to destruct the architecture itself
-	template <typename Fold>
-	struct Destructor
+	struct DestructorCallback
 	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline static void inspect(This* arch)
+		template <typename Value>
+		static inline void callback(This* arch)
 		{
-			if (!inspect::contains<Inner, Value>()
-				&& !inspect::contains<Next, Value>()
-				&& !inspect::contains<Fold, Value>())
+			if (isComponent<Value>())
 			{
-				if (isComponent<Value>())
-				{
-					auto comp = arch->template getComponents<Value>();
-					comp->~SparseVec<Value>();
-				}
-
-				if (isEntity<Value>())
-				{
-					auto ent = arch->template getEntities<Value>();
-					ent->~EntityStore<Value>();
-				}
+				auto comp = arch->template getComponents<Value>();
+				comp->~SparseVec<Value>();
 			}
 
-			Inner::template evaluate<Destructor<Rbox<Fold, Next, Value>>>(arch);
-			Next::template evaluate<Destructor<Dummy>>(arch);
+			if (isEntity<Value>())
+			{
+				auto ent = arch->template getEntities<Value>();
+				ent->~EntityStore<Value>();
+			}
 		}
 	};
 
