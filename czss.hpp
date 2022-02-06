@@ -1416,45 +1416,6 @@ private:
 			}
 		}
 	};
-
-	struct Incrementer
-	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline static bool inspect(This* iterac)
-		{
-			if ( isEntity<Value>() && Value::template isCompatible<Iter>()
-				&& inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
-			{
-				auto p = reinterpret_cast<typename std::unordered_map<uint64_t, Padding<Value>>::iterator*>(&iterac->iterator);
-
-				if (!iterac->hasValue)
-				{
-					*p = iterac->arch->template getEntities<Value>()->map.begin();
-					iterac->hasValue = true;
-				}
-				else
-				{
-					(*p)++;
-				}
-
-				if (*p == iterac->arch->template getEntities<Value>()->map.end())
-				{
-					iterac->hasValue = false;
-				}
-
-				if (iterac->hasValue)
-				{
-					iterac->inner = U(reinterpret_cast<Value*>(&(**p).second));
-				}
-
-				return true;
-			}
-			else
-			{
-				return Next::template evaluate<bool, Incrementer>(iterac) || Inner::template evaluate<bool, Incrementer>(iterac);
-			}
-		}
-	};
 };
 
 template <typename Iter, typename Arch, typename Sys>
