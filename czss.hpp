@@ -129,6 +129,50 @@ struct Rbox <Base, Value>
 	}
 };
 
+template <typename Base, typename Value>
+struct NrBox
+{
+	using Cont = NrBox <Base, Value>;
+	template <typename Return, typename Inspector>
+	constexpr static Return evaluate()
+	{
+		return Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>();
+	}
+
+	template <typename Return, typename Inspector>
+	constexpr static Return evaluate(uint64_t value)
+	{
+		return Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>(value);
+	}
+
+	template <typename Inspector, typename A>
+	inline static void evaluate(A* a)
+	{
+		Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>(a);
+	}
+
+	template <typename Inspector, typename A, typename B>
+	inline static void evaluate(A* a, B* b)
+	{
+		Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>(a, b);
+	}
+
+	template <typename Inspector, typename A, typename B, typename C>
+	inline static void evaluate(A* a, B* b, C* c)
+	{
+		Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>(a, b, c);
+	}
+
+	template <typename Return, typename Inspector, typename A>
+	static Return evaluate(A* a)
+	{
+		return Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>(a);
+	}
+};
+
+template <typename T>
+struct NrContainer : NrBox<Root, T> { };
+
 template <typename ...T>
 struct Container : Rbox<Root, T...> { };
 
@@ -316,6 +360,40 @@ constexpr uint64_t indexOf()
 }
 
 } // namespace inspect
+
+template <typename Fold, typename Callback>
+struct OncePerType
+{
+	template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+	inline static void inspect()
+	{
+		if (!inspect::contains<Fold, Value>())
+			Callback::template callback<Value>();
+
+		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>();
+		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>();
+	}
+
+	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A>
+	inline static void inspect(A* a)
+	{
+		if (!inspect::contains<Fold, Value>())
+			Callback::template callback<Value>(a);
+
+		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>(a);
+		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a);
+	}
+
+	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A, typename B>
+	inline static void inspect(A* a, B* b)
+	{
+		if (!inspect::contains<Fold, Value>())
+			Callback::template callback<Value>(a, b);
+
+		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>(a, b);
+		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a, b);
+	}
+};
 
 // #####################
 // Tags & Validation
