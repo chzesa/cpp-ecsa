@@ -361,6 +361,9 @@ constexpr uint64_t indexOf()
 
 } // namespace inspect
 
+template <typename T>
+constexpr bool isDummy();
+
 template <typename Fold, typename Callback>
 struct OncePerType
 {
@@ -1334,11 +1337,15 @@ struct IteratorIterator
 	
 	This& operator++()
 	{
-		Arch::Cont::template evaluate<bool, Incrementer>(this);
-		while(!hasValue && typeKey<inspect::numUniques<typename Arch::Cont, EntityBase>())
+		Arch::Cont::template evaluate<OncePerType<Dummy, IncrementerCallback>>(this);
+
+		while (!hasValue && typeKey < inspect::numUniques<typename Arch::Cont, EntityBase>())
 		{
-			typeKey++;
-			Arch::Cont::template evaluate<bool, Incrementer>(this);
+			typeKey = nextTypeKey(typeKey);
+			if (typeKey < inspect::numUniques<typename Arch::Cont, EntityBase>())
+			{
+				Arch::Cont::template evaluate<OncePerType<Dummy, IncrementerCallback>>(this);
+			}
 		}
 
 		return *this;
@@ -1360,6 +1367,55 @@ private:
 	typename std::unordered_map<uint64_t, Padding<uint64_t>>::iterator iterator;
 	bool hasValue;
 	U inner;
+
+	static constexpr uint64_t nextTypeKey(uint64_t key)
+	{
+		return Arch::Cont::template evaluate<uint64_t, NextKey>(key);
+	}
+
+	struct NextKey
+	{
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		static constexpr uint64_t inspect(uint64_t key)
+		{
+			return min(
+				min((isDummy<Inner>() ? -1 : Inner::template evaluate<uint64_t, NextKey>(key)), (isDummy<Next>() ? -1 : Next::template evaluate<uint64_t, NextKey>(key))),
+				inspect::indexOf<typename Arch::Cont, Value, EntityBase>() > key ? inspect::indexOf<typename Arch::Cont, Value, EntityBase>() : -1
+			);
+		};
+	};
+
+	struct IncrementerCallback
+	{
+		template <typename Value>
+		static inline void callback(This* iterac)
+		{
+			if (isEntity<Value>() && Value::template isCompatible<Iter>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
+			{
+				auto p = reinterpret_cast<typename std::unordered_map<uint64_t, Padding<Value>>::iterator*>(&iterac->iterator);
+
+				if (!iterac->hasValue)
+				{
+					*p = iterac->arch->template getEntities<Value>()->map.begin();
+					iterac->hasValue = true;
+				}
+				else
+				{
+					(*p)++;
+				}
+
+				if (*p == iterac->arch->template getEntities<Value>()->map.end())
+				{
+					iterac->hasValue = false;
+				}
+
+				if (iterac->hasValue)
+				{
+					iterac->inner = U(reinterpret_cast<Value*>(&(**p).second));
+				}
+			}
+		}
+	};
 
 	struct Incrementer
 	{
@@ -1649,6 +1705,12 @@ template<typename T>
 constexpr bool isPermission()
 {
 	return isBaseType<PermissionsBase, T>();
+}
+
+template <typename T>
+constexpr bool isDummy()
+{
+	return std::is_same<T, Dummy>();
 }
 
 // #####################
