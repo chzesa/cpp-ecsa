@@ -393,6 +393,16 @@ struct OncePerType
 		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>(a, b);
 		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a, b);
 	}
+
+	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A, typename B, typename C>
+	inline static void inspect(A* a, B* b, C* c)
+	{
+		if (!inspect::contains<Fold, Value>())
+			Callback::template callback<Value>(a, b, c);
+
+		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>(a, b, c);
+		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a, b, c);
+	}
 };
 
 // #####################
@@ -1016,7 +1026,7 @@ private:
 
 		if (first != second)
 		{
-			Cont::template evaluate<ComponentPointerFixup<Component>>(this, first, second);
+			Cont::template evaluate<OncePerType<Dummy, ComponentPointerFixCallback<Component>>>(this, first, second);
 		}
 
 		return components->get(index);
@@ -1109,16 +1119,13 @@ private:
 		}
 	};
 
-	template<typename Component>
-	struct ComponentPointerFixup
+	template <typename Component>
+	struct ComponentPointerFixCallback
 	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline static void inspect(This* arch, Component* first, Component* second)
+		template <typename Value>
+		inline static void callback(This* arch, Component* first, Component* second)
 		{
-			if (isEntity<Value>()
-				&& inspect::contains<Value, Component>()
-				&& !inspect::contains<Inner, Value>()
-				&& !inspect::contains<Next, Value>())
+			if (isEntity<Value>() && inspect::contains<Value, Component>())
 			{
 				auto ents = arch->template getEntities<Value>();
 				for (auto& ent : ents->map)
@@ -1128,9 +1135,6 @@ private:
 					);
 				}
 			}
-
-			Inner::template evaluate<ComponentPointerFixup<Component>>(arch, first, second);
-			Next::template evaluate<ComponentPointerFixup<Component>>(arch, first, second);
 		}
 	};
 
