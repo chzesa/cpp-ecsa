@@ -944,16 +944,15 @@ struct Architecture : VirtualArchitecture
 		if (ent == entities->map.end())
 			return;
 
-		EntityComponentDestructor<Entity> ds = {this, entities->get(id)};
-		Entity::template evaluate(&ds);
-
+		Cont::template evaluate<OncePerType<Dummy, EntityComponentDestructorCallback<Entity>>>(this, entities->get(id));
 		entities->map.erase(ent);
 	}
 
 	void destroyEntity(Guid guid)
 	{
-		EntityDestructor ds {this, typeKey(guid), guidId(guid)};
-		Cont::template evaluate(&ds);
+		uint64_t tk = typeKey(guid);
+		uint64_t id = guidId(guid);
+		Cont::template evaluate<OncePerType<Dummy, EntityDestructorCallback>>(this, &tk, &id);
 	}
 
 	template <typename Entity>
@@ -1102,39 +1101,28 @@ private:
 		}
 	};
 
-	template <typename E>
-	struct EntityComponentDestructor
+	template <typename Entity>
+	struct EntityComponentDestructorCallback
 	{
-		This* arch;
-		E* entity;
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline void inspect()
+		template <typename Value>
+		inline static void callback(This* arch, Entity* entity)
 		{
-			uint64_t index = entity->template getComponent<Value>()
-				- reinterpret_cast<Value*>(arch->template getComponents<Value>()->items.data());
-			arch->template getComponents<Value>()->destroy(index);
-
-			Next::template evaluate(this);
+			if (isComponent<Value>() && inspect::contains<Entity, Value>())
+			{
+				uint64_t index = entity->template getComponent<Value>()
+					- reinterpret_cast<Value*>(arch->template getComponents<Value>()->first());
+				arch->template getComponents<Value>()->destroy(index);
+			}
 		}
 	};
 
-	struct EntityDestructor
+	struct EntityDestructorCallback
 	{
-		This* arch;
-		uint64_t typeKey;
-		uint64_t id;
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline bool inspect()
+		template <typename Value>
+		inline static void callback(This* arch, uint64_t* typeKey, uint64_t* id)
 		{
-			if(isEntity<Value>() && inspect::contains<Cont, Value>() && inspect::indexOf<Cont, Value, EntityBase>() == typeKey)
-			{
-				arch->template destroyEntity<Value>(id);
-				return true;
-			}
-			else
-			{
-				return Next::template evaluate<bool>(this) || Inner::template evaluate<bool>(this);
-			}
+			if(isEntity<Value>() && inspect::contains<Cont, Value>() && inspect::indexOf<Cont, Value, EntityBase>() == *typeKey)
+				arch->template destroyEntity<Value>(*id);
 		}
 	};
 
