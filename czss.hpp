@@ -1585,6 +1585,12 @@ struct Accessor
 		return arch->template getComponents<Component>()->get(index);
 	}
 
+	template <typename Component>
+	bool componentReallocated()
+	{
+		return arch->template componentReallocated<Component, Sys>();
+	}
+
 
 // private:
 	// friend Arch;
