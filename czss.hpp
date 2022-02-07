@@ -962,6 +962,17 @@ struct Architecture : VirtualArchitecture
 		destroyEntity<Entity>(This::getEntityId(key));
 	}
 
+	template <typename Component, typename System>
+	bool componentReallocated()
+	{
+		static const uint64_t index = inspect::indexOf<Cont, Component, ComponentBase>()
+			* inspect::numUniques<Cont, SystemBase>()
+			+ inspect::indexOf<Cont, System, SystemBase>();
+		bool ret = reallocated[index];
+		reallocated[index] = false;
+		return ret;
+	}
+
 	void run()
 	{
 		uint64_t sysCount = inspect::numUniques<Container<Systems...>, SystemBase>();
@@ -1016,6 +1027,7 @@ private:
 	void* resources[max(inspect::numUniques<Cont, ResourceBase>(), uint64_t(1))] = {0};
 	char components[max(inspect::numUniques<Cont, ComponentBase>(), uint64_t(1)) * sizeof(SparseVec<char>)] = {0};
 	char entities[max(inspect::numUniques<Cont, EntityBase>(), uint64_t(1)) * sizeof(EntityStore<uint64_t>)] = {0};
+	bool reallocated[max(inspect::numUniques<Cont, ComponentBase>() * inspect::numUniques<Cont, SystemBase>(), uint64_t(1))] = {0};
 
 	template <typename Component>
 	Component* createComponent()
@@ -1030,6 +1042,10 @@ private:
 		if (first != second)
 		{
 			Cont::template evaluate<OncePerType<Dummy, ComponentPointerFixCallback<Component>>>(this, first, second);
+			static const uint64_t begin = inspect::indexOf<Cont, Component, ComponentBase>() * inspect::numUniques<Cont, SystemBase>();
+			static const uint64_t end = (inspect::indexOf<Cont, Component, ComponentBase>() + 1) * inspect::numUniques<Cont, SystemBase>();
+			for (uint64_t i = begin; i < end; i++)
+				reallocated[i] = true;
 		}
 
 		return components->get(index);
