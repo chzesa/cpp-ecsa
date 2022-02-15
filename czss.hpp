@@ -999,12 +999,12 @@ struct Architecture : VirtualArchitecture
 		Cont::template evaluate<SystemRunner>(&id, barriers, this);
 	}
 
-	void initializeSystemCallback(uint64_t id, czsf::Barrier* barriers)
+	void initializeSystemCallback(uint64_t id, czsf::Barrier* barriers) override
 	{
 		Cont::template evaluate<SystemInitialize>(&id, barriers, this);
 	}
 
-	void shutdownSystemCallback(uint64_t id, czsf::Barrier* barriers)
+	void shutdownSystemCallback(uint64_t id, czsf::Barrier* barriers) override
 	{
 		Cont::template evaluate<SystemShutdown>(&id, barriers, this);
 	}
