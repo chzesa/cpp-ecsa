@@ -978,20 +978,7 @@ struct Architecture : VirtualArchitecture
 
 	void run()
 	{
-		uint64_t sysCount = inspect::numUniques<Container<Systems...>, SystemBase>();
-		czsf::Barrier barriers[sysCount];
-		RunTaskData taskData[sysCount];
-
-		for (uint64_t i = 0; i < sysCount; i++)
-		{
-			taskData[i].arch = this;
-			taskData[i].barriers = barriers;
-			taskData[i].id = i;
-		}
-
-		czsf::Barrier wait(sysCount);
-		czsf::run(runSysCallback, taskData, sysCount, &wait);
-		wait.wait();
+		runForSystems(runSysCallback);
 	}
 
 	void initialize()
@@ -1060,6 +1047,7 @@ private:
 
 		for (uint64_t i = 0; i < sysCount; i++)
 		{
+			barriers[i] = czsf::Barrier(1);
 			taskData[i].arch = this;
 			taskData[i].barriers = barriers;
 			taskData[i].id = i;
