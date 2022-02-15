@@ -47,6 +47,16 @@ struct Sysa : System <Dependency<>, Orchestrator<Enta>, Writer <Resa>>
 		auto ent = arch.createEntity<Enta>();
 		ent->getComponent<A>()->value = rand()%10000;
 	};
+
+	static void initialize(Accessor<MyArch, Sysa> arch)
+	{
+		std::cout << "Initialize Sysa" << std::endl;
+	};
+
+	static void shutdown(Accessor<MyArch, Sysa> arch)
+	{
+		std::cout << "Shutdown Sysa" << std::endl;
+	};
 }; 
 
 struct Sysb : System <Dependency<Sysa>, Reader<Iter, Entb>, Writer<Resa>>
@@ -60,6 +70,18 @@ struct Sysb : System <Dependency<Sysa>, Reader<Iter, Entb>, Writer<Resa>>
 			res->sum += iter.template view<A>()->value;
 		}
 	}
+
+	template<typename Arch>
+	static void initialize(Arch arch)
+	{
+		std::cout << "Initialize Sysb" << std::endl;
+	};
+
+	template<typename Arch>
+	static void shutdown(Arch arch)
+	{
+		std::cout << "Shutdown Sysb" << std::endl;
+	};
 };
 
 struct MyArch : Architecture <MyArch, Sysb, Sysa> {};
@@ -72,6 +94,8 @@ void fmain()
 	Resa res = {};
 	arch.setResource(&res);
 
+	arch.initialize();
+
 	std::cout << "Running 50000 iterations" << std::endl;
 	auto start = high_resolution_clock::now();
 	for (int i = 0; i < 50000; i++)
@@ -80,6 +104,8 @@ void fmain()
 			std::cout << "iter #" << i << std::endl;
 		arch.run();
 	}
+
+	arch.shutdown();
 
 	auto stop = high_resolution_clock::now();
 	auto duration = duration_cast<microseconds>(stop - start);
