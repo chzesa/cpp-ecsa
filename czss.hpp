@@ -408,6 +408,51 @@ struct OncePerType
 	}
 };
 
+template <typename Container, int Num>
+struct Switch
+{
+	template <typename Inspector, typename A>
+	inline static void evaluate(int i, A* a)
+	{
+		if (i == Num - 1)
+			Container::template evaluate<Inspector>(a);
+		else
+			Switch<Container, Num - 1>::template evaluate<Inspector>(i, a);
+	}
+
+	template <typename Inspector, typename A, typename B>
+	inline static void evaluate(int i, A* a, B* b)
+	{
+		if (i == Num - 1)
+			Container::template evaluate<Inspector>(a, b);
+		else
+			Switch<Container, Num - 1>::template evaluate<Inspector>(i, a, b);
+	}
+
+	template <typename Inspector, typename A, typename B, typename C>
+	inline static void evaluate(int i, A* a, B* b, C* c)
+	{
+		if (i == Num - 1)
+			Container::template evaluate<Inspector>(a, b, c);
+		else
+			Switch<Container, Num - 1>::template evaluate<Inspector>(i, a, b, c);
+	}
+};
+
+template <typename Container>
+struct Switch <Container, 0>
+{
+	template <typename Inspector, typename A>
+	inline static void evaluate(int i, A* a) { }
+
+	template <typename Inspector, typename A, typename B>
+	inline static void evaluate(int i, A* a, B* b) { }
+
+	template <typename Inspector, typename A, typename B, typename C>
+	inline static void evaluate(int i, A* a, B* b, C* c) { }
+};
+
+
 // #####################
 // Tags & Validation
 // #####################
