@@ -7,5 +7,5 @@ Facilitates easy building of a coarsely parallelized ECS-architecture by definin
 Linux:
 
 ```sh
-clang++ -O1 example.cpp -pthread
+clang++ -O1 example.cpp
 ```
