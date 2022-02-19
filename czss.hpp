@@ -1445,7 +1445,7 @@ struct IteratorIterator
 
 		while (!hasValue && typeKey < Arch::numEntities())
 		{
-			typeKey = nextTypeKey(typeKey);
+			typeKey = Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<uint64_t, NextKey>(typeKey, typeKey);
 			if (typeKey < Arch::numEntities())
 			{
 				Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, IncrementerCallback>>(typeKey, this);
@@ -1471,11 +1471,6 @@ private:
 	typename std::unordered_map<uint64_t, Padding<uint64_t>>::iterator iterator;
 	bool hasValue;
 	U inner;
-
-	static constexpr uint64_t nextTypeKey(uint64_t key)
-	{
-		return Arch::Cont::template evaluate<uint64_t, NextKey>(key);
-	}
 
 	struct NextKey
 	{
