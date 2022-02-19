@@ -1014,7 +1014,7 @@ struct Architecture : VirtualArchitecture
 	{
 		uint64_t tk = typeKey(guid);
 		uint64_t id = guidId(guid);
-		Cont::template evaluate<OncePerType<Dummy, EntityDestructorCallback>>(this, &tk, &id);
+		Switch<Cont, numEntities()>::template evaluate<OncePerType<Dummy, EntityDestructorCallback>>(id, this, &tk, &id);
 	}
 
 	template <typename Entity>
@@ -1054,17 +1054,17 @@ struct Architecture : VirtualArchitecture
 
 	void systemCallback(uint64_t id, czsf::Barrier* barriers) override
 	{
-		Cont::template evaluate<SystemRunner>(&id, barriers, this);
+		Switch<Cont, numSystems()>::template evaluate<SystemRunner>(id, &id, barriers, this);
 	}
 
 	void initializeSystemCallback(uint64_t id, czsf::Barrier* barriers) override
 	{
-		Cont::template evaluate<SystemInitialize>(&id, barriers, this);
+		Switch<Cont, numSystems()>::template evaluate<SystemInitialize>(id, &id, barriers, this);
 	}
 
 	void shutdownSystemCallback(uint64_t id, czsf::Barrier* barriers) override
 	{
-		Cont::template evaluate<SystemShutdown>(&id, barriers, this);
+		Switch<Cont, numSystems()>::template evaluate<SystemShutdown>(id, &id, barriers, this);
 	}
 
 	static constexpr uint64_t typeKeyLength()
