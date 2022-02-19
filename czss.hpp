@@ -411,6 +411,14 @@ struct OncePerType
 template <typename Container, int Num>
 struct Switch
 {
+	template <typename Return, typename Inspector, typename A>
+	constexpr static Return evaluate(int i, A a)
+	{
+		return i == Num - 1
+			? Container::template evaluate<Return, Inspector>(a)
+			: Switch<Container, Num - 1>::template evaluate<Return, Inspector>(i, a);
+	}
+
 	template <typename Inspector, typename A>
 	inline static void evaluate(int i, A* a)
 	{
@@ -442,6 +450,9 @@ struct Switch
 template <typename Container>
 struct Switch <Container, 0>
 {
+	template <typename Return,  typename Inspector, typename A>
+	constexpr static Return evaluate(int i, A a) { return Return(); }
+
 	template <typename Inspector, typename A>
 	inline static void evaluate(int i, A* a) { }
 
