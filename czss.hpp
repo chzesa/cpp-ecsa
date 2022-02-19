@@ -1430,14 +1430,14 @@ struct IteratorIterator
 	
 	This& operator++()
 	{
-		Arch::Cont::template evaluate<OncePerType<Dummy, IncrementerCallback>>(this);
+		Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, IncrementerCallback>>(typeKey, this);
 
-		while (!hasValue && typeKey < inspect::numUniques<typename Arch::Cont, EntityBase>())
+		while (!hasValue && typeKey < Arch::numEntities())
 		{
 			typeKey = nextTypeKey(typeKey);
-			if (typeKey < inspect::numUniques<typename Arch::Cont, EntityBase>())
+			if (typeKey < Arch::numEntities())
 			{
-				Arch::Cont::template evaluate<OncePerType<Dummy, IncrementerCallback>>(this);
+				Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, IncrementerCallback>>(typeKey, this);
 			}
 		}
 
