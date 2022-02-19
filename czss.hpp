@@ -1186,6 +1186,21 @@ private:
 		}
 	};
 
+	template <typename Sys>
+	struct DependeeBlocker
+	{
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		inline static void inspect(czsf::Barrier* barriers)
+		{
+			if (Value::Dep::template directlyDependsOn<Sys>() && !Value::Dep::template transitivelyDependsOn<Sys>())
+			{
+				barriers[inspect::indexOf<Cont, Value, SystemBase>()].wait();
+			}
+
+			Next::template evaluate<DependeeBlocker<Sys>>(barriers);
+		}
+	};
+
 	template <typename E>
 	struct ComponentCreator
 	{
@@ -2163,7 +2178,7 @@ void Architecture<Desc, Systems...>::SystemShutdown::inspect(uint64_t* id, czsf:
 		return;
 	}
 
-	Cont::template evaluate<SystemBlocker<Value>>(barriers);
+	Cont::template evaluate<DependeeBlocker<Value>>(barriers);
 	Value::shutdown(Accessor<Desc, Value>(reinterpret_cast<Desc*>(arch)));
 	barriers[*id].signal();
 }
