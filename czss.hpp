@@ -1033,7 +1033,7 @@ struct Architecture : VirtualArchitecture
 
 	void shutdown()
 	{
-		runForSystems(initializeSysCallback);
+		runForSystems(shutdownSysCallback);
 	}
 
 	template <typename Sys>
