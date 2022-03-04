@@ -824,10 +824,6 @@ private:
 
 struct VirtualArchitecture
 {
-	virtual void systemCallback(uint64_t id, czsf::Barrier* barriers) = 0;
-	virtual void shutdownSystemCallback(uint64_t id, czsf::Barrier* barriers) = 0;
-	virtual void initializeSystemCallback(uint64_t id, czsf::Barrier* barriers) = 0;
-
 protected:
 	template<typename Entity>
 	static void setEntityId(Entity* ent, uint64_t id)
@@ -854,16 +850,13 @@ protected:
 	}
 };
 
+template <typename Arch>
 struct RunTaskData
 {
-	VirtualArchitecture* arch;
+	Arch* arch;
 	czsf::Barrier* barriers;
 	uint64_t id;
 };
-
-void initializeSysCallback(RunTaskData* d);
-void shutdownSysCallback(RunTaskData* d);
-void runSysCallback(RunTaskData* d);
 
 template <typename Desc, typename ...Systems>
 struct Architecture : VirtualArchitecture
@@ -1036,35 +1029,35 @@ struct Architecture : VirtualArchitecture
 
 	void run()
 	{
-		runForSystems(runSysCallback);
+		runForSystems(systemCallback);
 	}
 
 	void initialize()
 	{
-		runForSystems(initializeSysCallback);
+		runForSystems(initializeSystemCallback);
 	}
 
 	void shutdown()
 	{
-		runForSystems(shutdownSysCallback);
+		runForSystems(shutdownSystemCallback);
 	}
 
 	template <typename Sys>
 	void run();
 
-	void systemCallback(uint64_t id, czsf::Barrier* barriers) override
+	static void systemCallback(RunTaskData<This>* data)
 	{
-		Switch<Cont, numSystems()>::template evaluate<SystemRunner>(id, &id, barriers, this);
+		Switch<Cont, numSystems()>::template evaluate<SystemRunner>(data->id, &data->id, data->barriers, data->arch);
 	}
 
-	void initializeSystemCallback(uint64_t id, czsf::Barrier* barriers) override
+	static void initializeSystemCallback(RunTaskData<This>* data)
 	{
-		Switch<Cont, numSystems()>::template evaluate<SystemInitialize>(id, &id, barriers, this);
+		Switch<Cont, numSystems()>::template evaluate<SystemInitialize>(data->id, &data->id, data->barriers, data->arch);
 	}
 
-	void shutdownSystemCallback(uint64_t id, czsf::Barrier* barriers) override
+	static void shutdownSystemCallback(RunTaskData<This>* data)
 	{
-		Switch<Cont, numSystems()>::template evaluate<SystemShutdown>(id, &id, barriers, this);
+		Switch<Cont, numSystems()>::template evaluate<SystemShutdown>(data->id, &data->id, data->barriers, data->arch);
 	}
 
 	static constexpr uint64_t typeKeyLength()
@@ -1097,11 +1090,11 @@ private:
 	char entities[max(inspect::numUniques<Cont, EntityBase>(), uint64_t(1)) * sizeof(EntityStore<uint64_t>)] = {0};
 	bool reallocated[max(inspect::numUniques<Cont, ComponentBase>() * inspect::numUniques<Cont, SystemBase>(), uint64_t(1))] = {0};
 
-	void runForSystems(void (*fn)(RunTaskData*))
+	void runForSystems(void (*fn)(RunTaskData<This>*))
 	{
 		static const uint64_t sysCount = inspect::numUniques<Container<Systems...>, SystemBase>();
 		czsf::Barrier barriers[sysCount];
-		RunTaskData taskData[sysCount];
+		RunTaskData<This> taskData[sysCount];
 
 		for (uint64_t i = 0; i < sysCount; i++)
 		{
@@ -2243,21 +2236,6 @@ uint64_t Guid::get()
 
 void TemplateStubs::setGuid(Guid guid) { }
 Guid TemplateStubs::getGuid() { return Guid(0); }
-
-void runSysCallback(RunTaskData* d)
-{
-	d->arch->systemCallback(d->id, d->barriers);
-}
-
-void initializeSysCallback(RunTaskData* d)
-{
-	d->arch->initializeSystemCallback(d->id, d->barriers);
-}
-
-void shutdownSysCallback(RunTaskData* d)
-{
-	d->arch->shutdownSystemCallback(d->id, d->barriers);
-}
 
 } // namespace czss
 
