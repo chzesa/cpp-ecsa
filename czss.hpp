@@ -589,12 +589,104 @@ private:
 template <typename E>
 struct EntityStore
 {
-	std::unordered_map<uint64_t, Padding<E>> map;
+	EntityStore()
+	{
+		entities = (Padding<E>*) malloc(sizeof (Padding<E>) * (32));
+
+		for (uint64_t i = 0; i < 32; i++)
+			free_indices.push(i);
+	}
+
+	E* get(uint64_t id)
+	{
+		auto res = index_map.find(id);
+		if (res == index_map.end())
+			return nullptr;
+
+		return entities[res->second].into();
+	}
+
+	E* create(uint64_t& id)
+	{
+		id = nextId++;
+		if(free_indices.size() == 0)
+			expand(size());
+
+		uint64_t index = free_indices.top();
+		free_indices.pop();
+
+		used_indices.push_back(index);
+		used_indices_map.insert({id, index});
+		used_indices_map_reverse.insert({index, id});
+
+		index_map.insert({id, index});
+
+		return entities[index].into();
+	}
+
+	void destroy(uint64_t id)
+	{
+		auto res = index_map.find(id);
+		if (res == index_map.end())
+			return;
+
+		uint64_t index = res->second;
+
+		entities[index].into()->~E();
+		memset(&entities[index], 0, sizeof(E));
+
+		index_map.erase(id);
+
+		uint64_t ui_index = used_indices_map[id];
+
+		uint64_t replace_index = used_indices.size() - 1;
+		used_indices[ui_index] = used_indices[replace_index];
+		uint64_t replace_id = used_indices_map_reverse[replace_index];
+
+		used_indices_map_reverse[ui_index] = replace_id;
+		used_indices_map_reverse.erase(replace_index);
+		used_indices_map[replace_id] = ui_index;
+		used_indices_map.erase(id);
+
+		used_indices.pop_back();
+
+		free_indices.push(index);
+	}
+
+	uint64_t size()
+	{
+		return used_indices.size();
+	}
+
+// private:
+
+	void expand(uint64_t by)
+	{
+		uint64_t size = used_indices.size();
+		Padding<E>* next = (Padding<E>*) malloc(sizeof (Padding<E>) * (size + by));
+
+		memcpy(next, entities, sizeof (Padding<E>) * size);
+		free(entities);
+
+		entities = next;
+
+		uint64_t new_size = size + by;
+		while(size < new_size)
+		{
+			free_indices.push(size);
+			size++;
+		}
+	}
+
 	uint64_t nextId;
+	Padding<E>* entities;
+	std::vector<uint64_t> used_indices;
 
-	E* get(uint64_t id);
+	std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> free_indices;
+	std::unordered_map<uint64_t, uint64_t> index_map;
 
-	E* create(uint64_t& id);
+	std::unordered_map<uint64_t, uint64_t> used_indices_map;
+	std::unordered_map<uint64_t, uint64_t> used_indices_map_reverse;
 };
 
 // #####################
@@ -1294,10 +1386,11 @@ private:
 			if (isEntity<Value>() && inspect::contains<Value, Component>())
 			{
 				auto ents = arch->template getEntities<Value>();
-				for (auto& ent : ents->map)
+				for (auto index : ents->used_indices)
 				{
-					ent.second.into()->template setComponent<Component>(
-						ent.second.into()->template getComponent<Component>() - first + second
+					auto ent = ents->entities[index].into();
+					ent->template setComponent<Component>(
+						ent->template getComponent<Component>() - first + second
 					);
 				}
 			}
@@ -1829,10 +1922,11 @@ private:
 		{
 			if (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
 			{
-				auto entities = arch->template getEntities<Value>();
-				for (auto& pair : entities->map)
+				auto ents = arch->template getEntities<Value>();
+				for (auto index : ents->used_indices)
 				{
-					IteratorAccessor<Iterator, Arch, Sys> accessor(pair.second.into());
+					auto ent = ents->entities[index].into();
+					IteratorAccessor<Iterator, Arch, Sys> accessor(ent);
 					f(accessor);
 				}
 			}
@@ -1848,7 +1942,7 @@ private:
 			if (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
 			{
 				auto entities = arch->template getEntities<Value>();
-				*count += entities->map.size();
+				*count += entities->size();
 			}
 		}
 	};
@@ -1888,31 +1982,33 @@ private:
 				return;
 
 			auto entities = data->arch->template getEntities<Value>();
-			if (entities->map.size() == 0 || entities->map.size() < data->beginIndex)
+			if (entities->size() == 0 || entities->size() < data->beginIndex)
 			{
-				data->beginIndex -= entities->map.size();
+				data->beginIndex -= entities->size();
 				return;
 			}
 
-			auto it = entities->map.begin();
+			auto it = entities->used_indices.begin();
+			it += data->beginIndex;
 
-			// it = it + data->beginIndex;
-			for (uint64_t i = 0; i < data->beginIndex; i++)
-				it++;
+			auto end = entities->used_indices.end();
+			uint64_t handled;
 
-			uint64_t handled = 0;
-
-			while (it != entities->map.end())
+			if (data->entityCount < end - it)
 			{
-				IteratorAccessor<Iterator, Arch, Sys> accessor(it->second.into());
-				(*data->func)(accessor);
-				handled++;
-
-				if(handled == data->entityCount)
-					break;
-
-				it++;
+				handled = data->entityCount;
+				end = it + data->entityCount;
+			} else {
+				handled = end - it;
 			}
+
+			for (; it != end; it++)
+			{
+				uint64_t index = *it;
+				IteratorAccessor<Iterator, Arch, Sys> accessor(entities->entities[index].into());
+				(*data->func)(accessor);
+			}
+
 
 			data->entityCount -= handled;
 			data->beginIndex = 0;
@@ -2076,23 +2172,6 @@ void SparseVec<T>::expand(uint64_t by)
 		indices.push(i - 1);
 
 	size += by;
-}
-
-template <typename E>
-E* EntityStore<E>::get(uint64_t id)
-{
-	if (map.find(id) == map.end())
-		return nullptr;
-
-	return map[id].into();
-}
-
-template <typename E>
-E* EntityStore<E>::create(uint64_t& id)
-{
-	id = nextId++;
-	map.emplace(id, false);
-	return map[id].into();
 }
 
 // #####################
