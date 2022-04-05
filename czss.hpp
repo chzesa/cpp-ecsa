@@ -83,6 +83,12 @@ struct Rbox : Rbox <Base, Value>, Rbox<Rbox <Base, Value>, Rest...>
 		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(a, b);
 	}
 
+	template <typename Inspector, typename A, typename B>
+	inline static void evaluate(A a, B* b)
+	{
+		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(a, b);
+	}
+
 	template <typename Inspector, typename A, typename B, typename C>
 	inline static void evaluate(A* a, B* b, C* c)
 	{
@@ -125,6 +131,12 @@ struct Rbox <Base, Value>
 		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(a, b);
 	}
 
+	template <typename Inspector, typename A, typename B>
+	inline static void evaluate(A a, B* b)
+	{
+		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(a, b);
+	}
+
 	template <typename Inspector, typename A, typename B, typename C>
 	inline static void evaluate(A* a, B* b, C* c)
 	{
@@ -162,6 +174,12 @@ struct NrBox
 
 	template <typename Inspector, typename A, typename B>
 	inline static void evaluate(A* a, B* b)
+	{
+		Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>(a, b);
+	}
+
+	template <typename Inspector, typename A, typename B>
+	inline static void evaluate(A a, B* b)
 	{
 		Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>(a, b);
 	}
@@ -406,6 +424,16 @@ struct OncePerType
 		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a, b);
 	}
 
+	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A, typename B>
+	inline static void inspect(A a, B* b)
+	{
+		if (!inspect::contains<Fold, Value>())
+			Callback::template callback<Value>(a, b);
+
+		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>(a, b);
+		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a, b);
+	}
+
 	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A, typename B, typename C>
 	inline static void inspect(A* a, B* b, C* c)
 	{
@@ -642,7 +670,10 @@ struct Iterator : ComponentContainer<Components...>, IteratorBase
 	using Cont = Container<Components...>;
 
 	template <typename Entity>
-	constexpr static bool isCompatible();
+	constexpr static bool isCompatible()
+	{
+		return inspect::containsAll<Entity, Components...>();
+	}
 
 	void setGuid(Guid guid) { this->id = guid; }
 	Guid getGuid() { return id; }
@@ -659,7 +690,10 @@ struct Entity : ComponentContainer<Components...>, EntityBase
 	using Cont = Container<Components...>;
 
 	template <typename Iterator>
-	constexpr static bool isCompatible();
+	constexpr static bool isCompatible()
+	{
+		return Iterator::template isCompatible <Entity<Components...>>();
+	}
 
 private:
 	void setGuid(Guid guid) { this->id = guid.get(); }
@@ -667,6 +701,14 @@ private:
 	friend VirtualArchitecture;
 	uint64_t id;
 };
+
+template <typename Iterator, typename Entity>
+constexpr static bool isIteratorCompatibleWithEntity()
+{
+	return isIterator<Iterator>() && isEntity<Entity>()
+		? inspect::containsAllIn<typename Entity::Cont, typename Iterator::Cont>()
+		: false;
+}
 
 // #####################
 // Permissions
@@ -1378,6 +1420,7 @@ struct IteratorAccessor
 
 private:
 	friend IteratorIterator<Iter, Arch, Sys>;
+	friend Accessor<Arch, Sys>;
 
 	IteratorAccessor() {}
 
@@ -1658,10 +1701,15 @@ struct Accessor
 	template <typename Iterator>
 	IterableStub<Iterator, Arch, Sys> iterate()
 	{
-		static_assert(isIterator<Iterator>(), "Attempted to iterate non-iterator.");
-		static_assert(inspect::containsAllIn<Sys, Iterator>(), "System doesn't have access to all components of Iterator.");
-		static_assert(inspect::contains<typename Arch::Cont, Iterator>(), "Architecture doesn't contain the Iterator.");
+		iteratorPermission<Iterator>();
 		return IterableStub<Iterator, Arch, Sys>(arch);
+	}
+
+	template <typename Iterator, typename F>
+	void iterate(F f)
+	{
+		iteratorPermission<Iterator>();
+		Arch::Cont::template evaluate<OncePerType<Dummy, IteratorCallback<Iterator, F>>>(f, arch);
 	}
 
 	template <typename Component>
@@ -1698,6 +1746,14 @@ struct Accessor
 	Arch* arch;
 
 private:
+	template <typename Iterator>
+	void iteratorPermission()
+	{
+		static_assert(isIterator<Iterator>(), "Attempted to iterate non-iterator.");
+		static_assert(inspect::containsAllIn<Sys, Iterator>(), "System doesn't have access to all components of Iterator.");
+		static_assert(inspect::contains<typename Arch::Cont, Iterator>(), "Architecture doesn't contain the Iterator.");
+	}
+
 	template <typename Entity>
 	void entityPermission()
 	{
@@ -1716,6 +1772,24 @@ private:
 				&& Sys::template canOrchestrate<Value>()
 				|| Inner::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(key)
 				|| Next::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(key);
+		}
+	};
+
+	template <typename Iterator, typename F>
+	struct IteratorCallback
+	{
+		template <typename Value>
+		static inline void callback(F f, Arch* arch)
+		{
+			if (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
+			{
+				auto entities = arch->template getEntities<Value>();
+				for (auto& pair : entities->map)
+				{
+					IteratorAccessor<Iterator, Arch, Sys> accessor(pair.second.into());
+					f(accessor);
+				}
+			}
 		}
 	};
 };
@@ -1920,30 +1994,6 @@ void ComponentContainer<Components...>::setComponent(Component* p)
 	{
 		components[componentIndex<Component>()] = p;
 	}
-}
-
-// #####################
-// Iterator
-// #####################
-
-template <typename ...Components>
-template <typename Entity>
-constexpr bool Iterator<Components...>::isCompatible()
-{
-	// assert(isEntity<Entity>());
-	return inspect::containsAll<Entity, Components...>();
-};
-
-// #####################
-// Entity
-// #####################
-
-template <typename ...Components>
-template <typename Iterator>
-constexpr bool Entity<Components...>::isCompatible()
-{
-	// assert(isIterator<Iterator>());
-	return Iterator::template isCompatible <Entity<Components...>>();
 }
 
 // #####################
