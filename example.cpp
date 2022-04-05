@@ -84,7 +84,29 @@ struct Sysb : System <Dependency<Sysa>, Reader<Iter, Entb>, Writer<Resa>>
 	};
 };
 
-struct MyArch : Architecture <MyArch, Sysb, Sysa> {};
+struct Sysc : System<Dependency<Sysa>, Reader<Iter, Entb>, Writer<Resa>>
+{
+	static void run(Accessor<MyArch, Sysc> arch)
+	{
+		auto res = arch.template getResource<Resa>();
+
+		arch.iterate<Iter>([&] (IteratorAccessor<Iter, MyArch, Sysc>& accessor) {
+			res->sum += accessor.view<A>()->value;
+		});
+	};
+
+	static void initialize(Accessor<MyArch, Sysc> arch)
+	{
+		std::cout << "Initialize Sysc" << std::endl;
+	};
+
+	static void shutdown(Accessor<MyArch, Sysc> arch)
+	{
+		std::cout << "Shutdown Sysc" << std::endl;
+	};
+};
+
+struct MyArch : Architecture <MyArch, Sysc, Sysa> {};
 
 void fmain()
 {
