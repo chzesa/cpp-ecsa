@@ -610,12 +610,17 @@ struct EntityStore
 	{
 		id = nextId++;
 		if(free_indices.size() == 0)
+		{
+			E* old = reinterpret_cast<E*>(entities);
 			expand(size());
+			for (auto& p : used_indices)
+				p = p - old + reinterpret_cast<E*>(entities);
+		}
 
 		uint64_t index = free_indices.top();
 		free_indices.pop();
 
-		used_indices.push_back(index);
+		used_indices.push_back(reinterpret_cast<E*>(entities) + index);
 		used_indices_map.insert({id, index});
 		used_indices_map_reverse.insert({index, id});
 
@@ -680,7 +685,7 @@ struct EntityStore
 
 	uint64_t nextId;
 	Padding<E>* entities;
-	std::vector<uint64_t> used_indices;
+	std::vector<E*> used_indices;
 
 	std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> free_indices;
 	std::unordered_map<uint64_t, uint64_t> index_map;
@@ -1386,9 +1391,8 @@ private:
 			if (isEntity<Value>() && inspect::contains<Value, Component>())
 			{
 				auto ents = arch->template getEntities<Value>();
-				for (auto index : ents->used_indices)
+				for (auto& ent : ents->used_indices)
 				{
-					auto ent = ents->entities[index].into();
 					ent->template setComponent<Component>(
 						ent->template getComponent<Component>() - first + second
 					);
@@ -1923,9 +1927,8 @@ private:
 			if (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
 			{
 				auto ents = arch->template getEntities<Value>();
-				for (auto index : ents->used_indices)
+				for (auto& ent : ents->used_indices)
 				{
-					auto ent = ents->entities[index].into();
 					IteratorAccessor<Iterator, Arch, Sys> accessor(ent);
 					f(accessor);
 				}
@@ -2004,8 +2007,7 @@ private:
 
 			for (; it != end; it++)
 			{
-				uint64_t index = *it;
-				IteratorAccessor<Iterator, Arch, Sys> accessor(entities->entities[index].into());
+				IteratorAccessor<Iterator, Arch, Sys> accessor(*it);
 				(*data->func)(accessor);
 			}
 
