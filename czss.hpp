@@ -1712,6 +1712,52 @@ struct Accessor
 		Arch::Cont::template evaluate<OncePerType<Dummy, IteratorCallback<Iterator, F>>>(f, arch);
 	}
 
+	template <typename Iterator, typename F>
+	void parallelIterate(uint64_t numTasks, F f)
+	{
+		iteratorPermission<Iterator>();
+		uint64_t counter = countCompatibleEntities<Iterator>();
+
+		ParallelIterateTaskData<F> tasks[numTasks];
+
+		for (uint64_t i = 0; i < numTasks; i++)
+		{
+			tasks[i].arch = arch;
+			tasks[i].func = &f;
+			tasks[i].entityCount = min(counter, max(uint64_t(1), counter / (numTasks - i)));
+			counter -= tasks[i].entityCount;
+
+			if (i > 0)
+			{
+				tasks[i].beginIndex = tasks[i - 1].beginIndex + tasks[i - 1].entityCount;
+			}
+
+			if (counter == 0)
+			{
+				numTasks = i + 1;
+				break;
+			}
+		}
+
+		czsf::Barrier barrier(numTasks);
+		czsf::run(ParallelIterateTask<Iterator, F>, tasks, numTasks, &barrier);
+		barrier.wait();
+	}
+
+	template <typename Iterator>
+	uint64_t countCompatibleEntities()
+	{
+		uint64_t entityCount = 0;
+		Arch::Cont::template evaluate<OncePerType<Dummy, EntityCountCallback<Iterator>>>(&entityCount, arch);
+		return entityCount;
+	}
+
+	template <typename Iterator>
+	static constexpr uint64_t numCompatibleEntities()
+	{
+		return Arch::Cont::template evaluate<uint64_t, NumCompatibleEntities<Dummy, Iterator>>();
+	}
+
 	template <typename Component>
 	uint64_t componentIndex(Component* component)
 	{
@@ -1792,6 +1838,100 @@ private:
 			}
 		}
 	};
+
+	template <typename Iterator>
+	struct EntityCountCallback
+	{
+		template <typename Value>
+		static inline void callback(uint64_t* count, Arch* arch)
+		{
+			if (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
+			{
+				auto entities = arch->template getEntities<Value>();
+				*count += entities->map.size();
+			}
+		}
+	};
+
+	template <typename Handled, typename Iterator>
+	struct NumCompatibleEntities
+	{
+		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		static constexpr uint64_t inspect()
+		{
+			return (isEntity<Value>()
+				&& isIteratorCompatibleWithEntity<Iterator, Value>()
+				&& !inspect::contains<Next, Value>()
+				&& !inspect::contains<Handled, Value>()
+				? 1 : 0)
+				+ Inner::template evaluate<uint64_t, NumCompatibleEntities<Container <Handled, Value, Next>, Iterator>>()
+				+ Next::template evaluate<uint64_t, NumCompatibleEntities<Dummy, Iterator>>();
+		}
+	};
+
+	template <typename F>
+	struct ParallelIterateTaskData
+	{
+		uint64_t beginIndex = 0;
+		uint64_t entityCount = 0;
+		Arch* arch;
+		F* func;
+	};
+
+	template <typename Iterator, typename F>
+	struct ParallelIterateTaskCallback
+	{
+		template <typename Value>
+		static inline void callback(ParallelIterateTaskData<F>* data)
+		{
+			if (!isEntity<Value>() || !isIteratorCompatibleWithEntity<Iterator, Value>())
+				return;
+
+			auto entities = data->arch->template getEntities<Value>();
+			if (entities->map.size() == 0 || entities->map.size() < data->beginIndex)
+			{
+				data->beginIndex -= entities->map.size();
+				return;
+			}
+
+			auto it = entities->map.begin();
+
+			// it = it + data->beginIndex;
+			for (uint64_t i = 0; i < data->beginIndex; i++)
+				it++;
+
+			uint64_t handled = 0;
+
+			while (it != entities->map.end())
+			{
+				IteratorAccessor<Iterator, Arch, Sys> accessor(it->second.into());
+				(*data->func)(accessor);
+				handled++;
+
+				if(handled == data->entityCount)
+					break;
+
+				it++;
+			}
+
+			data->entityCount -= handled;
+			data->beginIndex = 0;
+		}
+	};
+
+
+	template <typename Iterator, typename F>
+	static void ParallelIterateTask(ParallelIterateTaskData<F>* data)
+	{
+		static const uint64_t limit = Accessor<Arch, Sys>::numCompatibleEntities<Iterator>();
+
+		for (uint64_t i = 0; i < limit; i++)
+		{
+			Switch<typename Arch::Cont, limit>::template evaluate<OncePerType<Dummy, ParallelIterateTaskCallback<Iterator, F>>>(i, data);
+			if (data->entityCount == 0)
+				return;
+		}
+	}
 };
 
 
