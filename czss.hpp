@@ -1142,7 +1142,7 @@ struct Architecture : VirtualArchitecture
 	{
 		uint64_t tk = typeKey(guid);
 		uint64_t id = guidId(guid);
-		Switch<Cont, numEntities()>::template evaluate<OncePerType<Dummy, EntityDestructorCallback>>(id, this, &tk, &id);
+		Switch<Cont, numEntities()>::template evaluate<OncePerType<Dummy, EntityDestructorCallback>>(tk, this, &tk, &id);
 	}
 
 	template <typename Entity>
