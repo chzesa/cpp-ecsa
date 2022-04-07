@@ -1201,13 +1201,12 @@ struct Architecture : VirtualArchitecture
 	void destroyEntity(uint64_t id)
 	{
 		auto entities = getEntities<Entity>();
-
-		auto ent = entities->map.find(id);
-		if (ent == entities->map.end())
+		auto ent = entities->get(id);
+		if (ent == nullptr)
 			return;
 
-		Cont::template evaluate<OncePerType<Dummy, EntityComponentDestructorCallback<Entity>>>(this, entities->get(id));
-		entities->map.erase(ent);
+		Cont::template evaluate<OncePerType<Dummy, EntityComponentDestructorCallback<Entity>>>(this, ent);
+		entities->destroy(ent);
 	}
 
 	void destroyEntity(Guid guid)
