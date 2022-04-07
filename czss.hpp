@@ -506,9 +506,6 @@ struct Switch <Container, 0>
 // Tags & Validation
 // #####################
 
-struct EnableConstructor {};
-struct DisableConstructor {};
-struct DisableDestructor {};
 struct ThreadSafe {};
 
 struct ComponentBase {};
@@ -558,41 +555,12 @@ private:
 	uint64_t id;
 };
 
-template <typename T>
-struct Padding
-{
-	Padding() : Padding(true) {  }
-	Padding(bool init) { if (init && !std::is_base_of<DisableConstructor, T>()) new(into()) T(); }
-	~Padding() { if (!std::is_base_of<DisableDestructor, T>()) into()->~T(); }
-	T* into() { return reinterpret_cast<T*>(d); }
-private:
-	char d[max(sizeof(T), uint64_t(1))];
-};
-
-template <typename T>
-struct SparseVec
-{
-	std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> indices;
-
-	SparseVec();
-	uint64_t create();
-	void destroy(uint64_t i);
-
-	T* get(uint64_t id);
-	T* first();
-
-	Padding<T>* items;
-	uint64_t size;
-private:
-	void expand(uint64_t by);
-};
-
 template <typename E>
 struct EntityStore
 {
 	EntityStore()
 	{
-		entities = (Padding<E>*) malloc(sizeof (Padding<E>) * (32));
+		entities = reinterpret_cast<E*>(malloc(sizeof (E) * 32));
 
 		for (uint64_t i = 0; i < 32; i++)
 			free_indices.push(i);
@@ -627,7 +595,7 @@ struct EntityStore
 
 		index_map.insert({id, index});
 
-		return entities[index].into();
+		return &entities[index];
 	}
 
 	void destroy(uint64_t id)
@@ -669,9 +637,9 @@ struct EntityStore
 	void expand(uint64_t by)
 	{
 		uint64_t size = used_indices.size();
-		Padding<E>* next = (Padding<E>*) malloc(sizeof (Padding<E>) * (size + by));
+		E* next = reinterpret_cast<E*>(malloc(sizeof (E) * (size + by)));
 
-		memcpy(next, entities, sizeof (Padding<E>) * size);
+		memcpy(next, entities, sizeof (E) * size);
 		free(entities);
 
 		entities = next;
@@ -685,7 +653,7 @@ struct EntityStore
 	}
 
 	uint64_t nextId;
-	Padding<E>* entities;
+	E* entities;
 	std::vector<E*> used_indices;
 
 	std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> free_indices;
@@ -703,9 +671,6 @@ struct TemplateStubs
 {
 	template <typename T>
 	constexpr static bool isCompatible() { return false; }
-
-	template <typename T>
-	void setComponent(T* p) {}
 
 	template <typename T>
 	T* getComponent() { return nullptr; }
@@ -741,27 +706,6 @@ struct Resource : Dummy, ResourceBase, TemplateStubs
 // Component collection types
 // #####################
 
-template <typename ...Components>
-struct ComponentContainer : Container<Components...>
-{
-	void* components[max(inspect::numUniques<Container<Components...>, ComponentBase>(), uint64_t(1))];
-
-	template <typename Component>
-	constexpr static bool containsComponent();
-
-	template <typename Component>
-	constexpr static uint64_t componentIndex();
-
-	template <typename Component>
-	Component* getComponent();
-
-	template <typename Component>
-	void setComponent(Component* p);
-
-	ComponentContainer() {}
-	~ComponentContainer() {}
-};
-
 template <typename Value, bool Decision, typename Inherit>
 struct ConditionalValue : Inherit { };
 
@@ -769,25 +713,25 @@ template <typename Value, typename Inherit>
 struct ConditionalValue <Value, true, Inherit> : Inherit
 {
 	template <typename T>
-	const T* view()
+	const T* viewComponent()
 	{
-		return Inherit::template view<T>();
+		return Inherit::template viewComponent<T>();
 	}
 
 	template<typename T>
-	T* get()
+	T* getComponent()
 	{
-		return Inherit::template get<T>();
+		return Inherit::template getComponent<T>();
 	}
 
 	template <>
-	const Value* view<Value>()
+	const Value* viewComponent<Value>()
 	{
 		return &value;
 	}
 
 	template<>
-	Value* get<Value>()
+	Value* getComponent<Value>()
 	{
 		return &value;
 	}
@@ -815,13 +759,7 @@ struct ComponentInheritor<Base, Value>
 { };
 
 template <typename ...Components>
-struct DirectComponentContainer : ComponentInheritor<Dummy, Components...>
-{
-	using Cont = Container<Components...>;
-};
-
-template <typename ...Components>
-struct Iterator : ComponentContainer<Components...>, IteratorBase
+struct Iterator : Container<Components...>, IteratorBase, TemplateStubs
 {
 	using Cont = Container<Components...>;
 
@@ -841,7 +779,7 @@ private:
 struct VirtualArchitecture;
 
 template <typename ...Components>
-struct Entity : ComponentContainer<Components...>, EntityBase
+struct Entity : ComponentInheritor<Dummy, Components...>, Container<Components...>, EntityBase
 {
 	using Cont = Container<Components...>;
 
@@ -1104,14 +1042,6 @@ struct Architecture : VirtualArchitecture
 		return reinterpret_cast<Resource*>(resources[index]);
 	}
 
-	template <typename Component>
-	SparseVec<Component>* getComponents()
-	{
-		// static_assert(isComponent<Component>(), "Template parameter must be a Component.");
-		uint64_t index = inspect::indexOf<Cont, Component, ComponentBase>();
-		return reinterpret_cast<SparseVec<Component>*>(&components[0]) + index;
-	}
-
 	template <typename Entity>
 	EntityStore<Entity>* getEntities()
 	{
@@ -1138,8 +1068,7 @@ struct Architecture : VirtualArchitecture
 	Entity* createEntity()
 	{
 		auto ent = initializeEntity<Entity>();
-		if (std::is_base_of<EnableConstructor, Entity>())
-			new(ent) Entity();
+		new(ent) Entity();
 
 		return ent;
 	}
@@ -1292,7 +1221,6 @@ struct Architecture : VirtualArchitecture
 
 private:
 	void* resources[max(inspect::numUniques<Cont, ResourceBase>(), uint64_t(1))] = {0};
-	char components[max(inspect::numUniques<Cont, ComponentBase>(), uint64_t(1)) * sizeof(SparseVec<char>)] = {0};
 	char entities[max(inspect::numUniques<Cont, EntityBase>(), uint64_t(1)) * sizeof(EntityStore<uint64_t>)] = {0};
 	bool reallocated[max(inspect::numUniques<Cont, ComponentBase>() * inspect::numUniques<Cont, SystemBase>(), uint64_t(1))] = {0};
 
@@ -1315,28 +1243,6 @@ private:
 		wait.wait();
 	}
 
-	template <typename Component>
-	Component* createComponent()
-	{
-		static_assert(isComponent<Component>(), "Template parameter must be a Component");
-
-		auto components = this->getComponents<Component>();
-		auto first = components->first();
-		uint64_t index = components->create();
-		auto second = components->first();
-
-		if (first != second)
-		{
-			Cont::template evaluate<OncePerType<Dummy, ComponentPointerFixCallback<Component>>>(this, first, second);
-			static const uint64_t begin = inspect::indexOf<Cont, Component, ComponentBase>() * inspect::numUniques<Cont, SystemBase>();
-			static const uint64_t end = (inspect::indexOf<Cont, Component, ComponentBase>() + 1) * inspect::numUniques<Cont, SystemBase>();
-			for (uint64_t i = begin; i < end; i++)
-				reallocated[i] = true;
-		}
-
-		return components->get(index);
-	}
-
 	template <typename Entity>
 	Entity* initializeEntity()
 	{
@@ -1347,7 +1253,6 @@ private:
 		uint64_t id;
 		auto ent = entities->create(id);
 		setEntityId(ent, id);
-		Entity::template evaluate<ComponentCreator<Entity>>(this, ent);
 
 		return ent;
 	}
@@ -1400,36 +1305,6 @@ private:
 		}
 	};
 
-	template <typename E>
-	struct ComponentCreator
-	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline static void inspect(This* arch, E* entity)
-		{
-			if (isComponent<Value>())
-			{
-				Value* p = arch->template createComponent<Value>();
-				entity->template setComponent<Value>(p);
-			}
-			Next::template evaluate<ComponentCreator<E>>(arch, entity);
-		}
-	};
-
-	template <typename Entity>
-	struct EntityComponentDestructorCallback
-	{
-		template <typename Value>
-		inline static void callback(This* arch, Entity* entity)
-		{
-			if (isComponent<Value>() && inspect::contains<Entity, Value>())
-			{
-				uint64_t index = entity->template getComponent<Value>()
-					- reinterpret_cast<Value*>(arch->template getComponents<Value>()->first());
-				arch->template getComponents<Value>()->destroy(index);
-			}
-		}
-	};
-
 	struct EntityDestructorCallback
 	{
 		template <typename Value>
@@ -1440,36 +1315,11 @@ private:
 		}
 	};
 
-	template <typename Component>
-	struct ComponentPointerFixCallback
-	{
-		template <typename Value>
-		inline static void callback(This* arch, Component* first, Component* second)
-		{
-			if (isEntity<Value>() && inspect::contains<Value, Component>())
-			{
-				auto ents = arch->template getEntities<Value>();
-				for (auto& ent : ents->used_indices)
-				{
-					ent->template setComponent<Component>(
-						ent->template getComponent<Component>() - first + second
-					);
-				}
-			}
-		}
-	};
-
 	struct ConstructorCallback
 	{
 		template <typename Value>
 		static inline void callback(This* arch)
 		{
-			if (isComponent<Value>())
-			{
-				auto p = arch->template getComponents<Value>();
-				*p = SparseVec<Value>();
-			}
-
 			if (isEntity<Value>())
 			{
 				auto p = arch->template getEntities<Value>();
@@ -1483,12 +1333,6 @@ private:
 		template <typename Value>
 		static inline void callback(This* arch)
 		{
-			if (isComponent<Value>())
-			{
-				auto comp = arch->template getComponents<Value>();
-				comp->~SparseVec<Value>();
-			}
-
 			if (isEntity<Value>())
 			{
 				auto ent = arch->template getEntities<Value>();
@@ -1563,15 +1407,34 @@ struct Accessor;
 template <typename Iter, typename Arch, typename Sys>
 struct IteratorAccessor
 {
-	IteratorAccessor(const IteratorAccessor<Iter, Arch, Sys>& other);
+	IteratorAccessor(const IteratorAccessor<Iter, Arch, Sys>& other)
+	{
+		this->typeKey = other.typeKey;
+		this->entity = other.entity;
+	}
 
 	template<typename Component>
-	const Component* view();
+	const Component* view()
+	{
+		static_assert(inspect::contains<typename Iter::Cont, Component>(), "Iterator doesn't contain the requested component.");
+		static_assert(Sys::template canRead<Component>(), "System lacks read permissions for the Iterator's components.");
+		return get_ptr<Component>();
+	}
 
 	template<typename Component>
-	Component* get();
+	Component* get()
+	{
+		static_assert(Iter::template containsComponent<Component>(), "Iterator doesn't contain the requested component.");
+		static_assert(Sys::template canWrite<Component>(), "System lacks write permissions for the Iterator's components.");
+		return get_ptr<Component>();
+	}
 
-	Guid guid();
+	Guid guid()
+	{
+		// TODO
+		// return iter.getGuid();
+		return Guid();
+	}
 
 private:
 	friend IteratorIterator<Iter, Arch, Sys>;
@@ -1582,177 +1445,198 @@ private:
 	template <typename Entity>
 	IteratorAccessor(Entity* ent)
 	{
-		iter.setGuid(Arch::getEntityGuid(ent));
-		Iter::template evaluate<Constructor<Entity>>(&iter, ent);
+		entity = ent;
+		typeKey = inspect::indexOf<typename Arch::Cont, Entity, EntityBase>();
 	}
 
-	Iter iter;
+	uint64_t typeKey;
+	void* entity;
 
-	template<typename Entity>
-	struct Constructor
+	struct Data
+	{
+		uint64_t typeKey;
+		void* entity;
+	};
+
+	template <typename Component>
+	Component* get_ptr()
+	{
+		Data data = {typeKey, entity};
+		return Switch<typename Arch::Cont, inspect::numUniques<typename Arch::Cont, EntityBase>()>
+			::template evaluate<Component*, Getter<Component>>(typeKey, &data);
+	}
+
+	template <typename Component>
+	struct Getter
 	{
 		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		inline static void inspect(Iter* iter, Entity* ent)
+		inline static Component* inspect(Data* data)
 		{
-			iter->template setComponent<Value>( ent->template getComponent<Value>() );
-			Next::template evaluate<Constructor<Entity>>(iter, ent);
+			if (isEntity<Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == data->typeKey)
+			{
+				return reinterpret_cast<Value*>(data->entity)->template getComponent<Component>();
+			}
+			Component* res = Inner::template evaluate<Component*, Getter<Component>>(data);
+			if (res != nullptr)
+				return res;
+			return Next:: template evaluate<Component*, Getter<Component>>(data);
 		}
 	};
 };
 
-template <typename Iter, typename Arch, typename Sys>
-struct IteratorIterator
-{
-	using This = IteratorIterator<Iter, Arch, Sys>;
-	using U = IteratorAccessor<Iter, Arch, Sys>;
+// template <typename Iter, typename Arch, typename Sys>
+// struct IteratorIterator
+// {
+// 	using This = IteratorIterator<Iter, Arch, Sys>;
+// 	using U = IteratorAccessor<Iter, Arch, Sys>;
 
-	typedef uint64_t difference_type;
-	typedef U value_type;
-	typedef U& reference;
-	typedef U* pointer;
-	typedef std::forward_iterator_tag iterator_category;
+// 	typedef uint64_t difference_type;
+// 	typedef U value_type;
+// 	typedef U& reference;
+// 	typedef U* pointer;
+// 	typedef std::forward_iterator_tag iterator_category;
 
-	IteratorIterator()
-	{
-		arch = nullptr;
-		iterator = {};
-	}
+// 	IteratorIterator()
+// 	{
+// 		arch = nullptr;
+// 		iterator = {};
+// 	}
 
-	IteratorIterator(const IteratorIterator& other)
-	{
-		arch = other.arch;
-		typeKey = other.typeKey;
-		iterator = other.iterator;
-		hasValue = other.hasValue;
-		inner = other.inner;
-	}
+// 	IteratorIterator(const IteratorIterator& other)
+// 	{
+// 		arch = other.arch;
+// 		typeKey = other.typeKey;
+// 		iterator = other.iterator;
+// 		hasValue = other.hasValue;
+// 		inner = other.inner;
+// 	}
 
-	U& operator* ()
-	{
-		return inner;
-	}
+// 	U& operator* ()
+// 	{
+// 		return inner;
+// 	}
 
-	U* operator-> ()
-	{
-		return inner;
-	}
+// 	U* operator-> ()
+// 	{
+// 		return inner;
+// 	}
 
-	friend bool operator== (const This& a, const This& b)
-	{
-		return a.iterator == b.iterator;
-	}
+// 	friend bool operator== (const This& a, const This& b)
+// 	{
+// 		return a.iterator == b.iterator;
+// 	}
 
-	friend bool operator!= (const This& a, const This& b)
-	{
-		return a.iterator != b.iterator;
-	};
+// 	friend bool operator!= (const This& a, const This& b)
+// 	{
+// 		return a.iterator != b.iterator;
+// 	};
 
-	This operator++(int)
-	{
-		This ret = *this;
-		++(*this);
-		return ret;
-	}
+// 	This operator++(int)
+// 	{
+// 		This ret = *this;
+// 		++(*this);
+// 		return ret;
+// 	}
 	
-	This& operator++()
-	{
-		Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, IncrementerCallback>>(typeKey, this);
+// 	This& operator++()
+// 	{
+// 		Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, IncrementerCallback>>(typeKey, this);
 
-		while (!hasValue && typeKey < Arch::numEntities())
-		{
-			typeKey = Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<uint64_t, NextKey>(typeKey, typeKey);
-			if (typeKey < Arch::numEntities())
-			{
-				Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, IncrementerCallback>>(typeKey, this);
-			}
-		}
+// 		while (!hasValue && typeKey < Arch::numEntities())
+// 		{
+// 			typeKey = Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<uint64_t, NextKey>(typeKey, typeKey);
+// 			if (typeKey < Arch::numEntities())
+// 			{
+// 				Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, IncrementerCallback>>(typeKey, this);
+// 			}
+// 		}
 
-		return *this;
-	}
+// 		return *this;
+// 	}
 
-private:
-	friend IterableStub<Iter, Arch, Sys>;
+// private:
+// 	friend IterableStub<Iter, Arch, Sys>;
 
-	IteratorIterator(Arch* arch)
-	{
-		this->arch = arch;
-		typeKey = 0;
-		hasValue = false;
-		++(*this);
-	}
+// 	IteratorIterator(Arch* arch)
+// 	{
+// 		this->arch = arch;
+// 		typeKey = 0;
+// 		hasValue = false;
+// 		++(*this);
+// 	}
 
-	Arch* arch;
-	uint64_t typeKey;
-	typename std::unordered_map<uint64_t, Padding<uint64_t>>::iterator iterator;
-	bool hasValue;
-	U inner;
+// 	Arch* arch;
+// 	uint64_t typeKey;
+// 	typename std::unordered_map<uint64_t, Padding<uint64_t>>::iterator iterator;
+// 	bool hasValue;
+// 	U inner;
 
-	struct NextKey
-	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		static constexpr uint64_t inspect(uint64_t key)
-		{
-			return min(
-				min((isDummy<Inner>() ? -1 : Inner::template evaluate<uint64_t, NextKey>(key)), (isDummy<Next>() ? -1 : Next::template evaluate<uint64_t, NextKey>(key))),
-				inspect::indexOf<typename Arch::Cont, Value, EntityBase>() > key ? inspect::indexOf<typename Arch::Cont, Value, EntityBase>() : -1
-			);
-		};
-	};
+// 	struct NextKey
+// 	{
+// 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+// 		static constexpr uint64_t inspect(uint64_t key)
+// 		{
+// 			return min(
+// 				min((isDummy<Inner>() ? -1 : Inner::template evaluate<uint64_t, NextKey>(key)), (isDummy<Next>() ? -1 : Next::template evaluate<uint64_t, NextKey>(key))),
+// 				inspect::indexOf<typename Arch::Cont, Value, EntityBase>() > key ? inspect::indexOf<typename Arch::Cont, Value, EntityBase>() : -1
+// 			);
+// 		};
+// 	};
 
-	struct IncrementerCallback
-	{
-		template <typename Value>
-		static inline void callback(This* iterac)
-		{
-			if (isEntity<Value>() && Value::template isCompatible<Iter>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
-			{
-				auto p = reinterpret_cast<typename std::unordered_map<uint64_t, Padding<Value>>::iterator*>(&iterac->iterator);
+// 	struct IncrementerCallback
+// 	{
+// 		template <typename Value>
+// 		static inline void callback(This* iterac)
+// 		{
+// 			if (isEntity<Value>() && Value::template isCompatible<Iter>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
+// 			{
+// 				auto p = reinterpret_cast<typename std::unordered_map<uint64_t, Padding<Value>>::iterator*>(&iterac->iterator);
 
-				if (!iterac->hasValue)
-				{
-					*p = iterac->arch->template getEntities<Value>()->map.begin();
-					iterac->hasValue = true;
-				}
-				else
-				{
-					(*p)++;
-				}
+// 				if (!iterac->hasValue)
+// 				{
+// 					*p = iterac->arch->template getEntities<Value>()->map.begin();
+// 					iterac->hasValue = true;
+// 				}
+// 				else
+// 				{
+// 					(*p)++;
+// 				}
 
-				if (*p == iterac->arch->template getEntities<Value>()->map.end())
-				{
-					iterac->hasValue = false;
-				}
+// 				if (*p == iterac->arch->template getEntities<Value>()->map.end())
+// 				{
+// 					iterac->hasValue = false;
+// 				}
 
-				if (iterac->hasValue)
-				{
-					iterac->inner = U(reinterpret_cast<Value*>(&(**p).second));
-				}
-			}
-		}
-	};
-};
+// 				if (iterac->hasValue)
+// 				{
+// 					iterac->inner = U(reinterpret_cast<Value*>(&(**p).second));
+// 				}
+// 			}
+// 		}
+// 	};
+// };
 
-template <typename Iter, typename Arch, typename Sys>
-struct IterableStub
-{
-	IteratorIterator<Iter, Arch, Sys> begin()
-	{
-		return IteratorIterator<Iter, Arch, Sys>(arch);
-	}
+// template <typename Iter, typename Arch, typename Sys>
+// struct IterableStub
+// {
+// 	IteratorIterator<Iter, Arch, Sys> begin()
+// 	{
+// 		return IteratorIterator<Iter, Arch, Sys>(arch);
+// 	}
 
-	IteratorIterator<Iter, Arch, Sys> end()
-	{
-		return IteratorIterator<Iter, Arch, Sys>();
-	}
+// 	IteratorIterator<Iter, Arch, Sys> end()
+// 	{
+// 		return IteratorIterator<Iter, Arch, Sys>();
+// 	}
 
-private:
-	IterableStub(Arch* arch)
-	{
-		this ->arch = arch;
-	}
-	friend Accessor<Arch, Sys>;
-	Arch* arch;
-};
+// private:
+// 	IterableStub(Arch* arch)
+// 	{
+// 		this ->arch = arch;
+// 	}
+// 	friend Accessor<Arch, Sys>;
+// 	Arch* arch;
+// };
 
 template<typename Arch, typename Sys>
 struct Accessor
@@ -1853,12 +1737,12 @@ struct Accessor
 		return arch->template getResource<Resource>();
 	}
 
-	template <typename Iterator>
-	IterableStub<Iterator, Arch, Sys> iterate()
-	{
-		iteratorPermission<Iterator>();
-		return IterableStub<Iterator, Arch, Sys>(arch);
-	}
+	// template <typename Iterator>
+	// IterableStub<Iterator, Arch, Sys> iterate()
+	// {
+	// 	iteratorPermission<Iterator>();
+	// 	return IterableStub<Iterator, Arch, Sys>(arch);
+	// }
 
 	template <typename Iterator, typename F>
 	void iterate(F f)
@@ -2167,115 +2051,6 @@ constexpr bool isDummy()
 }
 
 // #####################
-// Linked Vector
-// #####################
-template <typename T>
-SparseVec<T>::SparseVec()
-{
-	static const uint64_t n = 64;
-	items = (Padding<T>*) malloc(sizeof (Padding<T>) * n);
-
-	for (int i = n; i > 0; i--)
-		indices.push(i - 1);
-
-	size = n;
-}
-
-template <typename T>
-uint64_t SparseVec<T>::create()
-{
-	if (indices.empty())
-		expand(size);
-
-	uint64_t i = indices.top();
-	indices.pop();
-	new(&items[i]) Padding<T>();
-
-	return i;
-}
-
-template <typename T>
-T* SparseVec<T>::get(uint64_t i)
-{
-	if (i >= size)
-		return nullptr;
-
-	return items[i].into();
-}
-
-template <typename T>
-T* SparseVec<T>::first()
-{
-	return items[0].into();
-}
-
-template <typename T>
-void SparseVec<T>::destroy(uint64_t i)
-{
-	if (i >= size)
-		return;
-
-	items[i].~Padding<T>();
-
-	indices.push(i);
-}
-
-template <typename T>
-void SparseVec<T>::expand(uint64_t by)
-{
-	Padding<T>* next = (Padding<T>*) malloc(sizeof (Padding<T>) * (size + by));
-	memcpy(next, items, sizeof (Padding<T>) * size);
-	free(items);
-	items = next;
-
-	for (int i = size + by; i > size; i--)
-		indices.push(i - 1);
-
-	size += by;
-}
-
-// #####################
-// ComponentContainer
-// #####################
-template <typename ...Components>
-template <typename Component>
-constexpr bool ComponentContainer<Components...>::containsComponent()
-{
-	// assert(isComponent<Component>());
-	return inspect::contains <ComponentContainer<Components...>, Component>();
-}
-
-template <typename ...Components>
-template <typename Component>
-constexpr uint64_t ComponentContainer<Components...>::componentIndex()
-{
-	// assert(containsComponent<Component>());
-	return inspect::indexOf<ComponentContainer<Components...>, Component, ComponentBase>();
-}
-
-template <typename ...Components>
-template <typename Component>
-Component* ComponentContainer<Components...>::getComponent()
-{
-	// assert(containsComponent<Component>());
-	if (!containsComponent<Component>())
-	{
-		return nullptr;
-	}
-	return reinterpret_cast<Component*>(components[componentIndex<Component>()]);
-}
-
-template <typename ...Components>
-template <typename Component>
-void ComponentContainer<Components...>::setComponent(Component* p)
-{
-	if (containsComponent<Component>())
-	{
-		components[componentIndex<Component>()] = p;
-	}
-}
-
-// #####################
 // Permission Objects
 // #####################
 
@@ -2512,40 +2287,6 @@ void Architecture<Desc, Systems...>::SystemShutdown::inspect(uint64_t* id, czsf:
 	Cont::template evaluate<DependeeBlocker<Value>>(barriers);
 	Value::shutdown(Accessor<Desc, Value>(reinterpret_cast<Desc*>(arch)));
 	barriers[*id].signal();
-}
-
-// #####################
-// Accessors
-// #####################
-
-template <typename Iter,typename Arch, typename Sys>
-IteratorAccessor<Iter,Arch, Sys>::IteratorAccessor(const IteratorAccessor<Iter, Arch, Sys>& other)
-{
-	this->iter = other.iter;
-}
-
-template <typename Iter,typename Arch, typename Sys>
-template <typename Component>
-const Component* IteratorAccessor<Iter,Arch, Sys>::view()
-{
-	static_assert(Iter::template containsComponent<Component>(), "Iterator doesn't contain the requested component.");
-	static_assert(Sys::template canRead<Component>(), "System lacks read permissions for the Iterator's components.");
-	return iter.template getComponent<Component>();
-}
-
-template <typename Iter,typename Arch, typename Sys>
-template <typename Component>
-Component* IteratorAccessor<Iter,Arch, Sys>::get()
-{
-	static_assert(Iter::template containsComponent<Component>(), "Iterator doesn't contain the requested component.");
-	static_assert(Sys::template canWrite<Component>(), "System lacks write permissions for the Iterator's components.");
-	return iter.template getComponent<Component>();
-}
-
-template <typename Iter,typename Arch, typename Sys>
-Guid IteratorAccessor<Iter,Arch, Sys>::guid()
-{
-	return iter.getGuid();
 }
 
 } // namespace czss
