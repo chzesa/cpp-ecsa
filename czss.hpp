@@ -789,9 +789,9 @@ struct Entity : ComponentInheritor<Dummy, Components...>, Container<Components..
 		return Iterator::template isCompatible <Entity<Components...>>();
 	}
 
+	Guid getGuid() { return {id}; }
 private:
 	void setGuid(Guid guid) { this->id = guid.get(); }
-	Guid getGuid() { return {id}; }
 	friend VirtualArchitecture;
 	uint64_t id;
 };
@@ -1068,8 +1068,9 @@ struct Architecture : VirtualArchitecture
 	Entity* createEntity()
 	{
 		auto ent = initializeEntity<Entity>();
+		Guid guid = ent->getGuid();
 		new(ent) Entity();
-
+		setEntityId(ent, guid.get());
 		return ent;
 	}
 
@@ -1077,7 +1078,9 @@ struct Architecture : VirtualArchitecture
 	Entity* createEntity(A a)
 	{
 		auto ent = initializeEntity<Entity>();
+		Guid guid = ent->getGuid();
 		new (ent) Entity(a);
+		setEntityId(ent, guid.get());
 		return ent;
 	}
 
@@ -1085,7 +1088,9 @@ struct Architecture : VirtualArchitecture
 	Entity* createEntity(A a, B b)
 	{
 		auto ent = initializeEntity<Entity>();
+		Guid guid = ent->getGuid();
 		new (ent) Entity(a, b);
+		setEntityId(ent, guid.get());
 		return ent;
 	}
 
@@ -1093,7 +1098,9 @@ struct Architecture : VirtualArchitecture
 	Entity* createEntity(A a, B b, C c)
 	{
 		auto ent = initializeEntity<Entity>();
+		Guid guid = ent->getGuid();
 		new (ent) Entity(a, b, c);
+		setEntityId(ent, guid.get());
 		return ent;
 	}
 
@@ -1101,7 +1108,9 @@ struct Architecture : VirtualArchitecture
 	Entity* createEntity(A a, B b, C c, D d)
 	{
 		auto ent = initializeEntity<Entity>();
+		Guid guid = ent->getGuid();
 		new (ent) Entity(a, b, c, d);
+		setEntityId(ent, guid.get());
 		return ent;
 	}
 
@@ -1109,7 +1118,9 @@ struct Architecture : VirtualArchitecture
 	Entity* createEntity(A a, B b, C c, D d, E e)
 	{
 		auto ent = initializeEntity<Entity>();
+		Guid guid = ent->getGuid();
 		new (ent) Entity(a, b, c, d, e);
+		setEntityId(ent, guid.get());
 		return ent;
 	}
 
