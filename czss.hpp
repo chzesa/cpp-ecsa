@@ -1206,7 +1206,7 @@ struct Architecture : VirtualArchitecture
 			return;
 
 		Cont::template evaluate<OncePerType<Dummy, EntityComponentDestructorCallback<Entity>>>(this, ent);
-		entities->destroy(ent);
+		entities->destroy(id);
 	}
 
 	void destroyEntity(Guid guid)
