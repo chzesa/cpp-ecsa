@@ -572,7 +572,7 @@ struct EntityStore
 		if (res == index_map.end())
 			return nullptr;
 
-		return entities[res->second].into();
+		return &entities[res->second];
 	}
 
 	E* create(uint64_t& id)
@@ -606,7 +606,7 @@ struct EntityStore
 
 		uint64_t index = res->second;
 
-		entities[index].into()->~E();
+		entities[index].~E();
 		memset(&entities[index], 0, sizeof(E));
 
 		index_map.erase(id);
@@ -1141,11 +1141,6 @@ struct Architecture : VirtualArchitecture
 	void destroyEntity(uint64_t id)
 	{
 		auto entities = getEntities<Entity>();
-		auto ent = entities->get(id);
-		if (ent == nullptr)
-			return;
-
-		Cont::template evaluate<OncePerType<Dummy, EntityComponentDestructorCallback<Entity>>>(this, ent);
 		entities->destroy(id);
 	}
 
