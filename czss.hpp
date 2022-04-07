@@ -762,64 +762,6 @@ struct ComponentContainer : Container<Components...>
 	~ComponentContainer() {}
 };
 
-template <typename Value, bool Decision, typename Inherit>
-struct ConditionalValue : Inherit { };
-
-template <typename Value, typename Inherit>
-struct ConditionalValue <Value, true, Inherit> : Inherit
-{
-	template <typename T>
-	const T* view()
-	{
-		return Inherit::template view<T>();
-	}
-
-	template<typename T>
-	T* get()
-	{
-		return Inherit::template get<T>();
-	}
-
-	template <>
-	const Value* view<Value>()
-	{
-		return &value;
-	}
-
-	template<>
-	Value* get<Value>()
-	{
-		return &value;
-	}
-
-private:
-	Value value;
-};
-
-template <typename Base, typename Value, typename ...Rest>
-struct ComponentInheritor
-	: ConditionalValue <
-		Value,
-		!inspect::contains<Base, Value>(),
-		ComponentInheritor<Container<Base, NrContainer<Value>>, Rest...>
-	>
-{ };
-
-template <typename Base, typename Value>
-struct ComponentInheritor<Base, Value>
-	: ConditionalValue <
-		Value,
-		!inspect::contains<Base, Value>(),
-		EmptyDummy
-	>
-{ };
-
-template <typename ...Components>
-struct DirectComponentContainer : ComponentInheritor<Dummy, Components...>
-{
-	using Cont = Container<Components...>;
-};
-
 template <typename ...Components>
 struct Iterator : ComponentContainer<Components...>, IteratorBase
 {
