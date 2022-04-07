@@ -761,6 +761,89 @@ struct ComponentContainer : Container<Components...>
 	~ComponentContainer() {}
 };
 
+template <typename Base, bool include, typename Value, typename ...Rest>
+struct ComponentInheritor : ComponentInheritor<Container<Base, NrContainer<Value>>, !inspect::contains<Container<Base, NrContainer<Value>>, Value>(), Rest...>
+{ };
+
+
+template <typename Base, typename Value, typename ...Rest>
+struct ComponentInheritor <Base, false, Value, Rest...> : ComponentInheritor<Container<Base, NrContainer<Value>>, !inspect::contains<Container<Base, NrContainer<Value>>, Value>(), Rest...>
+{ };
+
+
+template <typename Base, typename Value, typename ...Rest>
+struct ComponentInheritor <Base, true, Value, Rest...> : ComponentInheritor<Container<Base, NrContainer<Value>>, !inspect::contains<Container<Base, NrContainer<Value>>, Value>(), Rest...>
+{
+	template <typename T>
+	const T* view() { return nullptr; }
+
+	template<typename T>
+	T* get() { return nullptr; }
+
+	template <>
+	const Value* view<Value>()
+	{
+		return &component;
+	}
+
+	template<>
+	Value* get<Value>()
+	{
+		return &component;
+	}
+
+private:
+	Value component;
+};
+
+
+template <typename Base, bool Include, typename Value>
+struct ComponentInheritor<Base, Include, Value>
+{
+};
+
+template <typename Base, typename Value>
+struct ComponentInheritor<Base, false, Value>
+{
+};
+
+template <typename Base, typename Value>
+struct ComponentInheritor<Base, true, Value>
+{
+	template <typename T>
+	const T* view()
+	{
+		return nullptr;
+	}
+
+	template<typename T>
+	T* get()
+	{
+		return nullptr;
+	}
+
+	template <>
+	const Value* view<Value>()
+	{
+		return &component;
+	}
+
+	template<>
+	Value* get<Value>()
+	{
+		return &component;
+	}
+
+private:
+	Value component;
+};
+
+template <typename ...Components>
+struct DirectComponentContainer : ComponentInheritor<Dummy, true, Components...>
+{
+	using Cont = Container<Components...>;
+};
+
 template <typename ...Components>
 struct Iterator : ComponentContainer<Components...>, IteratorBase
 {
