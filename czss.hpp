@@ -765,12 +765,6 @@ template <typename Base, bool include, typename Value, typename ...Rest>
 struct ComponentInheritor : ComponentInheritor<Container<Base, NrContainer<Value>>, !inspect::contains<Container<Base, NrContainer<Value>>, Value>(), Rest...>
 { };
 
-
-template <typename Base, typename Value, typename ...Rest>
-struct ComponentInheritor <Base, false, Value, Rest...> : ComponentInheritor<Container<Base, NrContainer<Value>>, !inspect::contains<Container<Base, NrContainer<Value>>, Value>(), Rest...>
-{ };
-
-
 template <typename Base, typename Value, typename ...Rest>
 struct ComponentInheritor <Base, true, Value, Rest...> : ComponentInheritor<Container<Base, NrContainer<Value>>, !inspect::contains<Container<Base, NrContainer<Value>>, Value>(), Rest...>
 {
@@ -799,13 +793,7 @@ private:
 
 template <typename Base, bool Include, typename Value>
 struct ComponentInheritor<Base, Include, Value>
-{
-};
-
-template <typename Base, typename Value>
-struct ComponentInheritor<Base, false, Value>
-{
-};
+{ };
 
 template <typename Base, typename Value>
 struct ComponentInheritor<Base, true, Value>
