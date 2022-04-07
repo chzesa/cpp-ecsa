@@ -22,6 +22,7 @@ const static char* name()
 	return name;
 }
 
+struct EmptyDummy {};
 struct Dummy
 {
 	using Cont = Dummy;
@@ -761,73 +762,60 @@ struct ComponentContainer : Container<Components...>
 	~ComponentContainer() {}
 };
 
-template <typename Base, bool include, typename Value, typename ...Rest>
-struct ComponentInheritor : ComponentInheritor<Container<Base, NrContainer<Value>>, !inspect::contains<Container<Base, NrContainer<Value>>, Value>(), Rest...>
-{ };
+template <typename Value, bool Decision, typename Inherit>
+struct ConditionalValue : Inherit { };
 
-template <typename Base, typename Value, typename ...Rest>
-struct ComponentInheritor <Base, true, Value, Rest...> : ComponentInheritor<Container<Base, NrContainer<Value>>, !inspect::contains<Container<Base, NrContainer<Value>>, Value>(), Rest...>
-{
-	template <typename T>
-	const T* view() { return nullptr; }
-
-	template<typename T>
-	T* get() { return nullptr; }
-
-	template <>
-	const Value* view<Value>()
-	{
-		return &component;
-	}
-
-	template<>
-	Value* get<Value>()
-	{
-		return &component;
-	}
-
-private:
-	Value component;
-};
-
-
-template <typename Base, bool Include, typename Value>
-struct ComponentInheritor<Base, Include, Value>
-{ };
-
-template <typename Base, typename Value>
-struct ComponentInheritor<Base, true, Value>
+template <typename Value, typename Inherit>
+struct ConditionalValue <Value, true, Inherit> : Inherit
 {
 	template <typename T>
 	const T* view()
 	{
-		return nullptr;
+		return Inherit::template view<T>();
 	}
 
 	template<typename T>
 	T* get()
 	{
-		return nullptr;
+		return Inherit::template get<T>();
 	}
 
 	template <>
 	const Value* view<Value>()
 	{
-		return &component;
+		return &value;
 	}
 
 	template<>
 	Value* get<Value>()
 	{
-		return &component;
+		return &value;
 	}
 
 private:
-	Value component;
+	Value value;
 };
 
+template <typename Base, typename Value, typename ...Rest>
+struct ComponentInheritor
+	: ConditionalValue <
+		Value,
+		!inspect::contains<Base, Value>(),
+		ComponentInheritor<Container<Base, NrContainer<Value>>, Rest...>
+	>
+{ };
+
+template <typename Base, typename Value>
+struct ComponentInheritor<Base, Value>
+	: ConditionalValue <
+		Value,
+		!inspect::contains<Base, Value>(),
+		EmptyDummy
+	>
+{ };
+
 template <typename ...Components>
-struct DirectComponentContainer : ComponentInheritor<Dummy, true, Components...>
+struct DirectComponentContainer : ComponentInheritor<Dummy, Components...>
 {
 	using Cont = Container<Components...>;
 };
