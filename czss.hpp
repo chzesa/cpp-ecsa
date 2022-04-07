@@ -851,9 +851,9 @@ struct Entity : ComponentContainer<Components...>, EntityBase
 		return Iterator::template isCompatible <Entity<Components...>>();
 	}
 
+	Guid getGuid() { return {id}; }
 private:
 	void setGuid(Guid guid) { this->id = guid.get(); }
-	Guid getGuid() { return {id}; }
 	friend VirtualArchitecture;
 	uint64_t id;
 };
