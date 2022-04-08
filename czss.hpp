@@ -22,7 +22,6 @@ const static char* name()
 	return name;
 }
 
-struct EmptyDummy {};
 struct Dummy
 {
 	using Cont = Dummy;
@@ -706,6 +705,21 @@ struct Resource : Dummy, ResourceBase, TemplateStubs
 // Component collection types
 // #####################
 
+struct ConditionalValueEnd
+{
+	template <typename T>
+	const T* viewComponent()
+	{
+		return nullptr;
+	}
+
+	template<typename T>
+	T* getComponent()
+	{
+		return nullptr;
+	}
+};
+
 template <typename Value, bool Decision, typename Inherit>
 struct ConditionalValue : Inherit { };
 
@@ -715,25 +729,15 @@ struct ConditionalValue <Value, true, Inherit> : Inherit
 	template <typename T>
 	const T* viewComponent()
 	{
-		return Inherit::template viewComponent<T>();
+		return getComponent<T>();
 	}
 
 	template<typename T>
 	T* getComponent()
 	{
-		return Inherit::template getComponent<T>();
-	}
-
-	template <>
-	const Value* viewComponent<Value>()
-	{
-		return &value;
-	}
-
-	template<>
-	Value* getComponent<Value>()
-	{
-		return &value;
+		return std::is_same<T, Value>()
+			? reinterpret_cast<T*>(&value)
+			: Inherit::template getComponent<T>();
 	}
 
 private:
@@ -754,7 +758,7 @@ struct ComponentInheritor<Base, Value>
 	: ConditionalValue <
 		Value,
 		!inspect::contains<Base, Value>(),
-		EmptyDummy
+		ConditionalValueEnd
 	>
 { };
 
