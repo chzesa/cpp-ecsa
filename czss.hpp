@@ -13,6 +13,12 @@
 namespace czss
 {
 
+#if __cplusplus < 201703L
+#define CZSS_CONST_IF if
+#else
+#define CZSS_CONST_IF if constexpr
+#endif
+
 #define CZSS_NAME(A, B) template <> const char* czss::name<A>() { const static char name[] = B; return name; }
 
 template <typename Value>
@@ -397,7 +403,7 @@ struct OncePerType
 	template <typename Base, typename Box, typename Value, typename Inner, typename Next>
 	inline static void inspect()
 	{
-		if (!inspect::contains<Fold, Value>())
+		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
 			Callback::template callback<Value>();
 
 		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>();
@@ -407,7 +413,7 @@ struct OncePerType
 	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A>
 	inline static void inspect(A* a)
 	{
-		if (!inspect::contains<Fold, Value>())
+		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
 			Callback::template callback<Value>(a);
 
 		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>(a);
@@ -417,7 +423,7 @@ struct OncePerType
 	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A, typename B>
 	inline static void inspect(A* a, B* b)
 	{
-		if (!inspect::contains<Fold, Value>())
+		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
 			Callback::template callback<Value>(a, b);
 
 		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>(a, b);
@@ -427,7 +433,7 @@ struct OncePerType
 	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A, typename B>
 	inline static void inspect(A a, B* b)
 	{
-		if (!inspect::contains<Fold, Value>())
+		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
 			Callback::template callback<Value>(a, b);
 
 		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>(a, b);
@@ -437,7 +443,7 @@ struct OncePerType
 	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A, typename B, typename C>
 	inline static void inspect(A* a, B* b, C* c)
 	{
-		if (!inspect::contains<Fold, Value>())
+		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
 			Callback::template callback<Value>(a, b, c);
 
 		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>(a, b, c);
@@ -1306,7 +1312,7 @@ private:
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
 		inline static void inspect(czsf::Barrier* barriers)
 		{
-			if (Value::Dep::template directlyDependsOn<Sys>() && !Value::Dep::template transitivelyDependsOn<Sys>())
+			CZSS_CONST_IF (Value::Dep::template directlyDependsOn<Sys>() && !Value::Dep::template transitivelyDependsOn<Sys>())
 			{
 				barriers[inspect::indexOf<Cont, Value, SystemBase>()].wait();
 			}
@@ -1330,7 +1336,7 @@ private:
 		template <typename Value>
 		static inline void callback(This* arch)
 		{
-			if (isEntity<Value>())
+			CZSS_CONST_IF (isEntity<Value>())
 			{
 				auto p = arch->template getEntities<Value>();
 				*p = EntityStore<Value>();
@@ -1343,7 +1349,7 @@ private:
 		template <typename Value>
 		static inline void callback(This* arch)
 		{
-			if (isEntity<Value>())
+			CZSS_CONST_IF (isEntity<Value>())
 			{
 				auto ent = arch->template getEntities<Value>();
 				ent->~EntityStore<Value>();
@@ -1876,7 +1882,7 @@ private:
 		template <typename Value>
 		static inline void callback(F f, Arch* arch)
 		{
-			if (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
+			CZSS_CONST_IF (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
 			{
 				auto ents = arch->template getEntities<Value>();
 				for (auto& ent : ents->used_indices)
@@ -1933,7 +1939,7 @@ private:
 		template <typename Value>
 		static inline void callback(ParallelIterateTaskData<F>* data)
 		{
-			if (!isEntity<Value>() || !isIteratorCompatibleWithEntity<Iterator, Value>())
+			CZSS_CONST_IF (!isEntity<Value>() || !isIteratorCompatibleWithEntity<Iterator, Value>())
 				return;
 
 			auto entities = data->arch->template getEntities<Value>();
