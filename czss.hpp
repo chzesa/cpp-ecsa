@@ -711,21 +711,6 @@ struct Resource : Dummy, ResourceBase, TemplateStubs
 // Component collection types
 // #####################
 
-struct ConditionalValueEnd
-{
-	template <typename T>
-	const T* viewComponent()
-	{
-		return nullptr;
-	}
-
-	template<typename T>
-	T* getComponent()
-	{
-		return nullptr;
-	}
-};
-
 template <typename Value, bool Decision, typename Inherit>
 struct ConditionalValue : Inherit { };
 
@@ -741,13 +726,46 @@ struct ConditionalValue <Value, true, Inherit> : Inherit
 	template<typename T>
 	T* getComponent()
 	{
-		return std::is_same<T, Value>()
-			? reinterpret_cast<T*>(&value)
-			: Inherit::template getComponent<T>();
+		CZSS_CONST_IF (std::is_same<T, Value>())
+			return reinterpret_cast<T*>(&value);
+
+		return Inherit::template getComponent<T>();
 	}
 
 private:
 	Value value;
+};
+
+template <typename Value>
+struct ConditionalValue <Value, true, Dummy>
+{
+	template <typename T>
+	const T* viewComponent()
+	{
+		return nullptr;
+	}
+
+	template<typename T>
+	T* getComponent()
+	{
+		return nullptr;
+	}
+};
+
+template <typename Value>
+struct ConditionalValue <Value, false, Dummy>
+{
+	template <typename T>
+	const T* viewComponent()
+	{
+		return nullptr;
+	}
+
+	template<typename T>
+	T* getComponent()
+	{
+		return nullptr;
+	}
 };
 
 template <typename Base, typename Value, typename ...Rest>
@@ -764,7 +782,7 @@ struct ComponentInheritor<Base, Value>
 	: ConditionalValue <
 		Value,
 		!inspect::contains<Base, Value>(),
-		ConditionalValueEnd
+		Dummy
 	>
 { };
 
