@@ -1039,7 +1039,7 @@ struct Architecture : VirtualArchitecture
 	{
 		static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
 		static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
-		uint64_t index = inspect::indexOf<Container<Systems...>, Resource, ResourceBase>();
+		static const uint64_t index = inspect::indexOf<Container<Systems...>, Resource, ResourceBase>();
 		resources[index] = res;
 	}
 
@@ -1048,7 +1048,7 @@ struct Architecture : VirtualArchitecture
 	{
 		static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
 		static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
-		uint64_t index = inspect::indexOf<Container<Systems...>, Resource, ResourceBase>();
+		static const uint64_t index = inspect::indexOf<Container<Systems...>, Resource, ResourceBase>();
 		return reinterpret_cast<Resource*>(resources[index]);
 	}
 
@@ -1056,7 +1056,7 @@ struct Architecture : VirtualArchitecture
 	EntityStore<Entity>* getEntities()
 	{
 		// assert(isEntity<Entity>());
-		uint64_t index = inspect::indexOf<Cont, Entity, EntityBase>();
+		static const uint64_t index = inspect::indexOf<Cont, Entity, EntityBase>();
 		return reinterpret_cast<EntityStore<Entity>*>(&entities[0]) + index;
 	}
 
@@ -1218,13 +1218,13 @@ struct Architecture : VirtualArchitecture
 
 	static uint64_t typeKey(Guid guid)
 	{
-		uint64_t klen = typeKeyLength();
+		static const uint64_t klen = typeKeyLength();
 		uint64_t mask = ((uint64_t(1) << (klen + 1)) - 1) << (63 - klen);
 		return (guid.get() & mask) >> (63 - klen);
 	}
 	static uint64_t guidId(Guid guid)
 	{
-		uint64_t klen = typeKeyLength();
+		static const uint64_t klen = typeKeyLength();
 		uint64_t key = typeKey(guid) << (63 - klen);
 
 		return guid.get() - key;
