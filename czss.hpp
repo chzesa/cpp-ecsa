@@ -1297,7 +1297,7 @@ private:
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
 		inline static void inspect(czsf::Barrier* barriers)
 		{
-			if (Sys::Dep::template directlyDependsOn<Value>() && !Sys::Dep::template transitivelyDependsOn<Value>())
+			CZSS_CONST_IF (Sys::Dep::template directlyDependsOn<Value>() && !Sys::Dep::template transitivelyDependsOn<Value>())
 			{
 				barriers[inspect::indexOf<Cont, Value, SystemBase>()].wait();
 			}
@@ -1900,7 +1900,7 @@ private:
 		template <typename Value>
 		static inline void callback(uint64_t* count, Arch* arch)
 		{
-			if (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
+			CZSS_CONST_IF (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
 			{
 				auto entities = arch->template getEntities<Value>();
 				*count += entities->size();
