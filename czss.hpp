@@ -24,6 +24,13 @@ namespace czss
 template<typename T>
 struct Repair
 {
+	Repair(T* min, T* max, int64_t offset)
+	{
+		this->min = min;
+		this->max = max;
+		this->offset = offset;
+	}
+
 	void operator ()(T*& ptr)
 	{
 		if (min <= ptr && ptr < max)
@@ -33,11 +40,11 @@ struct Repair
 private:
 	T* min;
 	T* max;
-	T* offset;
+	int64_t offset;
 };
 
 template <typename Component, typename PointerType>
-void ManagePointer(Repair<PointerType> rep) { }
+void managePointer(Component& component, const Repair<PointerType>& rep) { }
 
 template <typename Value>
 const static char* name()
@@ -1303,18 +1310,140 @@ private:
 	}
 
 	template <typename Entity>
+	struct PointerFixupData
+	{
+		This* arch;
+		Entity* oldLoc;
+		Entity* oldMaxLoc;
+	};
+
+	template <typename Entity>
 	Entity* initializeEntity()
 	{
 		static_assert(isEntity<Entity>(), "Template parameter must be an Entity.");
 
 		auto entities = getEntities<Entity>();
+		Entity* loc = entities->entities;
+		uint64_t count = entities->size();
 
 		uint64_t id;
 		auto ent = entities->create(id);
 		setEntityId(ent, id);
 
+
+
+		if (loc != entities->entities)
+		{
+			PointerFixupData<Entity> data = {this, loc, loc + count};
+			// Cont::template evaluate<OncePerType<Dummy, ManagedPointerFixCallback1<Entity>>>(this, loc, loc + count);
+			Cont::template evaluate<OncePerType<Dummy, AltManagedPointerFixCallback1<Entity>>>(&data);
+		}
+
 		return ent;
 	}
+
+	template <typename Entity>
+	struct ManagedPointerFixCallback1
+	{
+		template <typename Value>
+		static inline void callback(This* arch, Entity* oldLoc, Entity* oldMaxLoc)
+		{
+			CZSS_CONST_IF (isComponent<Value>() && inspect::contains<typename Entity::Cont, Value>())
+			{
+				static const uint64_t begin = inspect::indexOf<Cont, Value, ComponentBase>() * inspect::numUniques<Cont, SystemBase>();
+				static const uint64_t end = (inspect::indexOf<Cont, Value, ComponentBase>() + 1) * inspect::numUniques<Cont, SystemBase>();
+				for (uint64_t i = begin; i < end; i++)
+					arch->reallocated[i] = true;
+
+				Cont::template evaluate<OncePerType<Dummy, ManagedPointerFixCallback2<Entity, Value>>>(arch, oldLoc, oldMaxLoc);
+			}
+		}
+	};
+
+	template <typename Entity, typename Component>
+	struct ManagedPointerFixCallback2
+	{
+		template <typename Value>
+		static inline void callback(This* arch, Entity* oldLoc, Entity* oldMaxLoc)
+		{
+			CZSS_CONST_IF (isEntity<Value>())
+			{
+				Cont::template evaluate<OncePerType<Dummy, ManagedPointerFixCallback3<Entity, Component, Value>>>(arch, oldLoc, oldMaxLoc);
+			}
+
+		}
+	};
+
+	template <typename Entity, typename Component, typename IterateEntity>
+	struct ManagedPointerFixCallback3
+	{
+		template <typename Value>
+		static inline void callback(This* arch, Entity* oldLoc, Entity* oldMaxLoc)
+		{
+			CZSS_CONST_IF (isComponent<Value>() && inspect::contains<typename IterateEntity::Cont, Value>())
+			{
+				auto entities = arch->template getEntities<IterateEntity>();
+				Component* min = oldLoc->template getComponent<Component>();
+				Component* max = reinterpret_cast<Component*>(oldMaxLoc);
+				Entity* loc = arch->template getEntities<Entity>()->entities;
+
+				Repair<Component> repair(min, max, loc->template getComponent<Component>() - min);
+
+				for (auto ptr : entities->used_indices)
+				{
+					Value* component = ptr->template getComponent<Value>();
+					managePointer(*component, repair);
+				}
+			}
+		}
+	};
+
+	template <typename Entity>
+	struct AltManagedPointerFixCallback1
+	{
+		template <typename Value>
+		static inline void callback(PointerFixupData<Entity>* data)
+		{
+			CZSS_CONST_IF (isEntity<Value>())
+			{
+				auto entities = data->arch->template getEntities<Value>();
+				for (auto ptr : entities->used_indices)
+					Cont::template evaluate<OncePerType<Dummy, AltManagedPointerFixCallback2<Entity, Value>>>(data, ptr);
+			}
+		}
+	};
+
+	template <typename Entity, typename IterateEntity>
+	struct AltManagedPointerFixCallback2
+	{
+		template <typename Value>
+		static inline void callback(PointerFixupData<Entity>* data, IterateEntity* ptr)
+		{
+			CZSS_CONST_IF (isComponent<Value>() && inspect::contains<typename IterateEntity::Cont, Value>())
+			{
+				Cont::template evaluate<OncePerType<Dummy, AltManagedPointerFixCallback3<Entity, IterateEntity, Value>>>(data, ptr);
+			}
+		}
+	};
+
+	template <typename Entity, typename IterateEntity, typename Component>
+	struct AltManagedPointerFixCallback3
+	{
+		template <typename Value>
+		static inline void callback(PointerFixupData<Entity>* data, IterateEntity* ptr)
+		{
+			CZSS_CONST_IF (isComponent<Value>() && inspect::contains<typename Entity::Cont, Value>())
+			{
+				Value* min = data->oldLoc->template getComponent<Value>();
+				Value* max = reinterpret_cast<Value*>(data->oldMaxLoc);
+				Entity* loc = data->arch->template getEntities<Entity>()->entities;
+				Repair<Value> repair(min, max, loc->template getComponent<Value>() - min);
+
+				Component* component = ptr->template getComponent<Component>();
+				managePointer(*component, repair);
+			}
+		}
+	};
 
 	struct SystemRunner
 	{
