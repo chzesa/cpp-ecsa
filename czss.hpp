@@ -1196,19 +1196,37 @@ struct Architecture : VirtualArchitecture
 		return ret;
 	}
 
+	template <typename T>
+	void run(T* fls)
+	{
+		runForSystems(systemCallback, fls);
+	}
+
+	template <typename T>
+	void initialize(T* fls)
+	{
+		runForSystems(initializeSystemCallback, fls);
+	}
+
+	template <typename T>
+	void shutdown(T* fls)
+	{
+		runForSystems(shutdownSystemCallback, fls);
+	}
+
 	void run()
 	{
-		runForSystems(systemCallback);
+		runForSystems<Dummy>(systemCallback, nullptr);
 	}
 
 	void initialize()
 	{
-		runForSystems(initializeSystemCallback);
+		runForSystems<Dummy>(initializeSystemCallback, nullptr);
 	}
 
 	void shutdown()
 	{
-		runForSystems(shutdownSystemCallback);
+		runForSystems<Dummy>(shutdownSystemCallback, nullptr);
 	}
 
 	template <typename Sys>
@@ -1258,7 +1276,8 @@ private:
 	char entities[max(inspect::numUniques<Cont, EntityBase>(), uint64_t(1)) * sizeof(EntityStore<uint64_t>)] = {0};
 	bool reallocated[max(inspect::numUniques<Cont, ComponentBase>() * inspect::numUniques<Cont, SystemBase>(), uint64_t(1))] = {0};
 
-	void runForSystems(void (*fn)(RunTaskData<This>*))
+	template <typename T>
+	void runForSystems(void (*fn)(RunTaskData<This>*), T* fls)
 	{
 		static const uint64_t sysCount = inspect::numUniques<Container<Systems...>, SystemBase>();
 		czsf::Barrier barriers[sysCount];
@@ -1273,7 +1292,10 @@ private:
 		}
 
 		czsf::Barrier wait(sysCount);
-		czsf::run(fn, taskData, sysCount, &wait);
+		if (fls == nullptr)
+			czsf::run(fn, taskData, sysCount, &wait);
+		else
+			czsf::run(fls, fn, taskData, sysCount, &wait);
 		wait.wait();
 	}
 
