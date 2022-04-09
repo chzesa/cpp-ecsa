@@ -764,14 +764,20 @@ struct ConditionalValue <Value, true, Dummy>
 	template <typename T>
 	const T* viewComponent()
 	{
-		return nullptr;
+		return getComponent<T>();
 	}
 
 	template<typename T>
 	T* getComponent()
 	{
+		CZSS_CONST_IF (std::is_same<T, Value>())
+			return reinterpret_cast<T*>(&value);
+
 		return nullptr;
 	}
+
+private:
+	Value value;
 };
 
 template <typename Value>
