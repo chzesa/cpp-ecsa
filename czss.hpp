@@ -31,7 +31,7 @@ struct Repair
 		this->offset = offset;
 	}
 
-	void operator ()(T*& ptr)
+	void operator ()(T*& ptr) const
 	{
 		if (min <= ptr && ptr < max)
 			ptr += offset;
