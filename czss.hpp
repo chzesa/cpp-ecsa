@@ -1955,6 +1955,7 @@ struct Accessor
 
 		for (uint64_t i = 0; i < numTasks; i++)
 		{
+			tasks[i].index = i;
 			tasks[i].arch = arch;
 			tasks[i].func = &f;
 			tasks[i].entityCount = min(counter, max(uint64_t(1), counter / (numTasks - i)));
@@ -2105,6 +2106,7 @@ private:
 	template <typename F>
 	struct ParallelIterateTaskData
 	{
+		uint64_t index = 0;
 		uint64_t beginIndex = 0;
 		uint64_t entityCount = 0;
 		Arch* arch;
@@ -2144,7 +2146,7 @@ private:
 			for (; it != end; it++)
 			{
 				IteratorAccessor<Iterator, Arch, Sys> accessor(*it);
-				(*data->func)(accessor);
+				(*data->func)(data->index, accessor);
 			}
 
 

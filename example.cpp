@@ -112,7 +112,7 @@ struct Sysc : System<Dependency<Sysb>, Orchestrator<Enta>, Reader<Iter, Iterb>, 
 	{
 		auto res = arch.template getResource<Resa>();
 
-		arch.parallelIterate<Iter>(8, [&] (IteratorAccessor<Iter, MyArch, Sysc>& accessor)
+		arch.parallelIterate<Iter>(8, [&] (uint64_t index, IteratorAccessor<Iter, MyArch, Sysc>& accessor)
 		{
 			res->sum += accessor.view<A>()->value;
 		});
