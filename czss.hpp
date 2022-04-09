@@ -675,9 +675,6 @@ struct EntityStore
 struct TemplateStubs
 {
 	template <typename T>
-	constexpr static bool isCompatible() { return false; }
-
-	template <typename T>
 	T* getComponent() { return nullptr; }
 
 	void setGuid(Guid guid);
@@ -791,12 +788,6 @@ struct Iterator : Container<Components...>, IteratorBase, TemplateStubs
 {
 	using Cont = Container<Components...>;
 
-	template <typename Entity>
-	constexpr static bool isCompatible()
-	{
-		return inspect::containsAll<Entity, Components...>();
-	}
-
 	void setGuid(Guid guid) { this->id = guid; }
 	Guid getGuid() { return id; }
 
@@ -810,12 +801,6 @@ template <typename ...Components>
 struct Entity : ComponentInheritor<Dummy, Components...>, Container<Components...>, EntityBase
 {
 	using Cont = Container<Components...>;
-
-	template <typename Iterator>
-	constexpr static bool isCompatible()
-	{
-		return Iterator::template isCompatible <Entity<Components...>>();
-	}
 
 	Guid getGuid() { return {id}; }
 private:
