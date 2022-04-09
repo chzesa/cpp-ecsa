@@ -1961,7 +1961,7 @@ private:
 				&& !inspect::contains<Next, Value>()
 				&& !inspect::contains<Handled, Value>()
 				? 1 : 0)
-				+ Inner::template evaluate<uint64_t, NumCompatibleEntities<Container <Handled, Value, Next>, Iterator>>()
+				+ Inner::template evaluate<uint64_t, NumCompatibleEntities<Container <Handled, NrContainer<Value>, Next>, Iterator>>()
 				+ Next::template evaluate<uint64_t, NumCompatibleEntities<Dummy, Iterator>>();
 		}
 	};
