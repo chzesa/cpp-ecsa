@@ -21,6 +21,24 @@ namespace czss
 
 #define CZSS_NAME(A, B) template <> const char* czss::name<A>() { const static char name[] = B; return name; }
 
+template<typename T>
+struct Repair
+{
+	void operator ()(T*& ptr)
+	{
+		if (min <= ptr && ptr < max)
+			ptr += offset;
+	}
+
+private:
+	T* min;
+	T* max;
+	T* offset;
+};
+
+template <typename Component, typename PointerType>
+void ManagePointer(Repair<PointerType> rep) { }
+
 template <typename Value>
 const static char* name()
 {
