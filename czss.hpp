@@ -2030,7 +2030,7 @@ private:
 	struct IteratorCallback
 	{
 		template <typename Value>
-		static inline void callback(F f, Arch* arch)
+		static inline void callback(F& f, Arch* arch)
 		{
 			CZSS_CONST_IF (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
 			{
@@ -2038,7 +2038,8 @@ private:
 				for (auto& ent : ents->used_indices)
 				{
 					IteratorAccessor<Iterator, Arch, Sys> accessor(ent);
-					f(accessor);
+					F lambda = f;
+					lambda(accessor);
 				}
 			}
 		}
@@ -2117,7 +2118,8 @@ private:
 			for (; it != end; it++)
 			{
 				IteratorAccessor<Iterator, Arch, Sys> accessor(*it);
-				(*data->func)(data->index, accessor);
+				F lambda = *data->func;
+				lambda(data->index, accessor);
 			}
 
 
@@ -2132,10 +2134,9 @@ private:
 	{
 		static const uint64_t limit = Accessor<Arch, Sys>::numCompatibleEntities<Iterator>();
 
-		F lambda = *data->func;
+		
 		for (uint64_t i = 0; i < limit; i++)
 		{
-			data->func = &lambda;
 			Switch<typename Arch::Cont, limit>::template evaluate<OncePerType<Dummy, ParallelIterateTaskCallback<Iterator, F>>>(i, data);
 			if (data->entityCount == 0)
 				return;
