@@ -6,7 +6,6 @@
 
 #include <iostream>
 #include <chrono>
-#include <thread>
 
 using namespace czss;
 using namespace std;
@@ -25,7 +24,14 @@ int main()
 
 struct Resa : Resource<Resa>
 {
-	uint64_t sum = 0;
+	uint64_t parallel = 0;
+	uint64_t pointer = 0;
+	uint64_t iter = 0;
+};
+
+struct RemoveGuid : Resource<RemoveGuid>
+{
+	Guid guid;
 };
 
 struct A : Component<A>
@@ -33,19 +39,43 @@ struct A : Component<A>
 	uint64_t value;
 };
 
-struct B : Component<B> {};
+struct B : Component<B>
+{
+	uint64_t value;
+	B* other;
+};
+
+template <>
+void czss::managePointer<B, B>(B& component, const Repair<B>& rep)
+{
+	rep(component.other);
+}
+
 struct Iter : Iterator<A> {};
+struct Iterb : Iterator<B>{};
+
 struct Enta : Entity<A, B> {};
 struct Entb : Entity<A> {};
 
+CZSS_NAME(Enta, "Enta")
+CZSS_NAME(Entb, "Entb")
+
 struct MyArch;
 
-struct Sysa : System <Dependency<>, Orchestrator<Enta>, Writer <Resa>>
+struct Sysa : System <Dependency<>, Orchestrator<Enta>, Writer<RemoveGuid>>
 {
 	static void run(Accessor<MyArch, Sysa> arch)
 	{
 		auto ent = arch.createEntity<Enta>();
-		ent->getComponent<A>()->value = rand()%10000;
+		A* a = ent->getComponent<A>();
+		a->value = rand()%10000;
+
+		B* b = ent->getComponent<B>();
+		b->value = a->value;
+		b->other = b;
+
+		ent = arch.createEntity<Enta>();
+		arch.getResource<RemoveGuid>()->guid = ent->getGuid();
 	};
 
 	static void initialize(Accessor<MyArch, Sysa> arch)
@@ -59,40 +89,45 @@ struct Sysa : System <Dependency<>, Orchestrator<Enta>, Writer <Resa>>
 	};
 }; 
 
-struct Sysb : System <Dependency<Sysa>, Reader<Iter, Entb>, Writer<Resa>>
+struct Sysb : System<Dependency<Sysa>, Orchestrator<Enta>, Reader<RemoveGuid>>
 {
-	template<typename Arch>
-	static void run(Arch arch)
+	static void run(Accessor<MyArch, Sysb> arch)
 	{
-		auto res = arch.template getResource<Resa>();
-		for (auto& iter : arch.template iterate<Iter>())
-		{
-			res->sum += iter.template view<A>()->value;
-		}
-	}
+		Guid guid = arch.viewResource<RemoveGuid>()->guid;
+		arch.destroyEntity(guid);
+	};
 
-	template<typename Arch>
-	static void initialize(Arch arch)
+	static void initialize(Accessor<MyArch, Sysb> arch)
 	{
 		std::cout << "Initialize Sysb" << std::endl;
 	};
 
-	template<typename Arch>
-	static void shutdown(Arch arch)
+	static void shutdown(Accessor<MyArch, Sysb> arch)
 	{
 		std::cout << "Shutdown Sysb" << std::endl;
 	};
 };
 
-struct Sysc : System<Dependency<Sysa>, Reader<Iter, Entb>, Writer<Resa>>
+struct Sysc : System<Dependency<Sysb>, Orchestrator<Enta>, Reader<Iter, Iterb>, Writer<Resa>>
 {
 	static void run(Accessor<MyArch, Sysc> arch)
 	{
-		auto res = arch.template getResource<Resa>();
+		auto res = arch.getResource<Resa>();
 
-		arch.iterate<Iter>([&] (IteratorAccessor<Iter, MyArch, Sysc>& accessor) {
-			res->sum += accessor.view<A>()->value;
+		arch.parallelIterate<Iter>(8, [&] (uint64_t index, IteratorAccessor<Iter, MyArch, Sysc>& accessor)
+		{
+			res->parallel += accessor.view<A>()->value;
 		});
+
+
+		arch.iterate<Iterb>([&] (IteratorAccessor<Iterb, MyArch, Sysc>& accessor) {
+			res->pointer += accessor.view<B>()->other->value;
+		});
+
+		for (auto& iter : arch.template iterate<Iter>())
+		{
+			res->iter += iter.template view<A>()->value;
+		}
 	};
 
 	static void initialize(Accessor<MyArch, Sysc> arch)
@@ -106,46 +141,29 @@ struct Sysc : System<Dependency<Sysa>, Reader<Iter, Entb>, Writer<Resa>>
 	};
 };
 
-struct Sysd : System<Dependency<Sysa>, Reader<Iter, Entb>, Writer<Resa>>
-{
-	static void run(Accessor<MyArch, Sysd> arch)
-	{
-		auto res = arch.template getResource<Resa>();
-
-		arch.parallelIterate<Iter>(8, [&] (IteratorAccessor<Iter, MyArch, Sysd>& accessor) {
-			res->sum += accessor.view<A>()->value;
-		});
-	};
-
-	static void initialize(Accessor<MyArch, Sysd> arch)
-	{
-		std::cout << "Initialize Sysd" << std::endl;
-	};
-
-	static void shutdown(Accessor<MyArch, Sysd> arch)
-	{
-		std::cout << "Shutdown Sysd" << std::endl;
-	};
-};
-
-struct MyArch : Architecture <MyArch, Sysd, Sysa> {};
+struct MyArch : Architecture <MyArch, Sysb, Sysa, Sysc> {};
 
 void fmain()
 {
 	srand(time(0));
 
-	MyArch arch = {};
-	Resa res = {};
+	MyArch arch;
+	Resa res;
+	RemoveGuid guid;
 	arch.setResource(&res);
+	arch.setResource(&guid);
 
 	arch.initialize();
 
 	std::cout << "Running 50000 iterations" << std::endl;
 	auto start = high_resolution_clock::now();
+	auto lap = high_resolution_clock::now();
 	for (int i = 0; i < 50000; i++)
 	{
 		if (i % 1000 == 0)
-			std::cout << "iter #" << i << std::endl;
+			std::cout << "iter #" << i << " " << double(duration_cast<microseconds>(high_resolution_clock::now() - lap).count()) / 1000 << "ms" << std::endl;
+
+		lap = high_resolution_clock::now();
 		arch.run();
 	}
 
@@ -155,6 +173,11 @@ void fmain()
 	auto duration = duration_cast<microseconds>(stop - start);
 	std::cout << "Total duration " << double(duration.count())/1000000 << "s" << std::endl;
 
-	std::cout << "Result: " << res.sum << std::endl;
+	std::cout << "Results: "
+		<< "\n\t Lambda using pointers: " << res.pointer
+		<< "\n\t Parallel lambda: " << res.parallel
+		<< "\n\t For-loop: " << res.iter
+		<< std::endl;
+
 	EXITING = true;
 }
