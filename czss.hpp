@@ -1336,16 +1336,31 @@ private:
 		auto ent = entities->create(id);
 		setEntityId(ent, id);
 
-
-
 		if (loc != entities->entities)
 		{
 			PointerFixupData<Entity> data = {this, loc, loc + count};
+			Cont::template evaluate<OncePerType<Dummy, MarkReallocatedCallback<Entity>>>(this);
 			Cont::template evaluate<OncePerType<Dummy, ManagedPointerCallback<Entity>>>(&data);
 		}
 
 		return ent;
 	}
+
+	template <typename Entity>
+	struct MarkReallocatedCallback
+	{
+		template <typename Value>
+		static inline void callback(This* arch)
+		{
+			CZSS_CONST_IF (isComponent<Value>() && inspect::contains<typename Entity::Cont, Value>())
+			{
+				static const uint64_t begin = inspect::indexOf<Cont, Value, ComponentBase>() * inspect::numUniques<Cont, SystemBase>();
+				static const uint64_t end = (inspect::indexOf<Cont, Value, ComponentBase>() + 1) * inspect::numUniques<Cont, SystemBase>();
+				for (uint64_t i = begin; i < end; i++)
+					arch->reallocated[i] = true;
+			}
+		}
+	};
 
 	template <typename Entity>
 	struct ManagedPointerCallback
