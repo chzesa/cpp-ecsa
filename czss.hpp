@@ -1611,6 +1611,12 @@ private:
 		typeKey = inspect::indexOf<typename Arch::Cont, Entity, EntityBase>();
 	}
 
+	IteratorAccessor(uint64_t key, void* entity)
+	{
+		this->typeKey = key;
+		this->entity = entity;
+	}
+
 	uint64_t typeKey;
 	void* entity;
 
@@ -1646,159 +1652,156 @@ private:
 	};
 };
 
-// template <typename Iter, typename Arch, typename Sys>
-// struct IteratorIterator
-// {
-// 	using This = IteratorIterator<Iter, Arch, Sys>;
-// 	using U = IteratorAccessor<Iter, Arch, Sys>;
+template <typename Iter, typename Arch, typename Sys>
+struct IteratorIterator
+{
+	using This = IteratorIterator<Iter, Arch, Sys>;
+	using U = IteratorAccessor<Iter, Arch, Sys>;
 
-// 	typedef uint64_t difference_type;
-// 	typedef U value_type;
-// 	typedef U& reference;
-// 	typedef U* pointer;
-// 	typedef std::forward_iterator_tag iterator_category;
+	typedef uint64_t difference_type;
+	typedef U value_type;
+	typedef U& reference;
+	typedef U* pointer;
+	typedef std::forward_iterator_tag iterator_category;
 
-// 	IteratorIterator()
-// 	{
-// 		arch = nullptr;
-// 		iterator = {};
-// 	}
+	IteratorIterator()
+	{
+		arch = nullptr;
+		typeKey = Arch::numEntities();
+	}
 
-// 	IteratorIterator(const IteratorIterator& other)
-// 	{
-// 		arch = other.arch;
-// 		typeKey = other.typeKey;
-// 		iterator = other.iterator;
-// 		hasValue = other.hasValue;
-// 		inner = other.inner;
-// 	}
+	IteratorIterator(const IteratorIterator& other)
+	{
+		arch = other.arch;
+		typeKey = other.typeKey;
+		index = other.index;
+		maxIndex = other.maxIndex;
+		accessor = other.accessor;
+	}
 
-// 	U& operator* ()
-// 	{
-// 		return inner;
-// 	}
+	U& operator* ()
+	{
+		return accessor;
+	}
 
-// 	U* operator-> ()
-// 	{
-// 		return inner;
-// 	}
+	U* operator-> ()
+	{
+		return accessor;
+	}
 
-// 	friend bool operator== (const This& a, const This& b)
-// 	{
-// 		return a.iterator == b.iterator;
-// 	}
+	friend bool operator== (const This& a, const This& b)
+	{
+		if (a.typeKey >= Arch::numEntities() && b.typeKey  >= Arch::numEntities())
+			return true;
 
-// 	friend bool operator!= (const This& a, const This& b)
-// 	{
-// 		return a.iterator != b.iterator;
-// 	};
+		return a.typeKey == b.typeKey
+			&& a.index == b.index;
+	}
 
-// 	This operator++(int)
-// 	{
-// 		This ret = *this;
-// 		++(*this);
-// 		return ret;
-// 	}
+	friend bool operator!= (const This& a, const This& b)
+	{
+		return !(a == b);
+	};
+
+	This operator++(int)
+	{
+		This ret = *this;
+		++(*this);
+		return ret;
+	}
 	
-// 	This& operator++()
-// 	{
-// 		Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, IncrementerCallback>>(typeKey, this);
+	This& operator++()
+	{
+		Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, IncrementerCallback>>(typeKey, this);
 
-// 		while (!hasValue && typeKey < Arch::numEntities())
-// 		{
-// 			typeKey = Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<uint64_t, NextKey>(typeKey, typeKey);
-// 			if (typeKey < Arch::numEntities())
-// 			{
-// 				Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, IncrementerCallback>>(typeKey, this);
-// 			}
-// 		}
+		while (index >= maxIndex && typeKey < Arch::numEntities())
+		{
+			typeKey = Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<uint64_t, NextKey>(typeKey, typeKey);
+			if (typeKey < Arch::numEntities())
+			{
+				Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, IncrementerCallback>>(typeKey, this);
+			}
+		}
 
-// 		return *this;
-// 	}
+		return *this;
+	}
 
-// private:
-// 	friend IterableStub<Iter, Arch, Sys>;
+private:
+	friend IterableStub<Iter, Arch, Sys>;
 
-// 	IteratorIterator(Arch* arch)
-// 	{
-// 		this->arch = arch;
-// 		typeKey = 0;
-// 		hasValue = false;
-// 		++(*this);
-// 	}
+	IteratorIterator(Arch* arch)
+	{
+		this->arch = arch;
+		typeKey = 0;
+		index = 0;
+		maxIndex = 0;
+		++(*this);
+	}
 
-// 	Arch* arch;
-// 	uint64_t typeKey;
-// 	typename std::unordered_map<uint64_t, Padding<uint64_t>>::iterator iterator;
-// 	bool hasValue;
-// 	U inner;
+	Arch* arch;
+	U accessor;
+	uint64_t index;
+	uint64_t maxIndex;
+	uint64_t typeKey;
 
-// 	struct NextKey
-// 	{
-// 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-// 		static constexpr uint64_t inspect(uint64_t key)
-// 		{
-// 			return min(
-// 				min((isDummy<Inner>() ? -1 : Inner::template evaluate<uint64_t, NextKey>(key)), (isDummy<Next>() ? -1 : Next::template evaluate<uint64_t, NextKey>(key))),
-// 				inspect::indexOf<typename Arch::Cont, Value, EntityBase>() > key ? inspect::indexOf<typename Arch::Cont, Value, EntityBase>() : -1
-// 			);
-// 		};
-// 	};
+	struct NextKey
+	{
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		static constexpr uint64_t inspect(uint64_t key)
+		{
+			return min(
+				min((isDummy<Inner>() ? -1 : Inner::template evaluate<uint64_t, NextKey>(key)), (isDummy<Next>() ? -1 : Next::template evaluate<uint64_t, NextKey>(key))),
+				inspect::indexOf<typename Arch::Cont, Value, EntityBase>() > key ? inspect::indexOf<typename Arch::Cont, Value, EntityBase>() : -1
+			);
+		};
+	};
 
-// 	struct IncrementerCallback
-// 	{
-// 		template <typename Value>
-// 		static inline void callback(This* iterac)
-// 		{
-// 			if (isEntity<Value>() && Value::template isCompatible<Iter>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
-// 			{
-// 				auto p = reinterpret_cast<typename std::unordered_map<uint64_t, Padding<Value>>::iterator*>(&iterac->iterator);
+	struct IncrementerCallback
+	{
+		template <typename Value>
+		static inline void callback(This* iterac)
+		{
+			if (isEntity<Value>() && isIteratorCompatibleWithEntity<Iter, Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
+			{
+				auto entities = iterac->arch->template getEntities<Value>();
 
-// 				if (!iterac->hasValue)
-// 				{
-// 					*p = iterac->arch->template getEntities<Value>()->map.begin();
-// 					iterac->hasValue = true;
-// 				}
-// 				else
-// 				{
-// 					(*p)++;
-// 				}
+				if (iterac->index < iterac->maxIndex)
+				{
+					iterac->index++;
+				}
+				else
+				{
+					iterac->index = 0;
+					iterac->maxIndex = entities->size();
+				}
 
-// 				if (*p == iterac->arch->template getEntities<Value>()->map.end())
-// 				{
-// 					iterac->hasValue = false;
-// 				}
+				iterac->accessor = U(iterac->typeKey, entities->used_indices[iterac->index]);
+			}
+		}
+	};
+};
 
-// 				if (iterac->hasValue)
-// 				{
-// 					iterac->inner = U(reinterpret_cast<Value*>(&(**p).second));
-// 				}
-// 			}
-// 		}
-// 	};
-// };
+template <typename Iter, typename Arch, typename Sys>
+struct IterableStub
+{
+	IteratorIterator<Iter, Arch, Sys> begin()
+	{
+		return IteratorIterator<Iter, Arch, Sys>(arch);
+	}
 
-// template <typename Iter, typename Arch, typename Sys>
-// struct IterableStub
-// {
-// 	IteratorIterator<Iter, Arch, Sys> begin()
-// 	{
-// 		return IteratorIterator<Iter, Arch, Sys>(arch);
-// 	}
+	IteratorIterator<Iter, Arch, Sys> end()
+	{
+		return IteratorIterator<Iter, Arch, Sys>();
+	}
 
-// 	IteratorIterator<Iter, Arch, Sys> end()
-// 	{
-// 		return IteratorIterator<Iter, Arch, Sys>();
-// 	}
-
-// private:
-// 	IterableStub(Arch* arch)
-// 	{
-// 		this ->arch = arch;
-// 	}
-// 	friend Accessor<Arch, Sys>;
-// 	Arch* arch;
-// };
+private:
+	IterableStub(Arch* arch)
+	{
+		this ->arch = arch;
+	}
+	friend Accessor<Arch, Sys>;
+	Arch* arch;
+};
 
 template<typename Arch, typename Sys>
 struct Accessor
@@ -1899,12 +1902,12 @@ struct Accessor
 		return arch->template getResource<Resource>();
 	}
 
-	// template <typename Iterator>
-	// IterableStub<Iterator, Arch, Sys> iterate()
-	// {
-	// 	iteratorPermission<Iterator>();
-	// 	return IterableStub<Iterator, Arch, Sys>(arch);
-	// }
+	template <typename Iterator>
+	IterableStub<Iterator, Arch, Sys> iterate()
+	{
+		iteratorPermission<Iterator>();
+		return IterableStub<Iterator, Arch, Sys>(arch);
+	}
 
 	template <typename Iterator, typename F>
 	void iterate(F f)
