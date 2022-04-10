@@ -2129,8 +2129,10 @@ private:
 	{
 		static const uint64_t limit = Accessor<Arch, Sys>::numCompatibleEntities<Iterator>();
 
+		F lambda = *data->func;
 		for (uint64_t i = 0; i < limit; i++)
 		{
+			data->func = &lambda;
 			Switch<typename Arch::Cont, limit>::template evaluate<OncePerType<Dummy, ParallelIterateTaskCallback<Iterator, F>>>(i, data);
 			if (data->entityCount == 0)
 				return;
