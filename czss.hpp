@@ -1608,9 +1608,9 @@ struct IteratorAccessor
 
 	Guid guid()
 	{
-		// TODO
-		// return iter.getGuid();
-		return Guid();
+		Guid guid;
+		Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, GuidGetter>>(typeKey, &typeKey, &guid, entity);
+		return guid;
 	}
 
 private:
@@ -1663,6 +1663,18 @@ private:
 			if (res != nullptr)
 				return res;
 			return Next:: template evaluate<Component*, Getter<Component>>(data);
+		}
+	};
+
+	struct GuidGetter
+	{
+		template <typename Value>
+		inline static void callback(uint64_t* id, Guid* guid, void* entity)
+		{
+			if (isEntity<Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == *id)
+			{
+				*guid = reinterpret_cast<Value*>(entity)->getGuid();
+			}
 		}
 	};
 };
