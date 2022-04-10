@@ -24,7 +24,9 @@ int main()
 
 struct Resa : Resource<Resa>
 {
-	uint64_t sum = 0;
+	uint64_t parallel = 0;
+	uint64_t pointer = 0;
+	uint64_t iter = 0;
 };
 
 struct RemoveGuid : Resource<RemoveGuid>
@@ -69,7 +71,7 @@ struct Sysa : System <Dependency<>, Orchestrator<Enta>, Writer<RemoveGuid>>
 		a->value = rand()%10000;
 
 		B* b = ent->getComponent<B>();
-		b->value = rand()%123;
+		b->value = a->value;
 		b->other = b;
 
 		ent = arch.createEntity<Enta>();
@@ -110,16 +112,22 @@ struct Sysc : System<Dependency<Sysb>, Orchestrator<Enta>, Reader<Iter, Iterb>, 
 {
 	static void run(Accessor<MyArch, Sysc> arch)
 	{
-		auto res = arch.template getResource<Resa>();
+		auto res = arch.getResource<Resa>();
 
 		arch.parallelIterate<Iter>(8, [&] (uint64_t index, IteratorAccessor<Iter, MyArch, Sysc>& accessor)
 		{
-			res->sum += accessor.view<A>()->value;
+			res->parallel += accessor.view<A>()->value;
 		});
 
+
 		arch.iterate<Iterb>([&] (IteratorAccessor<Iterb, MyArch, Sysc>& accessor) {
-			res->sum += accessor.view<B>()->other->value;
+			res->pointer += accessor.view<B>()->other->value;
 		});
+
+		for (auto& iter : arch.template iterate<Iter>())
+		{
+			res->iter += iter.template view<A>()->value;
+		}
 	};
 
 	static void initialize(Accessor<MyArch, Sysc> arch)
@@ -149,10 +157,13 @@ void fmain()
 
 	std::cout << "Running 50000 iterations" << std::endl;
 	auto start = high_resolution_clock::now();
+	auto lap = high_resolution_clock::now();
 	for (int i = 0; i < 50000; i++)
 	{
 		if (i % 1000 == 0)
-			std::cout << "iter #" << i << std::endl;
+			std::cout << "iter #" << i << " " << double(duration_cast<microseconds>(high_resolution_clock::now() - lap).count()) / 1000 << "ms" << std::endl;
+
+		lap = high_resolution_clock::now();
 		arch.run();
 	}
 
@@ -162,6 +173,11 @@ void fmain()
 	auto duration = duration_cast<microseconds>(stop - start);
 	std::cout << "Total duration " << double(duration.count())/1000000 << "s" << std::endl;
 
-	std::cout << "Result: " << res.sum << std::endl;
+	std::cout << "Results: "
+		<< "\n\t Lambda using pointers: " << res.pointer
+		<< "\n\t Parallel lambda: " << res.parallel
+		<< "\n\t For-loop: " << res.iter
+		<< std::endl;
+
 	EXITING = true;
 }
