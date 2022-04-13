@@ -181,55 +181,104 @@ struct Rbox <Base, Value>
 	}
 };
 
-template <typename Base, typename Value>
-struct NrBox
+template <typename Base, typename Value, typename ...Rest>
+struct NrBox : NrBox <Base, Value>, NrBox<NrBox <Base, Value>, Rest...>
 {
-	using Cont = NrBox <Base, Value>;
+	using Fwd = NrBox<NrBox <Base, Value>, Rest...>;
+	using Cont = NrBox <Base, Value, Rest...>;
+
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate()
 	{
-		return Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>();
+		return Inspector::template inspect<Base, Cont, Value, Dummy, Fwd::Cont>();
 	}
 
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate(uint64_t value)
 	{
-		return Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>(value);
+		return Inspector::template inspect<Base, Cont, Value, Dummy, Fwd::Cont>(value);
 	}
 
 	template <typename Inspector, typename A>
 	inline static void evaluate(A* a)
 	{
-		Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>(a);
+		Inspector::template inspect<Base, Cont, Value, Dummy, Fwd::Cont>(a);
 	}
 
 	template <typename Inspector, typename A, typename B>
 	inline static void evaluate(A* a, B* b)
 	{
-		Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>(a, b);
+		Inspector::template inspect<Base, Cont, Value, Dummy, Fwd::Cont>(a, b);
 	}
 
 	template <typename Inspector, typename A, typename B>
 	inline static void evaluate(A a, B* b)
 	{
-		Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>(a, b);
+		Inspector::template inspect<Base, Cont, Value, Dummy, Fwd::Cont>(a, b);
 	}
 
 	template <typename Inspector, typename A, typename B, typename C>
 	inline static void evaluate(A* a, B* b, C* c)
 	{
-		Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>(a, b, c);
+		Inspector::template inspect<Base, Cont, Value, Dummy, Fwd::Cont>(a, b, c);
 	}
 
 	template <typename Return, typename Inspector, typename A>
 	static Return evaluate(A* a)
 	{
-		return Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>(a);
+		return Inspector::template inspect<Base, Cont, Value, Dummy, Fwd::Cont>(a);
 	}
 };
 
-template <typename T>
-struct NrContainer : NrBox<Root, T> { };
+template <typename Base, typename Value>
+struct NrBox <Base, Value>
+{
+	using Cont = NrBox <Base, Value>;
+	template <typename Return, typename Inspector>
+	constexpr static Return evaluate()
+	{
+		return Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>();
+	}
+
+	template <typename Return, typename Inspector>
+	constexpr static Return evaluate(uint64_t value)
+	{
+		return Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>(value);
+	}
+
+	template <typename Inspector, typename A>
+	inline static void evaluate(A* a)
+	{
+		Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>(a);
+	}
+
+	template <typename Inspector, typename A, typename B>
+	inline static void evaluate(A* a, B* b)
+	{
+		Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>(a, b);
+	}
+
+	template <typename Inspector, typename A, typename B>
+	inline static void evaluate(A a, B* b)
+	{
+		Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>(a, b);
+	}
+
+	template <typename Inspector, typename A, typename B, typename C>
+	inline static void evaluate(A* a, B* b, C* c)
+	{
+		Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>(a, b, c);
+	}
+
+	template <typename Return, typename Inspector, typename A>
+	static Return evaluate(A* a)
+	{
+		return Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>(a);
+	}
+};
+
+template <typename ...T>
+struct NrContainer : NrBox<Root, T...> { };
 
 template <typename ...T>
 struct Container : Rbox<Root, T...> { };
