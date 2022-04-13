@@ -955,40 +955,81 @@ struct Orchestrator : Container<Entities...>, TemplateStubs
 // #####################
 
 template <typename ...N>
-struct Dependency : Container<N...>
+struct Dependency : Container<N...>, DependencyBase, TemplateStubs
 {
 	using Cont = Container<N...>;
-
-	template <typename Node>
-	constexpr static bool transitivelyDependsOn();
-
-	template <typename Node>
-	constexpr static bool directlyDependsOn();
-
-	template <typename Node>
-	constexpr static bool dependsOn();
-
-private:
-	template <typename Node>
-	struct TransitiveDependencyInspector
-	{
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		constexpr static bool inspect();
-	};
 };
 
 template <>
-struct Dependency<> : Container<>
+struct Dependency<> : Container<>, DependencyBase, TemplateStubs
 {
-	template <typename Node>
-	constexpr static bool transitivelyDependsOn() { return false; }
-
-	template <typename Node>
-	constexpr static bool directlyDependsOn() { return false; }
-
-	template <typename Node>
-	constexpr static bool dependsOn() { return false; }
+	using Cont = Container<>;
 };
+
+template <typename T>
+struct DependencyObjectFinder
+{
+	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	constexpr static bool inspect()
+	{
+		return isSystem<Value>()
+			? false
+			: isDependency<Value>()
+				? Inner::template evaluate<bool, T>()
+				: Inner::template evaluate<bool, DependencyObjectFinder<T>>()
+					|| Next::template evaluate<bool, DependencyObjectFinder<T>>();
+	}
+};
+
+template <typename Target>
+struct DirectDependencyCheck
+{
+	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	constexpr static bool inspect()
+	{
+		return isSystem<Value>()
+			? std::is_same<Target, Value>()
+			: Inner::template evaluate<bool, DirectDependencyCheck<Target>>()
+				|| Next::template evaluate<bool, DirectDependencyCheck<Target>>();
+	}
+};
+
+template <typename Target>
+struct TransitiveDependencyCheck
+{
+	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	constexpr static bool inspect()
+	{
+		return isSystem<Value>()
+			? std::is_same<Value, Target>()
+				? true
+				: Inner:: template evaluate<bool, DependencyObjectFinder<TransitiveDependencyCheck<Target>>>()
+			: isDependency<Value>()
+				? Inner::template evaluate<bool, TransitiveDependencyCheck<Target>>()
+					|| Next::template evaluate<bool, TransitiveDependencyCheck<Target>>()
+				:  Next::template evaluate<bool, TransitiveDependencyCheck<Target>>();
+	}
+};
+
+template <typename Left, typename Right>
+constexpr static bool directlyDependsOn()
+{
+	return isSystem<Left>() && isSystem<Right>()
+		? Left::Cont::template evaluate<bool, DependencyObjectFinder<DirectDependencyCheck<Right>>>()
+		: false;
+}
+
+template <typename Left, typename Right>
+constexpr static bool dependsOn()
+{
+	return directlyDependsOn<Left, Right> () || Left::Cont::template evaluate<bool, DependencyObjectFinder<TransitiveDependencyCheck<Right>>>();
+}
+
+template <typename Left, typename Right>
+constexpr static bool transitivelyDependsOn()
+{
+	return dependsOn<Left, Right>() && !directlyDependsOn<Left, Right>();
+}
 
 // #####################
 // System
@@ -998,14 +1039,11 @@ template <typename Dependencies, typename ...Permissions>
 struct System : Container<Permissions...>, SystemBase, TemplateStubs
 {
 	using This = System<Dependencies, Permissions...>;
-	using Cont = Container<Permissions...>;
+	using Cont = Container<Dependencies, Permissions...>;
 	using Dep = Dependencies;
 
 	template <typename Other>
 	constexpr static bool exclusiveWith();
-
-	template <typename Other>
-	constexpr static bool dependsOn();
 
 	template <typename T>
 	constexpr static bool canRead();
@@ -1511,7 +1549,7 @@ private:
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
 		inline static void inspect(czsf::Barrier* barriers)
 		{
-			CZSS_CONST_IF (Sys::Dep::template directlyDependsOn<Value>() && !Sys::Dep::template transitivelyDependsOn<Value>())
+			CZSS_CONST_IF (directlyDependsOn<Sys, Value>() && !transitivelyDependsOn<Sys, Value>())
 			{
 				barriers[inspect::indexOf<Cont, Value, SystemBase>()].wait();
 			}
@@ -1526,7 +1564,7 @@ private:
 		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
 		inline static void inspect(czsf::Barrier* barriers)
 		{
-			CZSS_CONST_IF (Value::Dep::template directlyDependsOn<Sys>() && !Value::Dep::template transitivelyDependsOn<Sys>())
+			CZSS_CONST_IF (directlyDependsOn<Value, Sys>() && !transitivelyDependsOn<Value, Sys>())
 			{
 				barriers[inspect::indexOf<Cont, Value, SystemBase>()].wait();
 			}
@@ -1601,8 +1639,8 @@ private:
 			return (isSystem<Value>()
 				&& !std::is_same<Sys, Value>()
 				&& Sys::template exclusiveWith<Value>()
-				&& !Sys::template dependsOn<Value>()
-				&& !Value::template dependsOn<Sys>())
+				&& !dependsOn<Sys, Value>()
+				&& !dependsOn<Value, Sys>())
 				|| Next::template evaluate<bool, SystemsCompare<Sys>>();
 		}
 	};
@@ -2392,36 +2430,6 @@ constexpr bool Orchestrator<Entities...>::canOrchestrate()
 // Graph
 // #####################
 
-template<typename ...N>
-template <typename Node>
-template <typename Base, typename This, typename Value, typename Inner, typename Next>
-constexpr bool Dependency<N...>::TransitiveDependencyInspector<Node>::inspect()
-{
-	return Value::template dependsOn<Node>()
-		|| Next::template evaluate<bool, TransitiveDependencyInspector<Node>>();
-}
-
-template <typename ...N>
-template <typename Node>
-constexpr bool Dependency<N...>::transitivelyDependsOn()
-{
-	return inspect::cInspect<bool, Dependency<N...>, TransitiveDependencyInspector<Node>>();
-}
-
-template <typename ...N>
-template <typename Node>
-constexpr bool Dependency<N...>::directlyDependsOn()
-{
-	return inspect::contains<Dependency<N...>, Node>();
-}
-
-template <typename ...N>
-template <typename Node>
-constexpr bool Dependency<N...>::dependsOn()
-{
-	return directlyDependsOn<Node>() || transitivelyDependsOn<Node>();
-}
-
 // #####################
 // System
 // #####################
@@ -2444,13 +2452,6 @@ constexpr bool System<Dependencies, Permissions...>::exclusiveWith()
 {
 	return Cont::template evaluate<bool, SysExclCheck<Other>>()
 		|| Other::Cont::template evaluate<bool, SysExclCheck<This>>() ;
-}
-
-template <typename Dependencies, typename ...Permissions>
-template <typename Other>
-constexpr bool System<Dependencies, Permissions...>::dependsOn()
-{
-	return Dependencies::template dependsOn<Other>();
 }
 
 template <typename Dependencies, typename ...Permissions>
