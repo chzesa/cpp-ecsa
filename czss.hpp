@@ -1826,8 +1826,16 @@ private:
 		static constexpr uint64_t inspect(uint64_t key)
 		{
 			return min(
-				min((isDummy<Inner>() ? -1 : Inner::template evaluate<uint64_t, NextKey>(key)), (isDummy<Next>() ? -1 : Next::template evaluate<uint64_t, NextKey>(key))),
-				inspect::indexOf<typename Arch::Cont, Value, EntityBase>() > key ? inspect::indexOf<typename Arch::Cont, Value, EntityBase>() : -1
+				min((Inner::template evaluate<uint64_t, NextKey>(key) > key
+					? Inner::template evaluate<uint64_t, NextKey>(key)
+					: -1),
+					(Next::template evaluate<uint64_t, NextKey>(key) > key
+					? Next::template evaluate<uint64_t, NextKey>(key)
+					: -1)
+				),
+				isEntity<Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() > key
+					? inspect::indexOf<typename Arch::Cont, Value, EntityBase>()
+					: -1
 			);
 		};
 	};
