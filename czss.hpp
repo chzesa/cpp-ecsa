@@ -1833,7 +1833,7 @@ private:
 					? Next::template evaluate<uint64_t, NextKey>(key)
 					: -1)
 				),
-				isEntity<Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() > key
+				isEntity<Value>() && isIteratorCompatibleWithEntity<Iter, Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() > key
 					? inspect::indexOf<typename Arch::Cont, Value, EntityBase>()
 					: -1
 			);
@@ -1845,7 +1845,7 @@ private:
 		template <typename Value>
 		static inline void callback(This* iterac)
 		{
-			if (isEntity<Value>() && isIteratorCompatibleWithEntity<Iter, Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
+			if (isEntity<Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
 			{
 				auto entities = iterac->arch->template getEntities<Value>();
 
