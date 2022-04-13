@@ -593,6 +593,7 @@ struct EntityBase {};
 struct SystemBase {};
 struct ResourceBase {};
 struct PermissionsBase {};
+struct DependencyBase {};
 
 template <typename T>
 constexpr bool isValidType();
@@ -620,6 +621,9 @@ constexpr bool isResource();
 
 template<typename T>
 constexpr bool isPermission();
+
+template <typename T>
+constexpr bool isDependency();
 
 // #####################
 // Data Container
@@ -2247,6 +2251,7 @@ constexpr bool isValidType()
 		<< std::is_base_of<SystemBase, T>()
 		<< std::is_base_of<ResourceBase, T>()
 		<< std::is_base_of<PermissionsBase, T>()
+		<< std::is_base_of<DependencyBase, T>()
 	) == 2;
 }
 
@@ -2296,6 +2301,12 @@ template<typename T>
 constexpr bool isPermission()
 {
 	return isBaseType<PermissionsBase, T>();
+}
+
+template<typename T>
+constexpr bool isDependency()
+{
+	return isBaseType<DependencyBase, T>();
 }
 
 template <typename T>
