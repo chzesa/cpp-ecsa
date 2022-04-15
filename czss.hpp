@@ -1159,6 +1159,20 @@ struct Architecture : VirtualArchitecture
 	static constexpr uint64_t numEntities() { return inspect::numUniques<Cont, EntityBase>(); }
 	static constexpr uint64_t numComponents() { return inspect::numUniques<Cont, ComponentBase>(); }
 
+	template <typename System>
+	static constexpr uint64_t systemIndex()
+	{
+		static_assert(isSystem<System>(), "Queried system index for non-system.");
+		return inspect::indexOf<Cont, System, SystemBase>();
+	}
+
+	template<typename Entity>
+	static constexpr uint64_t entityIndex()
+	{
+		static_assert(isSystem<Entity>(), "Queried entity index for non-entity.");
+		return inspect::indexOf<Cont, Entity, EntityBase>();
+	}
+
 	template <typename Resource>
 	void setResource(Resource* res)
 	{
