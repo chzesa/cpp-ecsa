@@ -1157,7 +1157,6 @@ struct Architecture : VirtualArchitecture
 
 	static constexpr uint64_t numSystems() { return inspect::numUniques<Cont, SystemBase>(); }
 	static constexpr uint64_t numEntities() { return inspect::numUniques<Cont, EntityBase>(); }
-	static constexpr uint64_t numComponents() { return inspect::numUniques<Cont, ComponentBase>(); }
 
 	template <typename System>
 	static constexpr uint64_t systemIndex()
