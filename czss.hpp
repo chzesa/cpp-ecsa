@@ -1542,7 +1542,7 @@ struct Architecture : VirtualArchitecture
 		template<typename A, typename B>
 		static void callback(std::string* str)
 		{
-			if (absoluteIndex<A>() == absoluteIndex<Dummy>() || absoluteIndex<B>() == absoluteIndex<Dummy>())
+			CZSS_CONST_IF (absoluteIndex<A>() == absoluteIndex<Dummy>() || absoluteIndex<B>() == absoluteIndex<Dummy>())
 				return;
 
 			std::string an = std::to_string(absoluteIndex<A>());
@@ -1555,11 +1555,11 @@ struct Architecture : VirtualArchitecture
 				CZSS_CONST_IF (directlyDependsOn<A, B>())
 					s += an + " -> " + bn + "\n";
 
-				if (exclusiveWith<A, B>() && !dependsOn<A, B>() && !dependsOn<B, A>())
+				CZSS_CONST_IF (exclusiveWith<A, B>() && !dependsOn<A, B>() && !dependsOn<B, A>())
 						s += an + "-> " + bn + " [ style = dotted ]\n";
 			}
 
-			CZSS_CONST_IF(isSystem<A>() && isComponent<B>())
+			CZSS_CONST_IF (isSystem<A>() && isComponent<B>())
 			{
 				CZSS_CONST_IF (canWrite<A, B>())
 					s += an + " -> " + bn + " [ color = yellow ]\n";
@@ -1568,19 +1568,19 @@ struct Architecture : VirtualArchitecture
 					s += an + " -> " + bn + " [ color = green ]\n";
 			}
 
-			CZSS_CONST_IF(isSystem<A>() && isEntity<B>())
+			CZSS_CONST_IF (isSystem<A>() && isEntity<B>())
 			{
 				CZSS_CONST_IF (canOrchestrate<A, B>())
 					s += an + " -> " + bn + " [ color = red ]\n";
 			}
 
-			CZSS_CONST_IF(isSystem<A>() && isResource<B>())
+			CZSS_CONST_IF (isSystem<A>() && isResource<B>())
 			{
 				CZSS_CONST_IF (isThreadSafe<B>() && canWrite<A, B>())
 					s += an + " -> " + bn + " [ color = green ]\n";
 				else CZSS_CONST_IF (canWrite<A, B>())
 					s += an + " -> " + bn + " [ color = red ]\n";
-				else CZSS_CONST_IF(canRead<A, B>())
+				else CZSS_CONST_IF (canRead<A, B>())
 					s += an + " -> " + bn + " [ color = green ]\n";
 			}
 
