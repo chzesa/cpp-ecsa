@@ -1030,12 +1030,10 @@ struct DependencyObjectFinder
 	template <typename Base, typename This, typename Value, typename Inner, typename Next>
 	constexpr static bool inspect()
 	{
-		return isSystem<Value>()
-			? false
-			: isDependency<Value>()
+		return (isDependency<Value>()
 				? Inner::template evaluate<bool, T>()
-				: Inner::template evaluate<bool, DependencyObjectFinder<T>>()
-					|| Next::template evaluate<bool, DependencyObjectFinder<T>>();
+				: Inner::template evaluate<bool, DependencyObjectFinder<T>>())
+			|| Next::template evaluate<bool, DependencyObjectFinder<T>>();
 	}
 };
 
