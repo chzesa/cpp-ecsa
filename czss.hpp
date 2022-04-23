@@ -1038,6 +1038,19 @@ struct Orchestrator : Container<Entities...>, TemplateStubs
 // Graphs
 // #####################
 
+template <typename B, typename T>
+struct BaseObjectFinder
+{
+	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	constexpr static bool inspect()
+	{
+		return (isBaseType<B, Value>()
+				? Inner::template evaluate<bool, T>()
+				: Inner::template evaluate<bool, BaseObjectFinder<B, T>>())
+			|| Next::template evaluate<bool, BaseObjectFinder<B, T>>();
+	}
+};
+
 template <typename ...N>
 struct Dependency : NrContainer<N...>, DependencyBase, TemplateStubs
 {
@@ -1052,19 +1065,6 @@ struct Dependency<> : NrContainer<>, DependencyBase, TemplateStubs
 
 template <typename Left, typename Right>
 constexpr static bool dependsOn();
-
-template <typename T>
-struct DependencyObjectFinder
-{
-	template <typename Base, typename This, typename Value, typename Inner, typename Next>
-	constexpr static bool inspect()
-	{
-		return (isDependency<Value>()
-				? Inner::template evaluate<bool, T>()
-				: Inner::template evaluate<bool, DependencyObjectFinder<T>>())
-			|| Next::template evaluate<bool, DependencyObjectFinder<T>>();
-	}
-};
 
 template <typename Target>
 struct DirectDependencyCheck
@@ -1100,14 +1100,14 @@ template <typename Left, typename Right>
 constexpr static bool directlyDependsOn()
 {
 	return isSystem<Left>() && isSystem<Right>()
-		? Left::Cont::template evaluate<bool, DependencyObjectFinder<DirectDependencyCheck<Right>>>()
+		? Left::Cont::template evaluate<bool, BaseObjectFinder<DependencyBase, DirectDependencyCheck<Right>>>()
 		: false;
 }
 
 template <typename Left, typename Right>
 constexpr static bool dependsOn()
 {
-	return directlyDependsOn<Left, Right> () || Left::Cont::template evaluate<bool, DependencyObjectFinder<TransitiveDependencyCheck<Right>>>();
+	return directlyDependsOn<Left, Right> () || Left::Cont::template evaluate<bool, BaseObjectFinder<DependencyBase, TransitiveDependencyCheck<Right>>>();
 }
 
 template <typename Left, typename Right>
