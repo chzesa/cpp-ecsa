@@ -568,6 +568,16 @@ struct OncePerPair
 		Next::template evaluate<OncePerPair<Cont, Container<Fold, NrContainer<Value>>, Callback>>();
 	}
 
+	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A>
+	inline static void inspect(A* a)
+	{
+		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
+			Cont::template evaluate<OncePerType<Dummy, PairCallback<Value>>>(a);
+
+		Inner::template evaluate<OncePerPair<Cont, Container<Fold, NrContainer<Value>, Next>, Callback>>(a);
+		Next::template evaluate<OncePerPair<Cont, Container<Fold, NrContainer<Value>>, Callback>>(a);
+	}
+
 private:
 	template <typename A>
 	struct PairCallback
@@ -577,6 +587,12 @@ private:
 		{
 			Callback::template callback<A, B>();
 		}
+
+		template <typename B, typename P1>
+		inline static void callback(P1* p1)
+		{
+			Callback::template callback<A, B>(p1);
+		}
 	};
 };
 
@@ -585,6 +601,13 @@ void oncePerPair()
 {
 	Container::template evaluate<OncePerPair<Container, Dummy, Callback>>();
 }
+
+template <typename Container, typename Callback, typename A>
+void oncePerPair(A* a)
+{
+	Container::template evaluate<OncePerPair<Container, Dummy, Callback>>(a);
+}
+
 
 template <typename Container, int Num>
 struct Switch
