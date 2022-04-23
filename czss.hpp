@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include "external/c-fiber/czsf.h"
 #include <math.h>
+#include <string>
 
 namespace czss
 {
