@@ -501,6 +501,19 @@ constexpr uint64_t indexOf()
 template <typename T>
 constexpr bool isDummy();
 
+
+template <typename Fold, typename Callback>
+struct OncePerTypeConst
+{
+	template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+	constexpr static bool inspect()
+	{
+		return (!inspect::contains<Fold, Value>() && Callback::template callback<Value>())
+			|| Inner::template evaluate<bool, OncePerTypeConst<Container<Fold, NrContainer<Value>, Next>, Callback>>()
+			|| Next::template evaluate<bool, OncePerTypeConst<Container<Fold, NrContainer<Value>>, Callback>>();
+	}
+};
+
 template <typename Fold, typename Callback>
 struct OncePerType
 {
@@ -1155,18 +1168,10 @@ struct System : Container<Permissions...>, SystemBase, TemplateStubs
 	using This = System<Dependencies, Permissions...>;
 	using Cont = Container<Dependencies, Permissions...>;
 	using Dep = Dependencies;
-
-	template <typename Other>
-	constexpr static bool exclusiveWith();
-
-private:
-	template <typename Sys>
-	struct SysExclCheck
-	{
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		constexpr static bool inspect();
-	};
 };
+
+template <typename A, typename B>
+constexpr bool exclusiveWith();
 
 // #####################
 // Architectures
@@ -1734,7 +1739,7 @@ private:
 		{
 			return (isSystem<Value>()
 				&& !std::is_same<Sys, Value>()
-				&& Sys::template exclusiveWith<Value>()
+				&& exclusiveWith<Sys, Value>()
 				&& !dependsOn<Sys, Value>()
 				&& !dependsOn<Value, Sys>())
 				|| Next::template evaluate<bool, SystemsCompare<Sys>>();
@@ -2477,24 +2482,22 @@ constexpr bool isDummy()
 // System
 // #####################
 
-template <typename Dependencies, typename ...Permissions>
 template <typename Sys>
-template <typename Base, typename This, typename Value, typename Inner, typename Next>
-constexpr bool System<Dependencies, Permissions...>::SysExclCheck<Sys>::inspect()
+struct SystemExclusiveCheck
 {
-	// return (isComponent<Value>() && Sys::template canWrite<Value>())
-	return (!isResource<Value>() && canWrite<Sys, Value>())
-		|| (isResource<Value>() && !isThreadSafe<Value>() && canWrite<Sys, Value>())
-		|| Next::template evaluate<bool, SysExclCheck<Sys>>()
-		|| Inner::template evaluate<bool, SysExclCheck<Sys>>();
-}
+	template <typename Value>
+	static constexpr bool callback()
+	{
+		return (!isResource<Value>() && canWrite<Sys, Value>())
+			|| (isResource<Value>() && !isThreadSafe<Value>() && canWrite<Sys, Value>());
+	}
+};
 
-template <typename Dependencies, typename ...Permissions>
-template <typename Other>
-constexpr bool System<Dependencies, Permissions...>::exclusiveWith()
+template <typename A, typename B>
+constexpr bool exclusiveWith()
 {
-	return Cont::template evaluate<bool, SysExclCheck<Other>>()
-		|| Other::Cont::template evaluate<bool, SysExclCheck<This>>() ;
+	return A::Cont::template evaluate<bool, OncePerTypeConst<Dummy, SystemExclusiveCheck<B>>>()
+		|| B::Cont::template evaluate<bool, OncePerTypeConst<Dummy, SystemExclusiveCheck<A>>>();
 }
 
 // #####################
