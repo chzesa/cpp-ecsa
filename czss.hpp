@@ -721,6 +721,19 @@ constexpr bool isWriter();
 template <typename T>
 constexpr bool isOrchestrator();
 
+template <typename B, typename T>
+struct BaseObjectFinder
+{
+	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	constexpr static bool inspect()
+	{
+		return (isBaseType<B, Value>()
+				? T::template callback<Value>()
+				: Inner::template evaluate<bool, BaseObjectFinder<B, T>>())
+			|| Next::template evaluate<bool, BaseObjectFinder<B, T>>();
+	}
+};
+
 // #####################
 // Data Container
 // #####################
@@ -1002,67 +1015,58 @@ constexpr static bool isIteratorCompatibleWithEntity()
 // #####################
 
 template <typename ...T>
-struct Reader : Container<T...>, TemplateStubs
+struct Reader : TemplateStubs, ReaderBase
 {
 	using Cont = Container<T...>;
-
-	template <typename U>
-	constexpr static bool canRead();
-
-	template <typename U>
-	constexpr static bool canWrite();
-
-	template <typename Entity>
-	constexpr static bool canOrchestrate();
 };
 
 template <typename ...T>
-struct Writer : Container<T...>, TemplateStubs
+struct Writer : TemplateStubs, WriterBase
 {
 	using Cont = Container<T...>;
-
-	template <typename U>
-	constexpr static bool canWrite();
-
-	template <typename U>
-	constexpr static bool canRead();
-
-	template <typename Entity>
-	constexpr static bool canOrchestrate();
 };
 
 template <typename ...Entities>
-struct Orchestrator : Container<Entities...>, TemplateStubs
+struct Orchestrator : TemplateStubs, OrchestratorBase
 {
 	using Cont = Container<Entities...>;
-
-	template <typename U>
-	constexpr static bool canRead();
-
-	template <typename U>
-	constexpr static bool canWrite();
-
-	template <typename Entity>
-	constexpr static bool canOrchestrate();
 };
+
+template <typename Target>
+struct ValueExists
+{
+	template <typename Value>
+	constexpr static bool callback()
+	{
+		return inspect::contains<typename Value::Cont, Target>();
+	}
+};
+
+template <typename Sys, typename T>
+constexpr bool canRead()
+{
+	return Sys::Cont::template evaluate<bool, BaseObjectFinder<ReaderBase, ValueExists<T>>>()
+		|| Sys::Cont::template evaluate<bool, BaseObjectFinder<WriterBase, ValueExists<T>>>()
+		|| Sys::Cont::template evaluate<bool, BaseObjectFinder<OrchestratorBase, ValueExists<T>>>();
+}
+
+template <typename Sys, typename T>
+constexpr bool canWrite()
+{
+	return Sys::Cont::template evaluate<bool, BaseObjectFinder<WriterBase, ValueExists<T>>>()
+		|| Sys::Cont::template evaluate<bool, BaseObjectFinder<OrchestratorBase, ValueExists<T>>>();
+}
+
+template <typename Sys, typename T>
+constexpr bool canOrchestrate()
+{
+	return Sys::Cont::template evaluate<bool, BaseObjectFinder<OrchestratorBase, ValueExists<T>>>();
+}
+
 
 // #####################
 // Graphs
 // #####################
-
-template <typename B, typename T>
-struct BaseObjectFinder
-{
-	template <typename Base, typename This, typename Value, typename Inner, typename Next>
-	constexpr static bool inspect()
-	{
-		return (isBaseType<B, Value>()
-				? T::template callback<Value>()
-				: Inner::template evaluate<bool, BaseObjectFinder<B, T>>())
-			|| Next::template evaluate<bool, BaseObjectFinder<B, T>>();
-	}
-};
-
 
 template <typename ...N>
 struct Dependency : NrContainer<N...>, DependencyBase, TemplateStubs
@@ -1155,43 +1159,12 @@ struct System : Container<Permissions...>, SystemBase, TemplateStubs
 	template <typename Other>
 	constexpr static bool exclusiveWith();
 
-	template <typename T>
-	constexpr static bool canRead();
-
-	template <typename T>
-	constexpr static bool canWrite();
-
-	template <typename Entity>
-	constexpr static bool canOrchestrate();
-
 private:
 	template <typename Sys>
 	struct SysExclCheck
 	{
 		template <typename Base, typename This, typename Value, typename Inner, typename Next>
 		constexpr static bool inspect();
-	};
-
-	template <typename T>
-	struct ReadCheck
-	{
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		constexpr static bool inspect();
-	};
-
-	template <typename T>
-	struct WriteCheck
-	{
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		constexpr static bool inspect();
-	};
-
-	template <typename E>
-	struct OrchestrateCheck
-	{
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
-		constexpr static bool inspect();
-		
 	};
 };
 
@@ -1808,7 +1781,7 @@ struct IteratorAccessor
 	const Component* view()
 	{
 		static_assert(inspect::contains<typename Iter::Cont, Component>(), "Iterator doesn't contain the requested component.");
-		static_assert(Sys::template canRead<Component>(), "System lacks read permissions for the Iterator's components.");
+		static_assert(canRead<Sys, Component>(), "System lacks read permissions for the Iterator's components.");
 		return get_ptr<Component>();
 	}
 
@@ -1816,7 +1789,7 @@ struct IteratorAccessor
 	Component* get()
 	{
 		static_assert(Iter::template containsComponent<Component>(), "Iterator doesn't contain the requested component.");
-		static_assert(Sys::template canWrite<Component>(), "System lacks write permissions for the Iterator's components.");
+		static_assert(canWrite<Sys, Component>(), "System lacks write permissions for the Iterator's components.");
 		return get_ptr<Component>();
 	}
 
@@ -2137,7 +2110,7 @@ struct Accessor
 	const Resource* viewResource()
 	{
 		static_assert(isResource<Resource>(), "Attempted to read non-resource.");
-		static_assert(Sys::template canRead<Resource>(), "System lacks permission to read Resource.");
+		static_assert(canRead<Sys, Resource>(), "System lacks permission to read Resource.");
 		static_assert(inspect::contains<typename Arch::Cont, Resource>(), "Architecture doesn't contain the Resource.");
 		return arch->template getResource<Resource>();
 	}
@@ -2146,7 +2119,7 @@ struct Accessor
 	Resource* getResource()
 	{
 		static_assert(isResource<Resource>(), "Attempted to write to non-resource.");
-		static_assert(Sys::template canWrite<Resource>(), "System lacks permission to modify Resource.");
+		static_assert(canWrite<Sys, Resource>(), "System lacks permission to modify Resource.");
 		static_assert(inspect::contains<typename Arch::Cont, Resource>(), "Architecture doesn't contain the Resource.");
 		return arch->template getResource<Resource>();
 	}
@@ -2258,7 +2231,7 @@ private:
 	void entityPermission()
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		static_assert(Sys::template canOrchestrate<Entity>(), "System lacks permission to create the Entity.");
+		static_assert(canOrchestrate<Sys, Entity>(), "System lacks permission to create the Entity.");
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 	}
 
@@ -2269,7 +2242,7 @@ private:
 		{
 			return isEntity<Value>()
 				&& inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == key
-				&& Sys::template canOrchestrate<Value>()
+				&& canOrchestrate<Sys, Value>()
 				|| Inner::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(key)
 				|| Next::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(key);
 		}
@@ -2501,83 +2474,6 @@ constexpr bool isDummy()
 }
 
 // #####################
-// Permission Objects
-// #####################
-
-// Reader
-
-template <typename ...T> 
-template <typename U>
-constexpr bool Reader<T...>::canRead()
-{
-	return inspect::contains<Reader<T...>, U>();
-}
-
-template <typename ...T> 
-template <typename U>
-constexpr bool Reader<T...>::canWrite()
-{
-	return false;
-}
-
-template <typename ...T> 
-template <typename Entity>
-constexpr bool Reader<T...>::canOrchestrate()
-{
-	return false;
-}
-
-// Writer
-
-template <typename ...T> 
-template <typename U>
-constexpr bool Writer<T...>::canRead()
-{
-	return canWrite<U>();
-}
-
-template <typename ...T> 
-template <typename U>
-constexpr bool Writer<T...>::canWrite()
-{
-	return inspect::contains<Writer<T...>, U>();
-}
-
-template <typename ...T> 
-template <typename Entity>
-constexpr bool Writer<T...>::canOrchestrate()
-{
-	return false;
-}
-
-// Orhcestrator
-
-template <typename ...Entities> 
-template <typename U>
-constexpr bool Orchestrator<Entities...>::canRead()
-{
-	return canWrite<U>();
-}
-
-template <typename ...Entities> 
-template <typename U>
-constexpr bool Orchestrator<Entities...>::canWrite()
-{
-	return inspect::contains<Orchestrator<Entities...>, U>();
-}
-
-template <typename ...Entities>
-template <typename Entity>
-constexpr bool Orchestrator<Entities...>::canOrchestrate()
-{
-	return inspect::contains<Orchestrator<Entities...>, Entity>();
-}
-
-// #####################
-// Graph
-// #####################
-
-// #####################
 // System
 // #####################
 
@@ -2587,8 +2483,8 @@ template <typename Base, typename This, typename Value, typename Inner, typename
 constexpr bool System<Dependencies, Permissions...>::SysExclCheck<Sys>::inspect()
 {
 	// return (isComponent<Value>() && Sys::template canWrite<Value>())
-	return (!isResource<Value>() && Sys::template canWrite<Value>())
-		|| (isResource<Value>() && !isThreadSafe<Value>() && Sys::template canWrite<Value>())
+	return (!isResource<Value>() && canWrite<Sys, Value>())
+		|| (isResource<Value>() && !isThreadSafe<Value>() && canWrite<Sys, Value>())
 		|| Next::template evaluate<bool, SysExclCheck<Sys>>()
 		|| Inner::template evaluate<bool, SysExclCheck<Sys>>();
 }
@@ -2599,51 +2495,6 @@ constexpr bool System<Dependencies, Permissions...>::exclusiveWith()
 {
 	return Cont::template evaluate<bool, SysExclCheck<Other>>()
 		|| Other::Cont::template evaluate<bool, SysExclCheck<This>>() ;
-}
-
-template <typename Dependencies, typename ...Permissions>
-template <typename T>
-constexpr bool System<Dependencies, Permissions...>::canRead()
-{
-	return Container<Permissions... >::template evaluate<bool, ReadCheck<T>>();
-}
-
-template <typename Dependencies, typename ...Permissions>
-template <typename T>
-template <typename Base, typename This, typename Value, typename Inner, typename Next>
-constexpr bool System<Dependencies, Permissions...>::ReadCheck<T>::inspect()
-{
-	return Value::template canRead<T>() || Next::template evaluate<bool, ReadCheck<T>>();
-}
-
-template <typename Dependencies, typename ...Permissions>
-template <typename T>
-constexpr bool System<Dependencies, Permissions...>::canWrite()
-{
-	return Container<Permissions...>::template evaluate <bool, WriteCheck<T>>();
-}
-
-template <typename Dependencies, typename ...Permissions>
-template <typename T>
-template <typename Base, typename This, typename Value, typename Inner, typename Next>
-constexpr bool System<Dependencies, Permissions...>::WriteCheck<T>::inspect()
-{
-	return Value::template canWrite<T>() || Next::template evaluate<bool, WriteCheck<T>>();
-}
-
-template <typename Dependencies, typename ...Permissions>
-template <typename Entity>
-constexpr bool System<Dependencies, Permissions...>::canOrchestrate()
-{
-	return Container<Permissions...>::template evaluate<bool, OrchestrateCheck<Entity>>();
-}
-
-template <typename Dependencies, typename ...Permissions>
-template <typename E>
-template <typename Base, typename This, typename Value, typename Inner, typename Next>
-constexpr bool System<Dependencies, Permissions...>::OrchestrateCheck<E>::inspect()
-{
-	return Value::template canOrchestrate<E>() || Next::template evaluate<bool, OrchestrateCheck<E>>();
 }
 
 // #####################
