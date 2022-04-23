@@ -678,6 +678,9 @@ struct SystemBase {};
 struct ResourceBase {};
 struct PermissionsBase {};
 struct DependencyBase {};
+struct ReaderBase {};
+struct WriterBase {};
+struct OrchestratorBase {};
 
 template <typename T>
 constexpr bool isValidType();
@@ -708,6 +711,15 @@ constexpr bool isPermission();
 
 template <typename T>
 constexpr bool isDependency();
+
+template <typename T>
+constexpr bool isReader();
+
+template <typename T>
+constexpr bool isWriter();
+
+template <typename T>
+constexpr bool isOrchestrator();
 
 // #####################
 // Data Container
@@ -2388,6 +2400,9 @@ constexpr bool isValidType()
 		<< std::is_base_of<ResourceBase, T>()
 		<< std::is_base_of<PermissionsBase, T>()
 		<< std::is_base_of<DependencyBase, T>()
+		<< std::is_base_of<ReaderBase, T>()
+		<< std::is_base_of<WriterBase, T>()
+		<< std::is_base_of<OrchestratorBase, T>()
 	) == 2;
 }
 
@@ -2444,6 +2459,27 @@ constexpr bool isDependency()
 {
 	return isBaseType<DependencyBase, T>();
 }
+
+template<typename T>
+constexpr bool isReader()
+{
+	return isBaseType<ReaderBase, T>();
+}
+
+
+template<typename T>
+constexpr bool isWriter()
+{
+	return isBaseType<WriterBase, T>();
+}
+
+
+template<typename T>
+constexpr bool isOrchestrator()
+{
+	return isBaseType<OrchestratorBase, T>();
+}
+
 
 template <typename T>
 constexpr bool isDummy()
