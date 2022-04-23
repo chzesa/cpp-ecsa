@@ -62,6 +62,9 @@ struct Dummy
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate(uint64_t value) { return 0; }
 
+	template <typename Inspector>
+	inline static void evaluate() { }
+
 	template <typename Inspector, typename A>
 	inline static void evaluate(A a) { }
 
@@ -100,6 +103,12 @@ struct Rbox : Rbox <Base, Value>, Rbox<Rbox <Base, Value>, Rest...>
 	constexpr static Return evaluate(uint64_t value)
 	{
 		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(value);
+	}
+
+	template <typename Inspector>
+	inline static void evaluate()
+	{
+		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>();
 	}
 
 	template <typename Inspector, typename A>
@@ -148,6 +157,12 @@ struct Rbox <Base, Value>
 	constexpr static Return evaluate(uint64_t value)
 	{
 		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(value);
+	}
+
+	template <typename Inspector>
+	inline static void evaluate()
+	{
+		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>();
 	}
 
 	template <typename Inspector, typename A>
@@ -199,6 +214,12 @@ struct NrBox : NrBox <Base, Value>, NrBox<NrBox <Base, Value>, Rest...>
 		return Inspector::template inspect<Base, Cont, Value, Dummy, typename Fwd::Cont>(value);
 	}
 
+	template <typename Inspector>
+	inline static void evaluate()
+	{
+		Inspector::template inspect<Base, Cont, Value, Dummy, typename Fwd::Cont>();
+	}
+
 	template <typename Inspector, typename A>
 	inline static void evaluate(A* a)
 	{
@@ -244,6 +265,12 @@ struct NrBox <Base, Value>
 	constexpr static Return evaluate(uint64_t value)
 	{
 		return Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>(value);
+	}
+
+	template <typename Inspector>
+	inline static void evaluate()
+	{
+		Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>();
 	}
 
 	template <typename Inspector, typename A>
@@ -524,6 +551,37 @@ struct OncePerType
 		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a, b, c);
 	}
 };
+
+template <typename Cont, typename Fold, typename Callback>
+struct OncePerPair
+{
+	template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+	inline static void inspect()
+	{
+		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
+			Cont::template evaluate<OncePerType<Dummy, PairCallback<Value>>>();
+
+		Inner::template evaluate<OncePerPair<Cont, Container<Fold, NrContainer<Value>, Next>, Callback>>();
+		Next::template evaluate<OncePerPair<Cont, Container<Fold, NrContainer<Value>>, Callback>>();
+	}
+
+private:
+	template <typename A>
+	struct PairCallback
+	{
+		template <typename B>
+		inline static void callback()
+		{
+			Callback::template callback<A, B>();
+		}
+	};
+};
+
+template <typename Container, typename Callback>
+void oncePerPair()
+{
+	Container::template evaluate<OncePerPair<Container, Dummy, Callback>>();
+}
 
 template <typename Container, int Num>
 struct Switch
