@@ -1043,10 +1043,10 @@ struct DirectDependencyCheck
 	template <typename Base, typename This, typename Value, typename Inner, typename Next>
 	constexpr static bool inspect()
 	{
-		return isSystem<Value>()
-			? std::is_same<Target, Value>()
-			: Inner::template evaluate<bool, DirectDependencyCheck<Target>>()
-				|| Next::template evaluate<bool, DirectDependencyCheck<Target>>();
+		return (isSystem<Value>()
+				? std::is_same<Target, Value>()
+				: Inner::template evaluate<bool, DirectDependencyCheck<Target>>())
+			|| Next::template evaluate<bool, DirectDependencyCheck<Target>>();
 	}
 };
 
