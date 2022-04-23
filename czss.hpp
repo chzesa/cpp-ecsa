@@ -1638,6 +1638,10 @@ private:
 
 		uint64_t id;
 		auto ent = entities->create(id);
+
+		uint64_t tk = inspect::indexOf<Cont, Entity, EntityBase>() << 63 - typeKeyLength();
+		id += tk;
+
 		setEntityId(ent, id);
 
 		if (loc != entities->entities)
