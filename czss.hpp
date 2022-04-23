@@ -1479,6 +1479,117 @@ struct Architecture : VirtualArchitecture
 		Cont::template evaluate<OncePerType<Dummy, DestructorCallback>>(this);
 	}
 
+	template <typename V>
+	static constexpr uint64_t absoluteIndex()
+	{
+		return isComponent<V>()
+			? inspect::indexOf<Cont, V, ComponentBase>()
+			: inspect::numUniques<Cont, ComponentBase>()
+				+ (isIterator<V>()
+					? inspect::indexOf<Cont, V, IteratorBase>()
+					: inspect::numUniques<Cont, IteratorBase>()
+						+ (isEntity<V>()
+						? inspect::indexOf<Cont, V, EntityBase>()
+						: inspect::numUniques<Cont, EntityBase>()
+							+ (isSystem<V>()
+							? inspect::indexOf<Cont, V, SystemBase>()
+							: inspect::numUniques<Cont, SystemBase>()
+								+ (isResource<V>()
+								? inspect::indexOf<Cont, V, ResourceBase>()
+								: inspect::numUniques<Cont, ResourceBase>()))));
+	}
+
+	static std::string dotGraphString()
+	{
+		std::string ret("digraph {\n");
+
+		Cont::template evaluate<OncePerType<Dummy, DotGenerateNodes>>(&ret);
+		oncePerPair<Cont, DotGenerateEdges, std::string>(&ret);
+
+		ret += "}\n";
+
+		return ret;
+	}
+
+	struct DotGenerateNodes
+	{
+		template<typename V>
+		static void callback(std::string* str)
+		{
+			CZSS_CONST_IF (absoluteIndex<V>() == absoluteIndex<Dummy>())
+				return;
+
+			std::string a;
+			std::string shape = "box";
+
+			CZSS_CONST_IF(isSystem<V>())
+				shape = "ellipse";
+			CZSS_CONST_IF(isEntity<V>())
+				shape = "cylinder";
+			CZSS_CONST_IF(isComponent<V>())
+				shape = "rect";
+			CZSS_CONST_IF(isResource<V>())
+				shape = "diamond";
+
+			a += std::to_string(absoluteIndex<V>()) + " [label = " + name<V>() + ", shape = " + shape + " ]\n";
+			str->append(a);
+		}
+	};
+
+	struct DotGenerateEdges
+	{
+		template<typename A, typename B>
+		static void callback(std::string* str)
+		{
+			if (absoluteIndex<A>() == absoluteIndex<Dummy>() || absoluteIndex<B>() == absoluteIndex<Dummy>())
+				return;
+
+			std::string an = std::to_string(absoluteIndex<A>());
+			std::string bn = std::to_string(absoluteIndex<B>());
+
+			std::string s;
+
+			CZSS_CONST_IF (isSystem<A>() && isSystem<B>() && !std::is_same<A, B>())
+			{
+				CZSS_CONST_IF (directlyDependsOn<A, B>())
+					s += an + " -> " + bn + "\n";
+
+				if (exclusiveWith<A, B>() && !dependsOn<A, B>() && !dependsOn<B, A>())
+						s += an + "-> " + bn + " [ style = dotted ]\n";
+			}
+
+			CZSS_CONST_IF(isSystem<A>() && isComponent<B>())
+			{
+				CZSS_CONST_IF (canWrite<A, B>())
+					s += an + " -> " + bn + " [ color = yellow ]\n";
+
+				else CZSS_CONST_IF (canRead<A, B>())
+					s += an + " -> " + bn + " [ color = green ]\n";
+			}
+
+			CZSS_CONST_IF(isSystem<A>() && isEntity<B>())
+			{
+				CZSS_CONST_IF (canOrchestrate<A, B>())
+					s += an + " -> " + bn + " [ color = red ]\n";
+			}
+
+			CZSS_CONST_IF(isSystem<A>() && isResource<B>())
+			{
+				CZSS_CONST_IF (isThreadSafe<B>() && canWrite<A, B>())
+					s += an + " -> " + bn + " [ color = green ]\n";
+				else CZSS_CONST_IF (canWrite<A, B>())
+					s += an + " -> " + bn + " [ color = red ]\n";
+				else CZSS_CONST_IF(canRead<A, B>())
+					s += an + " -> " + bn + " [ color = green ]\n";
+			}
+
+			CZSS_CONST_IF((isEntity<A>() || isIterator<A>()) && isComponent<B>())
+				s += an + " -> " + bn + "\n";
+
+			str->append(s);
+		}
+	};
+
 private:
 	void* resources[max(inspect::numUniques<Cont, ResourceBase>(), uint64_t(1))] = {0};
 	char entities[max(inspect::numUniques<Cont, EntityBase>(), uint64_t(1)) * sizeof(EntityStore<uint64_t>)] = {0};
