@@ -270,7 +270,7 @@ struct NrBox <Base, Value>
 	template <typename Inspector>
 	inline static void evaluate()
 	{
-		Inspector::template inspect<Base, Dummy, Value, Dummy, Dummy>();
+		Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>();
 	}
 
 	template <typename Inspector, typename A>
