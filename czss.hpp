@@ -1584,7 +1584,7 @@ struct Architecture : VirtualArchitecture
 					s += an + " -> " + bn + " [ color = green ]\n";
 			}
 
-			CZSS_CONST_IF((isEntity<A>() || isIterator<A>()) && isComponent<B>())
+			CZSS_CONST_IF((isEntity<A>() || isIterator<A>()) && isComponent<B>() && inspect::contains<typename A::Cont, B>())
 				s += an + " -> " + bn + "\n";
 
 			str->append(s);
