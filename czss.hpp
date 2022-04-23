@@ -1057,11 +1057,12 @@ struct BaseObjectFinder
 	constexpr static bool inspect()
 	{
 		return (isBaseType<B, Value>()
-				? Inner::template evaluate<bool, T>()
+				? T::template callback<Value>()
 				: Inner::template evaluate<bool, BaseObjectFinder<B, T>>())
 			|| Next::template evaluate<bool, BaseObjectFinder<B, T>>();
 	}
 };
+
 
 template <typename ...N>
 struct Dependency : NrContainer<N...>, DependencyBase, TemplateStubs
@@ -1089,6 +1090,12 @@ struct DirectDependencyCheck
 				: Inner::template evaluate<bool, DirectDependencyCheck<Target>>())
 			|| Next::template evaluate<bool, DirectDependencyCheck<Target>>();
 	}
+
+	template <typename Value>
+	constexpr static bool callback()
+	{
+		return Value::Cont::template evaluate<bool, DirectDependencyCheck<Target>>();
+	}
 };
 
 template <typename Target>
@@ -1105,6 +1112,12 @@ struct TransitiveDependencyCheck
 				? Inner::template evaluate<bool, TransitiveDependencyCheck<Target>>()
 					|| Next::template evaluate<bool, TransitiveDependencyCheck<Target>>()
 				:  Next::template evaluate<bool, TransitiveDependencyCheck<Target>>();
+	}
+
+	template <typename Value>
+	constexpr static bool callback()
+	{
+		return Value::Cont::template evaluate<bool, TransitiveDependencyCheck<Target>>();
 	}
 };
 
