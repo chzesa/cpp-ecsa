@@ -307,6 +307,9 @@ struct NrBox <Base, Value>
 template <typename ...T>
 struct NrContainer : NrBox<Root, T...> { };
 
+template <>
+struct NrContainer<> : Dummy { };
+
 template <typename ...T>
 struct Container : Rbox<Root, T...> { };
 
@@ -1013,16 +1016,19 @@ struct Orchestrator : Container<Entities...>, TemplateStubs
 // #####################
 
 template <typename ...N>
-struct Dependency : Container<N...>, DependencyBase, TemplateStubs
+struct Dependency : NrContainer<N...>, DependencyBase, TemplateStubs
 {
-	using Cont = Container<N...>;
+	using Cont = NrContainer<N...>;
 };
 
 template <>
-struct Dependency<> : Container<>, DependencyBase, TemplateStubs
+struct Dependency<> : NrContainer<>, DependencyBase, TemplateStubs
 {
-	using Cont = Container<>;
+	using Cont = NrContainer<>;
 };
+
+template <typename Left, typename Right>
+constexpr static bool dependsOn();
 
 template <typename T>
 struct DependencyObjectFinder
@@ -1059,7 +1065,7 @@ struct TransitiveDependencyCheck
 		return isSystem<Value>()
 			? std::is_same<Value, Target>()
 				? true
-				: Inner:: template evaluate<bool, DependencyObjectFinder<TransitiveDependencyCheck<Target>>>()
+				: dependsOn<Value, Target>()
 			: isDependency<Value>()
 				? Inner::template evaluate<bool, TransitiveDependencyCheck<Target>>()
 					|| Next::template evaluate<bool, TransitiveDependencyCheck<Target>>()
