@@ -305,6 +305,37 @@ struct NrBox <Base, Value>
 	}
 };
 
+template <typename Filter, typename Base, typename Value, typename ...Rest>
+struct Fbox : Fbox <Filter, Base, Value>, Fbox<Filter, Fbox <Filter, Base, Value>, Rest...>
+{
+	using Fwd = Fbox<Filter, Fbox <Filter, Base, Value>, Rest...>;
+	using Cont = Fbox<Filter, Base, Value, Rest...>;
+	using ValueCont = Fbox<Filter, Cont, typename Value::Cont>;
+
+	template <typename Return, typename Inspector>
+	constexpr static Return evaluate()
+	{
+		return Filter::template test<Value>()
+			? Inspector::template inspect<Base, Cont, Value, ValueCont, typename Fwd::Cont>()
+			: Inspector::template inspect<Base, Cont, Dummy, ValueCont, typename Fwd::Cont>();
+	}
+};
+
+template <typename Filter, typename Base, typename Value>
+struct Fbox <Filter, Base, Value>
+{
+	using Cont = Fbox <Filter, Base, Value>;
+	using ValueCont = Fbox<Filter, Cont, typename Value::Cont>;
+
+	template <typename Return, typename Inspector>
+	constexpr static Return evaluate()
+	{
+		return Filter::template test<Value>()
+			? Inspector::template inspect<Base, Cont, Value, ValueCont, Dummy>()
+			: Inspector::template inspect<Base, Cont, Dummy, ValueCont, Dummy>();
+	}
+};
+
 template <typename ...T>
 struct NrContainer : NrBox<Root, T...> { };
 
@@ -316,6 +347,12 @@ struct Container : Rbox<Root, T...> { };
 
 template <>
 struct Container<> : Dummy { };
+
+template <typename F, typename ...T>
+struct FContainer : Fbox<F, Root, T...> { };
+
+template <typename F>
+struct FContainer<F> : Dummy { };
 
 template <typename T>
 constexpr T min(T a, T b)
