@@ -2292,7 +2292,7 @@ struct Accessor
 	template <typename ...Systems>
 	void run(bool init)
 	{
-		Container<Systems...>::template evaluate<Filter<TestAlwaysTrue, TestIfContainer, SystemsRunPermissionTest>>();
+		Container<Systems...>::template evaluate<Filter<TestAlwaysTrue, TestIfContainer, SystemsRunPermissionTest<Container<Systems...>>>>();
 	}
 
 	template <typename Entity>
@@ -2452,7 +2452,7 @@ private:
 		}
 	};
 
-	template <typename Other>
+	template <typename Other, typename Systems>
 	struct SystemAccessValidationCallback
 	{
 		template <typename Value>
@@ -2478,10 +2478,12 @@ private:
 			CZSS_CONST_IF (isSystem<Value>())
 			{
 				static_assert(!inspect::contains<Arch::Cont, Value>(), "Subsystems must not refer any types in the architecture");
+				static_assert(inspect::contains<Systems, Value>(), "Subsystem run must include all dependencies.");
 			}
 		}
 	};
 
+	template <typename Systems>
 	struct SystemsRunPermissionTest
 	{
 		template <typename V>
@@ -2489,7 +2491,7 @@ private:
 		{
 			static_assert(isSystem<V>(), "Only systems allowed as template parameters.");
 			static_assert(!inspect::contains<Arch::Cont, V>(), "Architecture must not refer to system.");
-			typename V::Cont::template evaluate<OncePerType<Dummy, SystemAccessValidationCallback<V>>>();
+			typename V::Cont::template evaluate<OncePerType<Dummy, SystemAccessValidationCallback<V, Systems>>>();
 		}
 	};
 
