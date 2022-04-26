@@ -58,10 +58,10 @@ struct Dummy
 {
 	using Cont = Dummy;
 	template <typename Return, typename Inspector>
-	constexpr static Return evaluate() { return 0; }
+	constexpr static Return evaluate() { return Return(); }
 
 	template <typename Return, typename Inspector>
-	constexpr static Return evaluate(uint64_t value) { return 0; }
+	constexpr static Return evaluate(uint64_t value) { return Return(); }
 
 	template <typename Inspector>
 	inline static void evaluate() { }
@@ -76,7 +76,7 @@ struct Dummy
 	inline static void evaluate(A a, B b, C c) { }
 
 	template <typename Return, typename Inspector, typename A>
-	static Return evaluate(A a) { return 0; }
+	static Return evaluate(A a) { return Return(); }
 };
 
 struct Root
