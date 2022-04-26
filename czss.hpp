@@ -2283,10 +2283,16 @@ struct Accessor
 		arch->destroyEntity(key);
 	}
 
-	template <typename Entity>
-	Guid getEntityGuid(Entity* ent)
+	template <typename ...Entities>
+	void destroyEntities()
 	{
-		return Arch::getEntityGuid(ent);
+		Container<Entities...>::template evaluate<Filter<TestAlwaysTrue, TestIfContainer, EntityOrchestrationPermissionTest>>();
+	}
+
+	template <typename ...Systems>
+	void run(bool init)
+	{
+		Container<Systems...>::template evaluate<Filter<TestAlwaysTrue, TestIfContainer, SystemsRunPermissionTest>>();
 	}
 
 	template <typename Entity>
@@ -2409,7 +2415,7 @@ struct Accessor
 
 private:
 	template <typename Iterator>
-	void iteratorPermission()
+	static void iteratorPermission()
 	{
 		static_assert(isIterator<Iterator>(), "Attempted to iterate non-iterator.");
 		static_assert(inspect::containsAllIn<Sys, Iterator>(), "System doesn't have access to all components of Iterator.");
@@ -2417,10 +2423,10 @@ private:
 	}
 
 	template <typename Entity>
-	void entityPermission()
+	static void entityPermission()
 	{
-		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		static_assert(canOrchestrate<Sys, Entity>(), "System lacks permission to create the Entity.");
+		static_assert(isEntity<Entity>(), "Attempted to orchestrate non-entity.");
+		static_assert(canOrchestrate<Sys, Entity>(), "System lacks permission to orchestrate the Entity.");
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 	}
 
@@ -2434,6 +2440,24 @@ private:
 				&& canOrchestrate<Sys, Value>()
 				|| Inner::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(key)
 				|| Next::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(key);
+		}
+	};
+
+	struct EntityOrchestrationPermissionTest
+	{
+		template <typename V>
+		static void callback()
+		{
+			entityPermission<V>();
+		}
+	};
+
+	struct SystemsRunPermissionTest
+	{
+		template <typename V>
+		static void callback()
+		{
+			
 		}
 	};
 
