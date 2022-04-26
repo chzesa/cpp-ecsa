@@ -305,37 +305,6 @@ struct NrBox <Base, Value>
 	}
 };
 
-template <typename Filter, typename Base, typename Value, typename ...Rest>
-struct Fbox : Fbox <Filter, Base, Value>, Fbox<Filter, Fbox <Filter, Base, Value>, Rest...>
-{
-	using Fwd = Fbox<Filter, Fbox <Filter, Base, Value>, Rest...>;
-	using Cont = Fbox<Filter, Base, Value, Rest...>;
-	using ValueCont = Fbox<Filter, Cont, typename Value::Cont>;
-
-	template <typename Return, typename Inspector>
-	constexpr static Return evaluate()
-	{
-		return Filter::template test<Value>()
-			? Inspector::template inspect<Base, Cont, Value, ValueCont, typename Fwd::Cont>()
-			: Inspector::template inspect<Base, Cont, Dummy, ValueCont, typename Fwd::Cont>();
-	}
-};
-
-template <typename Filter, typename Base, typename Value>
-struct Fbox <Filter, Base, Value>
-{
-	using Cont = Fbox <Filter, Base, Value>;
-	using ValueCont = Fbox<Filter, Cont, typename Value::Cont>;
-
-	template <typename Return, typename Inspector>
-	constexpr static Return evaluate()
-	{
-		return Filter::template test<Value>()
-			? Inspector::template inspect<Base, Cont, Value, ValueCont, Dummy>()
-			: Inspector::template inspect<Base, Cont, Dummy, ValueCont, Dummy>();
-	}
-};
-
 template <typename ...T>
 struct NrContainer : NrBox<Root, T...> { };
 
@@ -347,12 +316,6 @@ struct Container : Rbox<Root, T...> { };
 
 template <>
 struct Container<> : Dummy { };
-
-template <typename F, typename ...T>
-struct FContainer : Fbox<F, Root, T...> { };
-
-template <typename F>
-struct FContainer<F> : Dummy { };
 
 template <typename T>
 constexpr T min(T a, T b)
@@ -645,6 +608,74 @@ private:
 			Callback::template callback<A, B>(p1);
 		}
 	};
+};
+
+template<typename FilterPolicy, typename RecursePolicy, typename Callback, typename Return, typename MergePolicy>
+struct FilterConst
+{
+	template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+	static constexpr Return inspect()
+	{
+		return FilterPolicy::template test<Value>() && RecursePolicy::template test<Value>()
+			// Merge everything
+			? MergePolicy::template merge(Callback::template callback<Return, Value>(), MergePolicy::template merge(
+				Inner::template evaluate<FilterConst<FilterPolicy, RecursePolicy, Callback, Return, MergePolicy>>(),
+				Next::template evaluate<FilterConst<FilterPolicy, RecursePolicy, Callback, Return, MergePolicy>>()))
+			: FilterPolicy::template test<Value>() || RecursePolicy::template test<Value>()
+				// Merge either recursion or value
+				? MergePolicy::template merge(Next::template evaluate<FilterConst<FilterPolicy, RecursePolicy, Callback, Return, MergePolicy>>(), 
+					FilterPolicy::template test<Value>()
+						? Callback::template callback<Return, Value>()
+						: Inner::template evaluate<FilterConst<FilterPolicy, RecursePolicy, Callback, Return, MergePolicy>>())
+				// Merge nothing
+				: Next::template evaluate<FilterConst<FilterPolicy, RecursePolicy, Callback, Return, MergePolicy>>();
+	}
+};
+
+template<typename FilterPolicy, typename Recurse, typename Callback>
+struct Filter
+{
+	template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+	inline static void inspect()
+	{
+		CZSS_CONST_IF (FilterPolicy::template test<Value>())
+			Callback::template callback<Value>();
+
+		CZSS_CONST_IF(Recurse::template test<Value>())
+			Inner::template evaluate<Filter<FilterPolicy, Recurse, Callback>>();
+
+		Next::template evaluate<Filter<FilterPolicy, Recurse, Callback>>();
+	}
+
+	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A>
+	inline static void inspect(A* a)
+	{
+		CZSS_CONST_IF (FilterPolicy::template test<Value>())
+			Callback::template callback<Value>(a);
+
+		CZSS_CONST_IF(Recurse::template test<Value>())
+			Inner::template evaluate<Filter<FilterPolicy, Recurse, Callback>>(a);
+
+		Next::template evaluate<Filter<FilterPolicy, Recurse, Callback>>();
+	}
+};
+
+struct TestIfContainer
+{
+	template <typename V>
+	inline static constexpr bool test()
+	{
+		return std::is_same<V, typename V::Cont>();
+	}
+};
+
+struct TestAlwaysTrue
+{
+	template <typename V>
+	inline static constexpr bool test()
+	{
+		return true;
+	}
 };
 
 template <typename Container, typename Callback>
