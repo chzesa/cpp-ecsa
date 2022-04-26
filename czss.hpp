@@ -2452,12 +2452,44 @@ private:
 		}
 	};
 
+	template <typename Other>
+	struct SystemAccessValidationCallback
+	{
+		template <typename Value>
+		static void callback()
+		{
+			#define ErrorMessage "System running other systems via accessor must have all permissions of the systems being run."
+
+			CZSS_CONST_IF (isComponent<Value>())
+			{
+				CZSS_CONST_IF (canRead<Other, Value>())
+					static_assert(canRead<Sys, Value>(), ErrorMessage);
+
+				CZSS_CONST_IF (canWrite<Other, Value>())
+					static_assert(canWrite<Sys, Value>(), ErrorMessage);
+			}
+
+			CZSS_CONST_IF (isEntity<Value>())
+			{
+				CZSS_CONST_IF (canOrchestrate<Other, Value>())
+					static_assert(canOrchestrate<Sys, Value>(), ErrorMessage);
+			}
+
+			CZSS_CONST_IF (isSystem<Value>())
+			{
+				static_assert(!inspect::contains<Arch::Cont, Value>(), "Subsystems must not refer any types in the architecture");
+			}
+		}
+	};
+
 	struct SystemsRunPermissionTest
 	{
 		template <typename V>
 		static void callback()
 		{
-			
+			static_assert(isSystem<V>(), "Only systems allowed as template parameters.");
+			static_assert(!inspect::contains<Arch::Cont, V>(), "Architecture must not refer to system.");
+			typename V::Cont::template evaluate<OncePerType<Dummy, SystemAccessValidationCallback<V>>>();
 		}
 	};
 
