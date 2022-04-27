@@ -933,10 +933,16 @@ struct EntityStore
 	E* entities;
 	std::vector<E*> used_indices;
 
+	// empty slots in entities array
 	std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> free_indices;
+
+	// maps entity id to entities array
 	std::unordered_map<uint64_t, uint64_t> index_map;
 
+	// maps entity id to index in used_indices
 	std::unordered_map<uint64_t, uint64_t> used_indices_map;
+
+	// reverse of the above
 	std::unordered_map<uint64_t, uint64_t> used_indices_map_reverse;
 };
 
