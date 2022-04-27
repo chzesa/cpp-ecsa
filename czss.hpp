@@ -1257,6 +1257,9 @@ constexpr static bool transitivelyDependsOn()
 // System
 // #####################
 
+template<typename Arch, typename Sys>
+struct Accessor;
+
 template <typename Dependencies, typename ...Permissions>
 struct System : Container<Permissions...>, SystemBase, TemplateStubs
 {
@@ -1319,6 +1322,130 @@ struct RunTaskData
 	Arch* arch;
 	czsf::Barrier* barriers;
 	uint64_t id;
+};
+
+template <typename Arch, typename Subset>
+struct Runner
+{
+
+	template <typename Sys>
+	struct SystemBlocker
+	{
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		inline static void inspect(czsf::Barrier* barriers)
+		{
+			CZSS_CONST_IF (directlyDependsOn<Sys, Value>() && !transitivelyDependsOn<Sys, Value>())
+			{
+				barriers[inspect::indexOf<Subset, Value, SystemBase>()].wait();
+			}
+
+			Next::template evaluate<SystemBlocker<Sys>>(barriers);
+		}
+	};
+
+	template <typename Sys>
+	struct DependeeBlocker
+	{
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		inline static void inspect(czsf::Barrier* barriers)
+		{
+			CZSS_CONST_IF (directlyDependsOn<Value, Sys>() && !transitivelyDependsOn<Value, Sys>())
+			{
+				barriers[inspect::indexOf<Subset, Value, SystemBase>()].wait();
+			}
+
+			Next::template evaluate<DependeeBlocker<Sys>>(barriers);
+		}
+	};
+
+	struct SystemRunner
+	{
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		inline static void inspect(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
+		{
+			if (inspect::indexOf<Subset, Value, SystemBase>() != *id)
+			{
+				Next::template evaluate<SystemRunner>(id, barriers, arch);
+				return;
+			}
+
+			Subset::template evaluate<SystemBlocker<Value>>(barriers);
+			Value::run(Accessor<Arch, Value>(arch));
+			barriers[*id].signal();
+		}
+	};
+
+	struct SystemInitialize
+	{
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		inline static void inspect(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
+		{
+			if (inspect::indexOf<Subset, Value, SystemBase>() != *id)
+			{
+				Next::template evaluate<SystemInitialize>(id, barriers, arch);
+				return;
+			}
+
+			Subset::template evaluate<SystemBlocker<Value>>(barriers);
+			Value::initialize(Accessor<Arch, Value>(arch));
+			barriers[*id].signal();
+		}
+	};
+
+	struct SystemShutdown
+	{
+		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		inline static void inspect(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
+		{
+			if (inspect::indexOf<Subset, Value, SystemBase>() != *id)
+			{
+				Next::template evaluate<SystemShutdown>(id, barriers, arch);
+				return;
+			}
+
+			Subset::template evaluate<DependeeBlocker<Value>>(barriers);
+			Value::shutdown(Accessor<Arch, Value>(arch));
+			barriers[*id].signal();
+		}
+	};
+
+	static void systemCallback(RunTaskData<Arch>* data)
+	{
+		Switch<Subset, inspect::numUniques<Subset, SystemBase>()>::template evaluate<SystemRunner>(data->id, &data->id, data->barriers, data->arch);
+	}
+
+	static void initializeSystemCallback(RunTaskData<Arch>* data)
+	{
+		Switch<Subset, inspect::numUniques<Subset, SystemBase>()>::template evaluate<SystemInitialize>(data->id, &data->id, data->barriers, data->arch);
+	}
+
+	static void shutdownSystemCallback(RunTaskData<Arch>* data)
+	{
+		Switch<Subset, inspect::numUniques<Subset, SystemBase>()>::template evaluate<SystemShutdown>(data->id, &data->id, data->barriers, data->arch);
+	}
+
+	template <typename T>
+	static void runForSystems(Arch* arch, void (*fn)(RunTaskData<Arch>*), T* fls)
+	{
+		static const uint64_t sysCount = inspect::numUniques<Subset, SystemBase>();
+		czsf::Barrier barriers[sysCount];
+		RunTaskData<Arch> taskData[sysCount];
+
+		for (uint64_t i = 0; i < sysCount; i++)
+		{
+			barriers[i] = czsf::Barrier(1);
+			taskData[i].arch = arch;
+			taskData[i].barriers = barriers;
+			taskData[i].id = i;
+		}
+
+		czsf::Barrier wait(sysCount);
+		if (fls == nullptr)
+			czsf::run(fn, taskData, sysCount, &wait);
+		else
+			czsf::run(fls, fn, taskData, sysCount, &wait);
+		wait.wait();
+	}
 };
 
 template <typename Desc, typename ...Systems>
@@ -1508,52 +1635,40 @@ struct Architecture : VirtualArchitecture
 	template <typename T>
 	void run(T* fls)
 	{
-		runForSystems(systemCallback, fls);
+		Runner<Desc, Cont>::template runForSystems(reinterpret_cast<Desc*>(this), Runner<Desc, Cont>::systemCallback, fls);
 	}
 
 	template <typename T>
 	void initialize(T* fls)
 	{
-		runForSystems(initializeSystemCallback, fls);
+		Runner<Desc, Cont>::template runForSystems(reinterpret_cast<Desc*>(this), Runner<Desc, Cont>::initializeSystemCallback, fls);
 	}
 
 	template <typename T>
 	void shutdown(T* fls)
 	{
-		runForSystems(shutdownSystemCallback, fls);
+		Runner<Desc, Cont>::template runForSystems(reinterpret_cast<Desc*>(this), Runner<Desc, Cont>::shutdownSystemCallback, fls);
 	}
 
 	void run()
 	{
-		runForSystems<Dummy>(systemCallback, nullptr);
+		Runner<Desc, Cont>::template runForSystems<Dummy>(reinterpret_cast<Desc*>(this), Runner<Desc, Cont>::systemCallback, nullptr);
 	}
 
 	void initialize()
 	{
-		runForSystems<Dummy>(initializeSystemCallback, nullptr);
+		Runner<Desc, Cont>::template runForSystems<Dummy>(reinterpret_cast<Desc*>(this), Runner<Desc, Cont>::initializeSystemCallback, nullptr);
 	}
 
 	void shutdown()
 	{
-		runForSystems<Dummy>(shutdownSystemCallback, nullptr);
+		Runner<Desc, Cont>::template runForSystems<Dummy>(reinterpret_cast<Desc*>(this), Runner<Desc, Cont>::shutdownSystemCallback, nullptr);
 	}
 
 	template <typename Sys>
-	void run();
-
-	static void systemCallback(RunTaskData<This>* data)
+	void run()
 	{
-		Switch<Cont, numSystems()>::template evaluate<SystemRunner>(data->id, &data->id, data->barriers, data->arch);
-	}
-
-	static void initializeSystemCallback(RunTaskData<This>* data)
-	{
-		Switch<Cont, numSystems()>::template evaluate<SystemInitialize>(data->id, &data->id, data->barriers, data->arch);
-	}
-
-	static void shutdownSystemCallback(RunTaskData<This>* data)
-	{
-		Switch<Cont, numSystems()>::template evaluate<SystemShutdown>(data->id, &data->id, data->barriers, data->arch);
+		Sys::run(Accessor<Desc, Sys>(reinterpret_cast<Desc*>(this)));
 	}
 
 	static constexpr uint64_t typeKeyLength()
@@ -1696,29 +1811,6 @@ private:
 	char entities[max(inspect::numUniques<Cont, EntityBase>(), uint64_t(1)) * sizeof(EntityStore<uint64_t>)] = {0};
 	bool reallocated[max(inspect::numUniques<Cont, ComponentBase>() * inspect::numUniques<Cont, SystemBase>(), uint64_t(1))] = {0};
 
-	template <typename T>
-	void runForSystems(void (*fn)(RunTaskData<This>*), T* fls)
-	{
-		static const uint64_t sysCount = inspect::numUniques<Container<Systems...>, SystemBase>();
-		czsf::Barrier barriers[sysCount];
-		RunTaskData<This> taskData[sysCount];
-
-		for (uint64_t i = 0; i < sysCount; i++)
-		{
-			barriers[i] = czsf::Barrier(1);
-			taskData[i].arch = this;
-			taskData[i].barriers = barriers;
-			taskData[i].id = i;
-		}
-
-		czsf::Barrier wait(sysCount);
-		if (fls == nullptr)
-			czsf::run(fn, taskData, sysCount, &wait);
-		else
-			czsf::run(fls, fn, taskData, sysCount, &wait);
-		wait.wait();
-	}
-
 	template <typename Entity>
 	struct PointerFixupData
 	{
@@ -1849,54 +1941,6 @@ private:
 		{
 			EntityStore<Value>* entities = arch->getEntities<Value>();
 			entities->clear();
-		}
-	};
-
-	struct SystemRunner
-	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline static void inspect(uint64_t* id, czsf::Barrier* barriers, This* arch);
-	};
-
-	struct SystemInitialize
-	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline static void inspect(uint64_t* id, czsf::Barrier* barriers, This* arch);
-	};
-
-	struct SystemShutdown
-	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline static void inspect(uint64_t* id, czsf::Barrier* barriers, This* arch);
-	};
-
-	template <typename Sys>
-	struct SystemBlocker
-	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline static void inspect(czsf::Barrier* barriers)
-		{
-			CZSS_CONST_IF (directlyDependsOn<Sys, Value>() && !transitivelyDependsOn<Sys, Value>())
-			{
-				barriers[inspect::indexOf<Cont, Value, SystemBase>()].wait();
-			}
-
-			Next::template evaluate<SystemBlocker<Sys>>(barriers);
-		}
-	};
-
-	template <typename Sys>
-	struct DependeeBlocker
-	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		inline static void inspect(czsf::Barrier* barriers)
-		{
-			CZSS_CONST_IF (directlyDependsOn<Value, Sys>() && !transitivelyDependsOn<Value, Sys>())
-			{
-				barriers[inspect::indexOf<Cont, Value, SystemBase>()].wait();
-			}
-
-			Next::template evaluate<DependeeBlocker<Sys>>(barriers);
 		}
 	};
 
@@ -2782,62 +2826,6 @@ constexpr bool exclusiveWith()
 {
 	return A::Cont::template evaluate<bool, OncePerTypeConst<Dummy, SystemExclusiveCheck<B>>>()
 		|| B::Cont::template evaluate<bool, OncePerTypeConst<Dummy, SystemExclusiveCheck<A>>>();
-}
-
-// #####################
-// Architecture
-// #####################
-
-template <typename Desc, typename ...Systems>
-template <typename Sys>
-void Architecture<Desc, Systems...>::run()
-{
-	Sys::run(Accessor<Desc, Sys>(reinterpret_cast<Desc*>(this)));
-}
-
-template <typename Desc, typename ...Systems>
-template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-void Architecture<Desc, Systems...>::SystemRunner::inspect(uint64_t* id, czsf::Barrier* barriers, This* arch)
-{
-	if (inspect::indexOf<Cont, Value, SystemBase>() != *id)
-	{
-		Next::template evaluate<SystemRunner>(id, barriers, arch);
-		return;
-	}
-
-	Cont::template evaluate<SystemBlocker<Value>>(barriers);
-	Value::run(Accessor<Desc, Value>(reinterpret_cast<Desc*>(arch)));
-	barriers[*id].signal();
-}
-
-template <typename Desc, typename ...Systems>
-template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-void Architecture<Desc, Systems...>::SystemInitialize::inspect(uint64_t* id, czsf::Barrier* barriers, This* arch)
-{
-	if (inspect::indexOf<Cont, Value, SystemBase>() != *id)
-	{
-		Next::template evaluate<SystemInitialize>(id, barriers, arch);
-		return;
-	}
-
-	Cont::template evaluate<SystemBlocker<Value>>(barriers);
-	Value::initialize(Accessor<Desc, Value>(reinterpret_cast<Desc*>(arch)));
-	barriers[*id].signal();
-}
-
-template <typename Desc, typename ...Systems>
-template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-void Architecture<Desc, Systems...>::SystemShutdown::inspect(uint64_t* id, czsf::Barrier* barriers, This* arch)
-{
-	if (inspect::indexOf<Cont, Value, SystemBase>() != *id)
-	{
-		Next::template evaluate<SystemShutdown>(id, barriers, arch);
-		return;
-	}
-
-	Cont::template evaluate<DependeeBlocker<Value>>(barriers);
-	Value::shutdown(Accessor<Desc, Value>(reinterpret_cast<Desc*>(arch)));
-	barriers[*id].signal();
 }
 
 } // namespace czss
