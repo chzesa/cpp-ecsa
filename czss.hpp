@@ -909,6 +909,23 @@ struct EntityStore
 		return used_indices.size();
 	}
 
+	void clear()
+	{
+
+		index_map.clear();
+		used_indices_map.clear();
+		used_indices_map_reverse.clear();
+
+		for (E* ptr : used_indices)
+		{
+			uint64_t index = ptr - entities;
+			ptr->~E();
+			free_indices.push(index);
+		}
+
+		memset(entities, 0, sizeof(E) * free_indices.size());
+	}
+
 // private:
 
 	void expand(uint64_t by)
@@ -1471,6 +1488,12 @@ struct Architecture : VirtualArchitecture
 		destroyEntity<Entity>(This::getEntityId(key));
 	}
 
+	template <typename ...Entities>
+	void destroyEntities()
+	{
+		NrContainer<Entities...>::template evaluate<DestroyEntitiesCallback>(this);
+	}
+
 	template <typename Component, typename System>
 	bool componentReallocated()
 	{
@@ -1816,6 +1839,16 @@ private:
 				Repair<Value> repair(min, max, loc->template getComponent<Value>() - min);
 				managePointer(*ptr, repair);
 			}
+		}
+	};
+
+	struct DestroyEntitiesCallback
+	{
+		template <typename Value>
+		static void callback(This* arch)
+		{
+			EntityStore<Value>* entities = arch->getEntities<Value>();
+			entities->clear();
 		}
 	};
 
