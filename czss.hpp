@@ -2373,6 +2373,7 @@ struct Accessor
 	void destroyEntities()
 	{
 		Container<Entities...>::template evaluate<Filter<TestAlwaysTrue, TestIfContainer, EntityOrchestrationPermissionTest>>();
+		arch->template destroyEntities<Entities...>();
 	}
 
 	template <typename T, typename ...Systems>
