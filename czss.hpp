@@ -863,9 +863,12 @@ struct EntityStore
 		uint64_t index = free_indices.top();
 		free_indices.pop();
 
+		uint64_t used_indices_index = used_indices.size();
+
 		used_indices.push_back(reinterpret_cast<E*>(entities) + index);
-		used_indices_map.insert({id, index});
-		used_indices_map_reverse.insert({index, id});
+
+		used_indices_map.insert({id, used_indices_index});
+		used_indices_map_reverse.insert({used_indices_index, id});
 
 		index_map.insert({id, index});
 
