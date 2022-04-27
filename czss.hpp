@@ -2375,10 +2375,24 @@ struct Accessor
 		Container<Entities...>::template evaluate<Filter<TestAlwaysTrue, TestIfContainer, EntityOrchestrationPermissionTest>>();
 	}
 
+	template <typename T, typename ...Systems>
+	void run(T* fls, bool init)
+	{
+		Container<Systems...>::template evaluate<Filter<TestAlwaysTrue, TestIfContainer, SystemsRunPermissionTest<Container<Systems...>>>>();
+
+		if (init)
+			Runner<Arch, Container<Systems...>>::runForSystems(arch, Runner<Arch, Container<Systems...>>::initializeSystemCallback, fls);
+
+		Runner<Arch, Container<Systems...>>::runForSystems(arch, Runner<Arch, Container<Systems...>>::systemCallback, fls);
+
+		if (init)
+			Runner<Arch, Container<Systems...>>::runForSystems(arch, Runner<Arch, Container<Systems...>>::shutdownSystemCallback, fls);
+	}
+
 	template <typename ...Systems>
 	void run(bool init)
 	{
-		Container<Systems...>::template evaluate<Filter<TestAlwaysTrue, TestIfContainer, SystemsRunPermissionTest<Container<Systems...>>>>();
+		run<Dummy, Systems...>(nullptr, init);
 	}
 
 	template <typename Entity>
