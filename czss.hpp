@@ -835,7 +835,7 @@ struct EntityStore
 	EntityStore()
 	{
 		entities = reinterpret_cast<E*>(malloc(sizeof (E) * 32));
-
+		nextId = 0;
 		for (uint64_t i = 0; i < 32; i++)
 			free_indices.push(i);
 	}
