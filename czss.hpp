@@ -1962,7 +1962,7 @@ private:
 			CZSS_CONST_IF (isEntity<Value>())
 			{
 				auto p = arch->template getEntities<Value>();
-				*p = EntityStore<Value>();
+				new(p) EntityStore<Value>();
 			}
 		}
 	};
