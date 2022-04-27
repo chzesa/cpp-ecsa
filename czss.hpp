@@ -926,6 +926,17 @@ struct EntityStore
 		memset(entities, 0, sizeof(E) * free_indices.size());
 	}
 
+	~EntityStore()
+	{
+		for (E* ptr : used_indices)
+		{
+			uint64_t index = ptr - entities;
+			ptr->~E();
+		}
+
+		free(entities);
+	}
+
 // private:
 
 	void expand(uint64_t by)
