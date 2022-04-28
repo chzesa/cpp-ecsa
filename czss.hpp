@@ -1021,16 +1021,19 @@ template <typename Value, typename Inherit>
 struct ConditionalValue <Value, true, Inherit> : Inherit
 {
 	template <typename T>
-	const T* viewComponent()
+	const T* viewComponent() const
 	{
-		return getComponent<T>();
+		CZSS_CONST_IF (std::is_same<T, Value>())
+			return &value;
+
+		return Inherit::template viewComponent<T>();
 	}
 
 	template<typename T>
 	T* getComponent()
 	{
 		CZSS_CONST_IF (std::is_same<T, Value>())
-			return reinterpret_cast<T*>(&value);
+			return &value;
 
 		return Inherit::template getComponent<T>();
 	}
@@ -1043,16 +1046,19 @@ template <typename Value>
 struct ConditionalValue <Value, true, Dummy>
 {
 	template <typename T>
-	const T* viewComponent()
+	const T* viewComponent() const
 	{
-		return getComponent<T>();
+		CZSS_CONST_IF (std::is_same<T, Value>())
+			return &value;
+
+		return nullptr;
 	}
 
 	template<typename T>
 	T* getComponent()
 	{
 		CZSS_CONST_IF (std::is_same<T, Value>())
-			return reinterpret_cast<T*>(&value);
+			return &value;
 
 		return nullptr;
 	}
@@ -1065,7 +1071,7 @@ template <typename Value>
 struct ConditionalValue <Value, false, Dummy>
 {
 	template <typename T>
-	const T* viewComponent()
+	const T* viewComponent() const
 	{
 		return nullptr;
 	}
