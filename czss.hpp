@@ -1024,7 +1024,7 @@ struct ConditionalValue <Value, true, Inherit> : Inherit
 	const T* viewComponent() const
 	{
 		CZSS_CONST_IF (std::is_same<T, Value>())
-			return &value;
+			return reinterpret_cast<const T*>(&value);
 
 		return Inherit::template viewComponent<T>();
 	}
@@ -1033,7 +1033,7 @@ struct ConditionalValue <Value, true, Inherit> : Inherit
 	T* getComponent()
 	{
 		CZSS_CONST_IF (std::is_same<T, Value>())
-			return &value;
+			return reinterpret_cast<T*>(&value);
 
 		return Inherit::template getComponent<T>();
 	}
@@ -1049,7 +1049,7 @@ struct ConditionalValue <Value, true, Dummy>
 	const T* viewComponent() const
 	{
 		CZSS_CONST_IF (std::is_same<T, Value>())
-			return &value;
+			return reinterpret_cast<const T*>(&value);
 
 		return nullptr;
 	}
@@ -1058,7 +1058,7 @@ struct ConditionalValue <Value, true, Dummy>
 	T* getComponent()
 	{
 		CZSS_CONST_IF (std::is_same<T, Value>())
-			return &value;
+			return reinterpret_cast<T*>(&value);
 
 		return nullptr;
 	}
