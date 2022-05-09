@@ -984,7 +984,7 @@ struct TemplateStubs
 	T* getComponent() { return nullptr; }
 
 	void setGuid(Guid guid);
-	Guid getGuid();
+	Guid getGuid() const;
 };
 
 // #####################
@@ -1107,7 +1107,7 @@ struct Iterator : Container<Components...>, IteratorBase, TemplateStubs
 	using Cont = Container<Components...>;
 
 	void setGuid(Guid guid) { this->id = guid; }
-	Guid getGuid() { return id; }
+	Guid getGuid() const { return id; }
 
 private:
 	Guid id;
@@ -1120,7 +1120,7 @@ struct Entity : ComponentInheritor<Dummy, Components...>, Container<Components..
 {
 	using Cont = Container<Components...>;
 
-	Guid getGuid() { return {id}; }
+	Guid getGuid() const { return {id}; }
 private:
 	void setGuid(Guid guid) { this->id = guid.get(); }
 	friend VirtualArchitecture;
@@ -2885,7 +2885,7 @@ uint64_t Guid::get()
 }
 
 void TemplateStubs::setGuid(Guid guid) { }
-Guid TemplateStubs::getGuid() { return Guid(0); }
+Guid TemplateStubs::getGuid() const { return Guid(0); }
 
 } // namespace czss
 
