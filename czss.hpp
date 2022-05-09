@@ -1315,13 +1315,13 @@ protected:
 	}
 
 	template<typename Entity>
-	static uint64_t getEntityId(Entity* ent)
+	static uint64_t getEntityId(const Entity* ent)
 	{
 		return ent->getGuid().get();
 	}
 
 	template <typename Arch, typename Entity>
-	static EntityId<Arch, Entity> getEntityId(Entity* ent)
+	static EntityId<Arch, Entity> getEntityId(const Entity* ent)
 	{
 		return EntityId<Arch, Entity>(VirtualArchitecture::getEntityId(ent));
 	}
@@ -2371,6 +2371,12 @@ struct Accessor
 		return arch->template getEntity<Entity>(guid);
 	}
 
+	template <typename Entity>
+	EntityId<Arch, Entity> getEntityId(const Entity* ent)
+	{
+		return Arch::getEntityId(ent);
+	}
+
 	void destroyEntity(Guid guid)
 	{
 		if (Arch::Cont::template evaluate<bool, EntityDestructionPermission>(Arch::typeKey(guid)))
@@ -2411,12 +2417,6 @@ struct Accessor
 	void run(bool init)
 	{
 		run<Dummy, Systems...>(nullptr, init);
-	}
-
-	template <typename Entity>
-	EntityId<Arch, Entity> getEntityId(Entity* ent)
-	{
-		return Arch::getEntityId(ent);
 	}
 
 	template <typename Resource>
