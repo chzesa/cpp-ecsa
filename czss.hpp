@@ -7,7 +7,11 @@
 #include <vector>
 #include <queue>
 #include <unordered_map>
+
+#ifndef CZSF_HEADERS_H
 #include "external/c-fiber/czsf.h"
+#endif
+
 #include <math.h>
 #include <string>
 
