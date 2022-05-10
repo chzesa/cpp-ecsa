@@ -1480,8 +1480,8 @@ struct Architecture : VirtualArchitecture
 		static_assert(!isSystem<Desc>(), "The first template parameter for Architecture must be the inheriting object");
 		// TODO assert all components are used in at least one entity
 		// TODO assert every entity can be instantiated
+		oncePerPair<Cont, SystemDependencyCheck>();
 		static_assert(!Cont::template evaluate<bool, SystemDependencyIterator>(), "Some System A depends on some System B which is not included in Architecture.");
-		static_assert(!Cont::template evaluate<bool, SystemDependencyMissingOuter>(), "An explicit dependency is missing between two systems.");
 
 		Cont::template evaluate<OncePerType<Dummy, ConstructorCallback>>(this);
 	}
@@ -2022,28 +2022,17 @@ private:
 		}
 	};
 
-	template<typename Sys>
-	struct SystemsCompare
+	struct SystemDependencyCheck
 	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		static constexpr bool inspect()
+		template <typename A, typename B>
+		static constexpr void callback()
 		{
-			return (isSystem<Value>()
-				&& !std::is_same<Sys, Value>()
-				&& exclusiveWith<Sys, Value>()
-				&& !dependsOn<Sys, Value>()
-				&& !dependsOn<Value, Sys>())
-				|| Next::template evaluate<bool, SystemsCompare<Sys>>();
-		}
-	};
-
-	struct SystemDependencyMissingOuter
-	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
-		static constexpr bool inspect()
-		{
-			return Cont::template evaluate<bool, SystemsCompare<Value>>()
-				|| Next::template evaluate <bool, SystemDependencyMissingOuter>();
+			static_assert(
+				isSystem<A>() && isSystem<B>() && !std::is_same<A, B>() && (exclusiveWith<A, B>() || exclusiveWith<B, A>())
+				? (dependsOn<A, B>() || dependsOn<B, A>())
+				: true,
+				"Explicit dependency missing between systems."
+			);
 		}
 	};
 };
