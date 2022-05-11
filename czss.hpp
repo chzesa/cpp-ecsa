@@ -2236,9 +2236,14 @@ private:
 	IteratorIterator(Arch* arch)
 	{
 		this->arch = arch;
-		typeKey = 0;
 		index = 0;
 		maxIndex = 0;
+
+		CZSS_CONST_IF(!Arch::Cont::template evaluate<bool, OncePerTypeConst<Dummy, ConstructorKeyCallback>>())
+			typeKey = Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<uint64_t, NextKey>(0, 0);
+		else
+			typeKey = 0;
+
 		++(*this);
 	}
 
@@ -2289,6 +2294,17 @@ private:
 
 				iterac->accessor = U(iterac->typeKey, entities->used_indices[iterac->index]);
 			}
+		}
+	};
+
+	struct ConstructorKeyCallback
+	{
+		template <typename Value>
+		static constexpr bool callback()
+		{
+			return isEntity<Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == 0
+				? isIteratorCompatibleWithEntity<Iter, Value>()
+				: false;
 		}
 	};
 };
