@@ -1265,8 +1265,9 @@ constexpr static bool dependsOn()
 template <typename Left, typename Right>
 constexpr static bool transitivelyDependsOn()
 {
-	// TODO doesn't ignore redundant direct dependencies
-	return dependsOn<Left, Right>() && !directlyDependsOn<Left, Right>();
+	return dependsOn<Left, Right>()
+		&& !directlyDependsOn<Left, Right>()
+		&& !(directlyDependsOn<Left, Right> () && Left::Cont::template evaluate<bool, BaseObjectFinder<DependencyBase, TransitiveDependencyCheck<Right>>>());
 }
 
 // #####################
