@@ -1263,11 +1263,15 @@ constexpr static bool dependsOn()
 }
 
 template <typename Left, typename Right>
+constexpr static bool redundantDependency()
+{
+	return directlyDependsOn<Left, Right> () && Left::Cont::template evaluate<bool, BaseObjectFinder<DependencyBase, TransitiveDependencyCheck<Right>>>();
+}
+
+template <typename Left, typename Right>
 constexpr static bool transitivelyDependsOn()
 {
-	return dependsOn<Left, Right>()
-		&& !directlyDependsOn<Left, Right>()
-		&& !(directlyDependsOn<Left, Right> () && Left::Cont::template evaluate<bool, BaseObjectFinder<DependencyBase, TransitiveDependencyCheck<Right>>>());
+	return dependsOn<Left, Right>() && !directlyDependsOn<Left, Right>() && !redundantDependency<Left, Right>();
 }
 
 // #####################
@@ -1785,10 +1789,15 @@ struct Architecture : VirtualArchitecture
 			CZSS_CONST_IF (isSystem<A>() && isSystem<B>() && !std::is_same<A, B>())
 			{
 				CZSS_CONST_IF (directlyDependsOn<A, B>())
-					s += an + " -> " + bn + "\n";
+				{
+					CZSS_CONST_IF (redundantDependency<A, B>())
+						s += an + " -> " + bn + " [ style = dotted, color = grey ]\n";
+					else
+						s += an + " -> " + bn + "\n";
+				}
 
 				CZSS_CONST_IF (exclusiveWith<A, B>() && !dependsOn<A, B>() && !dependsOn<B, A>())
-						s += an + "-> " + bn + " [ style = dotted ]\n";
+						s += an + " -> " + bn + " [ style = dotted ]\n";
 			}
 
 			CZSS_CONST_IF (isSystem<A>() && isComponent<B>())
