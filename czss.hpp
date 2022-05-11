@@ -1218,12 +1218,11 @@ struct DirectDependencyCheck
 	template <typename Base, typename This, typename Value, typename Inner, typename Next>
 	constexpr static bool inspect()
 	{
-		return (isSystem<Value>()
-				? std::is_same<Target, Value>()
-				: Inner::template evaluate<bool, DirectDependencyCheck<Target>>())
-			|| Next::template evaluate<bool, DirectDependencyCheck<Target>>();
+		return std::is_same<Target, Value>() || Next::template evaluate<bool, DirectDependencyCheck<Target>>();
 	}
 
+	// Base object finder calls callback with Value = Dependency<A, B, C...>
+	// Value::Cont is NrContainer of systems
 	template <typename Value>
 	constexpr static bool callback()
 	{
@@ -1237,16 +1236,11 @@ struct TransitiveDependencyCheck
 	template <typename Base, typename This, typename Value, typename Inner, typename Next>
 	constexpr static bool inspect()
 	{
-		return isSystem<Value>()
-			? std::is_same<Value, Target>()
-				? true
-				: dependsOn<Value, Target>()
-			: isDependency<Value>()
-				? Inner::template evaluate<bool, TransitiveDependencyCheck<Target>>()
-					|| Next::template evaluate<bool, TransitiveDependencyCheck<Target>>()
-				:  Next::template evaluate<bool, TransitiveDependencyCheck<Target>>();
+		return dependsOn<Value, Target>() || Next::template evaluate<bool, TransitiveDependencyCheck<Target>>();
 	}
 
+	// Base object finder calls callback with Value = Dependency<A, B, C...>
+	// Value::Cont is NrContainer of systems
 	template <typename Value>
 	constexpr static bool callback()
 	{
@@ -1271,6 +1265,7 @@ constexpr static bool dependsOn()
 template <typename Left, typename Right>
 constexpr static bool transitivelyDependsOn()
 {
+	// TODO doesn't ignore redundant direct dependencies
 	return dependsOn<Left, Right>() && !directlyDependsOn<Left, Right>();
 }
 
