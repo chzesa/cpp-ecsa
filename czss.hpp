@@ -2078,7 +2078,7 @@ struct IteratorAccessor
 	template<typename Component>
 	Component* get()
 	{
-		static_assert(Iter::template containsComponent<Component>(), "Iterator doesn't contain the requested component.");
+		static_assert(inspect::contains<typename Iter::Cont, Component>(), "Iterator doesn't contain the requested component.");
 		static_assert(canWrite<Sys, Component>(), "System lacks write permissions for the Iterator's components.");
 		return get_ptr<Component>();
 	}
