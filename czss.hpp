@@ -101,49 +101,49 @@ struct Rbox : Rbox <Base, Value>, Rbox<Rbox <Base, Value>, Rest...>
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate()
 	{
-		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>();
+		return Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>();
 	}
 
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate(uint64_t value)
 	{
-		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(value);
+		return Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(value);
 	}
 
 	template <typename Inspector>
 	inline static void evaluate()
 	{
-		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>();
+		Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>();
 	}
 
 	template <typename Inspector, typename A>
 	inline static void evaluate(A* a)
 	{
-		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(a);
+		Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(a);
 	}
 
 	template <typename Inspector, typename A, typename B>
 	inline static void evaluate(A* a, B* b)
 	{
-		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(a, b);
+		Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(a, b);
 	}
 
 	template <typename Inspector, typename A, typename B>
 	inline static void evaluate(A a, B* b)
 	{
-		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(a, b);
+		Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(a, b);
 	}
 
 	template <typename Inspector, typename A, typename B, typename C>
 	inline static void evaluate(A* a, B* b, C* c)
 	{
-		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(a, b, c);
+		Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(a, b, c);
 	}
 
 	template <typename Return, typename Inspector, typename A>
 	static Return evaluate(A* a)
 	{
-		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, typename Fwd::Cont>(a);
+		return Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(a);
 	}
 };
 
@@ -155,49 +155,49 @@ struct Rbox <Base, Value>
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate()
 	{
-		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>();
+		return Inspector::template inspect<Value, typename Value::Cont, Dummy>();
 	}
 
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate(uint64_t value)
 	{
-		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(value);
+		return Inspector::template inspect<Value, typename Value::Cont, Dummy>(value);
 	}
 
 	template <typename Inspector>
 	inline static void evaluate()
 	{
-		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>();
+		Inspector::template inspect<Value, typename Value::Cont, Dummy>();
 	}
 
 	template <typename Inspector, typename A>
 	inline static void evaluate(A* a)
 	{
-		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(a);
+		Inspector::template inspect<Value, typename Value::Cont, Dummy>(a);
 	}
 
 	template <typename Inspector, typename A, typename B>
 	inline static void evaluate(A* a, B* b)
 	{
-		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(a, b);
+		Inspector::template inspect<Value, typename Value::Cont, Dummy>(a, b);
 	}
 
 	template <typename Inspector, typename A, typename B>
 	inline static void evaluate(A a, B* b)
 	{
-		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(a, b);
+		Inspector::template inspect<Value, typename Value::Cont, Dummy>(a, b);
 	}
 
 	template <typename Inspector, typename A, typename B, typename C>
 	inline static void evaluate(A* a, B* b, C* c)
 	{
-		Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(a, b, c);
+		Inspector::template inspect<Value, typename Value::Cont, Dummy>(a, b, c);
 	}
 
 	template <typename Return, typename Inspector, typename A>
 	static Return evaluate(A* a)
 	{
-		return Inspector::template inspect<Base, Cont, Value, typename Value::Cont, Dummy>(a);
+		return Inspector::template inspect<Value, typename Value::Cont, Dummy>(a);
 	}
 };
 
@@ -210,49 +210,49 @@ struct NrBox : NrBox <Base, Value>, NrBox<NrBox <Base, Value>, Rest...>
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate()
 	{
-		return Inspector::template inspect<Base, Cont, Value, Dummy, typename Fwd::Cont>();
+		return Inspector::template inspect<Value, Dummy, typename Fwd::Cont>();
 	}
 
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate(uint64_t value)
 	{
-		return Inspector::template inspect<Base, Cont, Value, Dummy, typename Fwd::Cont>(value);
+		return Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(value);
 	}
 
 	template <typename Inspector>
 	inline static void evaluate()
 	{
-		Inspector::template inspect<Base, Cont, Value, Dummy, typename Fwd::Cont>();
+		Inspector::template inspect<Value, Dummy, typename Fwd::Cont>();
 	}
 
 	template <typename Inspector, typename A>
 	inline static void evaluate(A* a)
 	{
-		Inspector::template inspect<Base, Cont, Value, Dummy, typename Fwd::Cont>(a);
+		Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(a);
 	}
 
 	template <typename Inspector, typename A, typename B>
 	inline static void evaluate(A* a, B* b)
 	{
-		Inspector::template inspect<Base, Cont, Value, Dummy, typename Fwd::Cont>(a, b);
+		Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(a, b);
 	}
 
 	template <typename Inspector, typename A, typename B>
 	inline static void evaluate(A a, B* b)
 	{
-		Inspector::template inspect<Base, Cont, Value, Dummy, typename Fwd::Cont>(a, b);
+		Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(a, b);
 	}
 
 	template <typename Inspector, typename A, typename B, typename C>
 	inline static void evaluate(A* a, B* b, C* c)
 	{
-		Inspector::template inspect<Base, Cont, Value, Dummy, typename Fwd::Cont>(a, b, c);
+		Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(a, b, c);
 	}
 
 	template <typename Return, typename Inspector, typename A>
 	static Return evaluate(A* a)
 	{
-		return Inspector::template inspect<Base, Cont, Value, Dummy, typename Fwd::Cont>(a);
+		return Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(a);
 	}
 };
 
@@ -263,49 +263,49 @@ struct NrBox <Base, Value>
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate()
 	{
-		return Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>();
+		return Inspector::template inspect<Value, Dummy, Dummy>();
 	}
 
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate(uint64_t value)
 	{
-		return Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>(value);
+		return Inspector::template inspect<Value, Dummy, Dummy>(value);
 	}
 
 	template <typename Inspector>
 	inline static void evaluate()
 	{
-		Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>();
+		Inspector::template inspect<Value, Dummy, Dummy>();
 	}
 
 	template <typename Inspector, typename A>
 	inline static void evaluate(A* a)
 	{
-		Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>(a);
+		Inspector::template inspect<Value, Dummy, Dummy>(a);
 	}
 
 	template <typename Inspector, typename A, typename B>
 	inline static void evaluate(A* a, B* b)
 	{
-		Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>(a, b);
+		Inspector::template inspect<Value, Dummy, Dummy>(a, b);
 	}
 
 	template <typename Inspector, typename A, typename B>
 	inline static void evaluate(A a, B* b)
 	{
-		Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>(a, b);
+		Inspector::template inspect<Value, Dummy, Dummy>(a, b);
 	}
 
 	template <typename Inspector, typename A, typename B, typename C>
 	inline static void evaluate(A* a, B* b, C* c)
 	{
-		Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>(a, b, c);
+		Inspector::template inspect<Value, Dummy, Dummy>(a, b, c);
 	}
 
 	template <typename Return, typename Inspector, typename A>
 	static Return evaluate(A* a)
 	{
-		return Inspector::template inspect<Base, Cont, Value, Dummy, Dummy>(a);
+		return Inspector::template inspect<Value, Dummy, Dummy>(a);
 	}
 };
 
@@ -345,7 +345,7 @@ constexpr Ret cInspect()
 template <typename T>
 struct TypeCounter
 {
-	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	constexpr static uint64_t inspect()
 	{
 		return (std::is_same<T, Value>() ? 1 : 0)
@@ -357,7 +357,7 @@ struct TypeCounter
 template <typename T>
 struct DerivativeCounter
 {
-	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	constexpr static uint64_t inspect()
 	{
 		return (std::is_base_of<T, Value>() ? 1 : 0)
@@ -375,7 +375,7 @@ constexpr uint64_t numInstances()
 template <typename Cont>
 struct NumContained
 {
-	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	constexpr static uint64_t inspect()
 	{
 		return (numInstances<Cont, Value>() > 0 ? 1 : 0)
@@ -408,7 +408,7 @@ constexpr bool branch()
 template <typename Cont>
 struct ContentsCheckerAll
 {
-	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	constexpr static uint64_t inspect()
 	{
 		return contains<Cont, Value>()
@@ -420,7 +420,7 @@ struct ContentsCheckerAll
 template <typename Cont>
 struct ContentsCheckerAny
 {
-	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	constexpr static uint64_t inspect()
 	{
 		return contains<Cont, Value>()
@@ -459,7 +459,7 @@ constexpr bool containsAnyIn()
 template <typename Root, typename T, typename Cat>
 struct IndexFinder
 {
-	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	constexpr static uint64_t inspect()
 	{
 		return (	branch<Inner, Next>()
@@ -479,7 +479,7 @@ struct IndexFinder
 template <typename Cont, typename Cat>
 struct UniquesCounter
 {
-	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	constexpr static uint64_t inspect()
 	{
 		return 	max(( std::is_base_of<Cat, Value>() ? indexOf<Cont, Value, Cat>() : 0 ),
@@ -510,7 +510,7 @@ constexpr bool isDummy();
 template <typename Fold, typename Callback>
 struct OncePerTypeConst
 {
-	template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	constexpr static bool inspect()
 	{
 		return (!inspect::contains<Fold, Value>() && Callback::template callback<Value>())
@@ -522,7 +522,7 @@ struct OncePerTypeConst
 template <typename Fold, typename Callback>
 struct OncePerType
 {
-	template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+	template < typename Value, typename Inner, typename Next>
 	inline static void inspect()
 	{
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
@@ -532,7 +532,7 @@ struct OncePerType
 		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>();
 	}
 
-	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A>
+	template <typename Value, typename Inner, typename Next, typename A>
 	inline static void inspect(A* a)
 	{
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
@@ -542,7 +542,7 @@ struct OncePerType
 		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a);
 	}
 
-	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A, typename B>
+	template <typename Value, typename Inner, typename Next, typename A, typename B>
 	inline static void inspect(A* a, B* b)
 	{
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
@@ -552,7 +552,7 @@ struct OncePerType
 		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a, b);
 	}
 
-	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A, typename B>
+	template <typename Value, typename Inner, typename Next, typename A, typename B>
 	inline static void inspect(A a, B* b)
 	{
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
@@ -562,7 +562,7 @@ struct OncePerType
 		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a, b);
 	}
 
-	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A, typename B, typename C>
+	template <typename Value, typename Inner, typename Next, typename A, typename B, typename C>
 	inline static void inspect(A* a, B* b, C* c)
 	{
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
@@ -576,7 +576,7 @@ struct OncePerType
 template <typename Cont, typename Fold, typename Callback>
 struct OncePerPair
 {
-	template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	inline static void inspect()
 	{
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
@@ -586,7 +586,7 @@ struct OncePerPair
 		Next::template evaluate<OncePerPair<Cont, Container<Fold, NrContainer<Value>>, Callback>>();
 	}
 
-	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A>
+	template <typename Value, typename Inner, typename Next, typename A>
 	inline static void inspect(A* a)
 	{
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
@@ -617,7 +617,7 @@ private:
 template<typename FilterPolicy, typename RecursePolicy, typename Callback, typename Return, typename MergePolicy>
 struct FilterConst
 {
-	template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	static constexpr Return inspect()
 	{
 		return FilterPolicy::template test<Value>() && RecursePolicy::template test<Value>()
@@ -639,7 +639,7 @@ struct FilterConst
 template<typename FilterPolicy, typename Recurse, typename Callback>
 struct Filter
 {
-	template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	inline static void inspect()
 	{
 		CZSS_CONST_IF (FilterPolicy::template test<Value>())
@@ -651,7 +651,7 @@ struct Filter
 		Next::template evaluate<Filter<FilterPolicy, Recurse, Callback>>();
 	}
 
-	template <typename Base, typename Box, typename Value, typename Inner, typename Next, typename A>
+	template <typename Value, typename Inner, typename Next, typename A>
 	inline static void inspect(A* a)
 	{
 		CZSS_CONST_IF (FilterPolicy::template test<Value>())
@@ -810,7 +810,7 @@ constexpr bool isOrchestrator();
 template <typename B, typename T>
 struct BaseObjectFinder
 {
-	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	constexpr static bool inspect()
 	{
 		return (isBaseType<B, Value>()
@@ -1215,7 +1215,7 @@ constexpr static bool dependsOn();
 template <typename Target>
 struct DirectDependencyCheck
 {
-	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	constexpr static bool inspect()
 	{
 		return std::is_same<Target, Value>() || Next::template evaluate<bool, DirectDependencyCheck<Target>>();
@@ -1233,7 +1233,7 @@ struct DirectDependencyCheck
 template <typename Target>
 struct TransitiveDependencyCheck
 {
-	template <typename Base, typename This, typename Value, typename Inner, typename Next>
+	template <typename Value, typename Inner, typename Next>
 	constexpr static bool inspect()
 	{
 		return dependsOn<Value, Target>() || Next::template evaluate<bool, TransitiveDependencyCheck<Target>>();
@@ -1352,7 +1352,7 @@ struct Runner
 	template <typename Sys>
 	struct SystemBlocker
 	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		template <typename Value, typename Inner, typename Next>
 		inline static void inspect(czsf::Barrier* barriers)
 		{
 			CZSS_CONST_IF (directlyDependsOn<Sys, Value>() && !transitivelyDependsOn<Sys, Value>())
@@ -1367,7 +1367,7 @@ struct Runner
 	template <typename Sys>
 	struct DependeeBlocker
 	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		template <typename Value, typename Inner, typename Next>
 		inline static void inspect(czsf::Barrier* barriers)
 		{
 			CZSS_CONST_IF (directlyDependsOn<Value, Sys>() && !transitivelyDependsOn<Value, Sys>())
@@ -1381,7 +1381,7 @@ struct Runner
 
 	struct SystemRunner
 	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		template <typename Value, typename Inner, typename Next>
 		inline static void inspect(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
 		{
 			if (inspect::indexOf<Subset, Value, SystemBase>() != *id)
@@ -1398,7 +1398,7 @@ struct Runner
 
 	struct SystemInitialize
 	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		template <typename Value, typename Inner, typename Next>
 		inline static void inspect(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
 		{
 			if (inspect::indexOf<Subset, Value, SystemBase>() != *id)
@@ -1415,7 +1415,7 @@ struct Runner
 
 	struct SystemShutdown
 	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		template <typename Value, typename Inner, typename Next>
 		inline static void inspect(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
 		{
 			if (inspect::indexOf<Subset, Value, SystemBase>() != *id)
@@ -2008,7 +2008,7 @@ private:
 
 	struct SystemsCompleteCheck
 	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		template <typename Value, typename Inner, typename Next>
 		static constexpr bool inspect()
 		{
 			return isSystem<Value>() && !inspect::contains<Cont, Value>()
@@ -2019,7 +2019,7 @@ private:
 
 	struct SystemDependencyIterator
 	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		template <typename Value, typename Inner, typename Next>
 		static constexpr bool inspect()
 		{
 			return (Value::Dep::template evaluate<bool, SystemsCompleteCheck>())
@@ -2129,7 +2129,7 @@ private:
 	template <typename Component>
 	struct Getter
 	{
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		template <typename Value, typename Inner, typename Next>
 		inline static Component* inspect(Data* data)
 		{
 			if (isEntity<Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == data->typeKey)
@@ -2255,7 +2255,7 @@ private:
 
 	struct NextKey
 	{
-		template <typename Base, typename Box, typename Value, typename Inner, typename Next>
+		template <typename Value, typename Inner, typename Next>
 		static constexpr uint64_t inspect(uint64_t key)
 		{
 			return min(
@@ -2591,7 +2591,7 @@ private:
 
 	struct EntityDestructionPermission
 	{
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		template <typename Value, typename Inner, typename Next>
 		static constexpr bool inspect(uint64_t key)
 		{
 			return isEntity<Value>()
@@ -2690,7 +2690,7 @@ private:
 	template <typename Handled, typename Iterator>
 	struct NumCompatibleEntities
 	{
-		template <typename Base, typename This, typename Value, typename Inner, typename Next>
+		template <typename Value, typename Inner, typename Next>
 		static constexpr uint64_t inspect()
 		{
 			return (isEntity<Value>()
