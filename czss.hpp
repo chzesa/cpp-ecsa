@@ -61,6 +61,7 @@ const static char* name()
 struct Dummy
 {
 	using Cont = Dummy;
+
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate() { return Return(); }
 
@@ -92,11 +93,11 @@ struct Root
 	constexpr static bool containsType() { return false; }
 };
 
-template <typename Base, typename Value, typename ...Rest>
-struct Rbox : Rbox <Base, Value>, Rbox<Rbox <Base, Value>, Rest...>
+template <typename Value, typename ...Rest>
+struct Rbox
 {
-	using Fwd = Rbox<Rbox <Base, Value>, Rest...>;
-	using Cont = Rbox <Base, Value, Rest...>;
+	using Cont = Rbox <Value, Rest...>;
+	using Fwd = Rbox <Rest...>;
 
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate()
@@ -147,10 +148,10 @@ struct Rbox : Rbox <Base, Value>, Rbox<Rbox <Base, Value>, Rest...>
 	}
 };
 
-template <typename Base, typename Value>
-struct Rbox <Base, Value>
+template <typename Value>
+struct Rbox <Value>
 {
-	using Cont = Rbox <Base, Value>;
+	using Cont = Rbox <Value>;
 
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate()
@@ -201,11 +202,11 @@ struct Rbox <Base, Value>
 	}
 };
 
-template <typename Base, typename Value, typename ...Rest>
-struct NrBox : NrBox <Base, Value>, NrBox<NrBox <Base, Value>, Rest...>
+template <typename Value, typename ...Rest>
+struct NrBox
 {
-	using Fwd = NrBox<NrBox <Base, Value>, Rest...>;
-	using Cont = NrBox <Base, Value, Rest...>;
+	using Cont = NrBox <Value, Rest...>;
+	using Fwd = NrBox <Rest...>;
 
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate()
@@ -256,10 +257,11 @@ struct NrBox : NrBox <Base, Value>, NrBox<NrBox <Base, Value>, Rest...>
 	}
 };
 
-template <typename Base, typename Value>
-struct NrBox <Base, Value>
+template <typename Value>
+struct NrBox <Value>
 {
-	using Cont = NrBox <Base, Value>;
+	using Cont = NrBox <Value>;
+
 	template <typename Return, typename Inspector>
 	constexpr static Return evaluate()
 	{
@@ -310,13 +312,13 @@ struct NrBox <Base, Value>
 };
 
 template <typename ...T>
-struct NrContainer : NrBox<Root, T...> { };
+struct NrContainer : NrBox<T...> { };
 
 template <>
 struct NrContainer<> : Dummy { };
 
 template <typename ...T>
-struct Container : Rbox<Root, T...> { };
+struct Container : Rbox<T...> { };
 
 template <>
 struct Container<> : Dummy { };
