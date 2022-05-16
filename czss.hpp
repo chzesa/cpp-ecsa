@@ -311,18 +311,6 @@ struct NrBox <Value>
 	}
 };
 
-template <typename ...T>
-struct NrContainer : NrBox<T...> { };
-
-template <>
-struct NrContainer<> : Dummy { };
-
-template <typename ...T>
-struct Container : Rbox<T...> { };
-
-template <>
-struct Container<> : Dummy { };
-
 template <typename T>
 constexpr T min(T a, T b)
 {
@@ -388,14 +376,14 @@ struct NumContained
 template <typename Cont, typename ...T>
 constexpr bool containsAll()
 {
-	return Container<T...>::template evaluate<uint64_t, NumContained<Cont>>()
+	return Rbox<T...>::template evaluate<uint64_t, NumContained<Cont>>()
 		== sizeof...(T);
 }
 
 template <typename Cont, typename ...T>
 constexpr bool contains()
 {
-	return Container<T...>::template evaluate<uint64_t, NumContained<Cont>>() > 0;
+	return Rbox<T...>::template evaluate<uint64_t, NumContained<Cont>>() > 0;
 }
 
 template <typename Cont, typename T, typename Cat>
@@ -444,10 +432,10 @@ constexpr bool containsAnyIn()
 }
 
 /*
-	Algorithm to uniquely number each type within a container.
+	Algorithm to uniquely number each type within a Rbox.
 	Every time an item has both Next (in the "array"), and 
-	is itself a container and therefore can be recursed inside,
-	the path through the container splits.
+	is itself a Rbox and therefore can be recursed inside,
+	the path through the Rbox splits.
 	On such a split, the Next type is folded into the current
 	root of the node and this becomes the new root of the Inner
 	branch.
@@ -465,7 +453,7 @@ struct IndexFinder
 	constexpr static uint64_t inspect()
 	{
 		return (	branch<Inner, Next>()
-					? Inner::template evaluate <uint64_t, IndexFinder<Container<Root, Next>, T, Cat>>()
+					? Inner::template evaluate <uint64_t, IndexFinder<Rbox<Root, Next>, T, Cat>>()
 					: Inner::template evaluate <uint64_t, IndexFinder<Root, T, Cat>>()
 			)
 			+ Next::template evaluate <uint64_t, IndexFinder<Root, T, Cat>>()
@@ -516,8 +504,8 @@ struct OncePerTypeConst
 	constexpr static bool inspect()
 	{
 		return (!inspect::contains<Fold, Value>() && Callback::template callback<Value>())
-			|| Inner::template evaluate<bool, OncePerTypeConst<Container<Fold, NrContainer<Value>, Next>, Callback>>()
-			|| Next::template evaluate<bool, OncePerTypeConst<Container<Fold, NrContainer<Value>>, Callback>>();
+			|| Inner::template evaluate<bool, OncePerTypeConst<Rbox<Fold, NrBox<Value>, Next>, Callback>>()
+			|| Next::template evaluate<bool, OncePerTypeConst<Rbox<Fold, NrBox<Value>>, Callback>>();
 	}
 };
 
@@ -530,8 +518,8 @@ struct OncePerType
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
 			Callback::template callback<Value>();
 
-		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>();
-		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>();
+		Inner::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>, Next>, Callback>>();
+		Next::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>>, Callback>>();
 	}
 
 	template <typename Value, typename Inner, typename Next, typename A>
@@ -540,8 +528,8 @@ struct OncePerType
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
 			Callback::template callback<Value>(a);
 
-		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>(a);
-		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a);
+		Inner::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>, Next>, Callback>>(a);
+		Next::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>>, Callback>>(a);
 	}
 
 	template <typename Value, typename Inner, typename Next, typename A, typename B>
@@ -550,8 +538,8 @@ struct OncePerType
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
 			Callback::template callback<Value>(a, b);
 
-		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>(a, b);
-		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a, b);
+		Inner::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>, Next>, Callback>>(a, b);
+		Next::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>>, Callback>>(a, b);
 	}
 
 	template <typename Value, typename Inner, typename Next, typename A, typename B>
@@ -560,8 +548,8 @@ struct OncePerType
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
 			Callback::template callback<Value>(a, b);
 
-		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>(a, b);
-		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a, b);
+		Inner::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>, Next>, Callback>>(a, b);
+		Next::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>>, Callback>>(a, b);
 	}
 
 	template <typename Value, typename Inner, typename Next, typename A, typename B, typename C>
@@ -570,8 +558,8 @@ struct OncePerType
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
 			Callback::template callback<Value>(a, b, c);
 
-		Inner::template evaluate<OncePerType<Container<Fold, NrContainer<Value>, Next>, Callback>>(a, b, c);
-		Next::template evaluate<OncePerType<Container<Fold, NrContainer<Value>>, Callback>>(a, b, c);
+		Inner::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>, Next>, Callback>>(a, b, c);
+		Next::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>>, Callback>>(a, b, c);
 	}
 };
 
@@ -584,8 +572,8 @@ struct OncePerPair
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
 			Cont::template evaluate<OncePerType<Dummy, PairCallback<Value>>>();
 
-		Inner::template evaluate<OncePerPair<Cont, Container<Fold, NrContainer<Value>, Next>, Callback>>();
-		Next::template evaluate<OncePerPair<Cont, Container<Fold, NrContainer<Value>>, Callback>>();
+		Inner::template evaluate<OncePerPair<Cont, Rbox<Fold, NrBox<Value>, Next>, Callback>>();
+		Next::template evaluate<OncePerPair<Cont, Rbox<Fold, NrBox<Value>>, Callback>>();
 	}
 
 	template <typename Value, typename Inner, typename Next, typename A>
@@ -594,8 +582,8 @@ struct OncePerPair
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
 			Cont::template evaluate<OncePerType<Dummy, PairCallback<Value>>>(a);
 
-		Inner::template evaluate<OncePerPair<Cont, Container<Fold, NrContainer<Value>, Next>, Callback>>(a);
-		Next::template evaluate<OncePerPair<Cont, Container<Fold, NrContainer<Value>>, Callback>>(a);
+		Inner::template evaluate<OncePerPair<Cont, Rbox<Fold, NrBox<Value>, Next>, Callback>>(a);
+		Next::template evaluate<OncePerPair<Cont, Rbox<Fold, NrBox<Value>>, Callback>>(a);
 	}
 
 private:
@@ -666,7 +654,7 @@ struct Filter
 	}
 };
 
-struct TestIfContainer
+struct TestIfRbox
 {
 	template <typename V>
 	inline static constexpr bool test()
@@ -684,60 +672,60 @@ struct TestAlwaysTrue
 	}
 };
 
-template <typename Container, typename Callback>
+template <typename Rbox, typename Callback>
 void oncePerPair()
 {
-	Container::template evaluate<OncePerPair<Container, Dummy, Callback>>();
+	Rbox::template evaluate<OncePerPair<Rbox, Dummy, Callback>>();
 }
 
-template <typename Container, typename Callback, typename A>
+template <typename Rbox, typename Callback, typename A>
 void oncePerPair(A* a)
 {
-	Container::template evaluate<OncePerPair<Container, Dummy, Callback>>(a);
+	Rbox::template evaluate<OncePerPair<Rbox, Dummy, Callback>>(a);
 }
 
 
-template <typename Container, int Num>
+template <typename Rbox, int Num>
 struct Switch
 {
 	template <typename Return, typename Inspector, typename A>
 	constexpr static Return evaluate(int i, A a)
 	{
 		return i == Num - 1
-			? Container::template evaluate<Return, Inspector>(a)
-			: Switch<Container, Num - 1>::template evaluate<Return, Inspector>(i, a);
+			? Rbox::template evaluate<Return, Inspector>(a)
+			: Switch<Rbox, Num - 1>::template evaluate<Return, Inspector>(i, a);
 	}
 
 	template <typename Inspector, typename A>
 	inline static void evaluate(int i, A* a)
 	{
 		if (i == Num - 1)
-			Container::template evaluate<Inspector>(a);
+			Rbox::template evaluate<Inspector>(a);
 		else
-			Switch<Container, Num - 1>::template evaluate<Inspector>(i, a);
+			Switch<Rbox, Num - 1>::template evaluate<Inspector>(i, a);
 	}
 
 	template <typename Inspector, typename A, typename B>
 	inline static void evaluate(int i, A* a, B* b)
 	{
 		if (i == Num - 1)
-			Container::template evaluate<Inspector>(a, b);
+			Rbox::template evaluate<Inspector>(a, b);
 		else
-			Switch<Container, Num - 1>::template evaluate<Inspector>(i, a, b);
+			Switch<Rbox, Num - 1>::template evaluate<Inspector>(i, a, b);
 	}
 
 	template <typename Inspector, typename A, typename B, typename C>
 	inline static void evaluate(int i, A* a, B* b, C* c)
 	{
 		if (i == Num - 1)
-			Container::template evaluate<Inspector>(a, b, c);
+			Rbox::template evaluate<Inspector>(a, b, c);
 		else
-			Switch<Container, Num - 1>::template evaluate<Inspector>(i, a, b, c);
+			Switch<Rbox, Num - 1>::template evaluate<Inspector>(i, a, b, c);
 	}
 };
 
-template <typename Container>
-struct Switch <Container, 0>
+template <typename Rbox>
+struct Switch <Rbox, 0>
 {
 	template <typename Return,  typename Inspector, typename A>
 	constexpr static Return evaluate(int i, A a) { return Return(); }
@@ -823,7 +811,7 @@ struct BaseObjectFinder
 };
 
 // #####################
-// Data Container
+// Data Rbox
 // #####################
 
 struct Guid
@@ -1094,7 +1082,7 @@ struct ComponentInheritor
 	: ConditionalValue <
 		Value,
 		!inspect::contains<Base, Value>(),
-		ComponentInheritor<Container<Base, NrContainer<Value>>, Rest...>
+		ComponentInheritor<Rbox<Base, NrBox<Value>>, Rest...>
 	>
 { };
 
@@ -1108,9 +1096,9 @@ struct ComponentInheritor<Base, Value>
 { };
 
 template <typename ...Components>
-struct Iterator : Container<Components...>, IteratorBase, TemplateStubs
+struct Iterator : Rbox<Components...>, IteratorBase, TemplateStubs
 {
-	using Cont = Container<Components...>;
+	using Cont = Rbox<Components...>;
 
 	void setGuid(Guid guid) { this->id = guid; }
 	Guid getGuid() const { return id; }
@@ -1122,9 +1110,9 @@ private:
 struct VirtualArchitecture;
 
 template <typename ...Components>
-struct Entity : ComponentInheritor<Dummy, Components...>, Container<Components...>, EntityBase
+struct Entity : ComponentInheritor<Dummy, Components...>, Rbox<Components...>, EntityBase
 {
-	using Cont = Container<Components...>;
+	using Cont = Rbox<Components...>;
 
 	Guid getGuid() const { return {id}; }
 private:
@@ -1148,19 +1136,19 @@ constexpr static bool isIteratorCompatibleWithEntity()
 template <typename ...T>
 struct Reader : TemplateStubs, ReaderBase
 {
-	using Cont = Container<T...>;
+	using Cont = Rbox<T...>;
 };
 
 template <typename ...T>
 struct Writer : TemplateStubs, WriterBase
 {
-	using Cont = Container<T...>;
+	using Cont = Rbox<T...>;
 };
 
 template <typename ...Entities>
 struct Orchestrator : TemplateStubs, OrchestratorBase
 {
-	using Cont = Container<Entities...>;
+	using Cont = Rbox<Entities...>;
 };
 
 template <typename Target>
@@ -1200,15 +1188,15 @@ constexpr bool canOrchestrate()
 // #####################
 
 template <typename ...N>
-struct Dependency : NrContainer<N...>, DependencyBase, TemplateStubs
+struct Dependency : NrBox<N...>, DependencyBase, TemplateStubs
 {
-	using Cont = NrContainer<N...>;
+	using Cont = NrBox<N...>;
 };
 
 template <>
-struct Dependency<> : NrContainer<>, DependencyBase, TemplateStubs
+struct Dependency<> : Dummy, DependencyBase, TemplateStubs
 {
-	using Cont = NrContainer<>;
+	using Cont = Dummy;
 };
 
 template <typename Left, typename Right>
@@ -1224,7 +1212,7 @@ struct DirectDependencyCheck
 	}
 
 	// Base object finder calls callback with Value = Dependency<A, B, C...>
-	// Value::Cont is NrContainer of systems
+	// Value::Cont is NrBox of systems
 	template <typename Value>
 	constexpr static bool callback()
 	{
@@ -1242,7 +1230,7 @@ struct TransitiveDependencyCheck
 	}
 
 	// Base object finder calls callback with Value = Dependency<A, B, C...>
-	// Value::Cont is NrContainer of systems
+	// Value::Cont is NrBox of systems
 	template <typename Value>
 	constexpr static bool callback()
 	{
@@ -1284,10 +1272,10 @@ template<typename Arch, typename Sys>
 struct Accessor;
 
 template <typename Dependencies, typename ...Permissions>
-struct System : Container<Permissions...>, SystemBase, TemplateStubs
+struct System : Rbox<Permissions...>, SystemBase, TemplateStubs
 {
 	using This = System<Dependencies, Permissions...>;
-	using Cont = Container<Dependencies, Permissions...>;
+	using Cont = Rbox<Dependencies, Permissions...>;
 	using Dep = Dependencies;
 };
 
@@ -1474,7 +1462,7 @@ struct Runner
 template <typename Desc, typename ...Systems>
 struct Architecture : VirtualArchitecture
 {
-	using Cont = Container<Systems...>;
+	using Cont = Rbox<Systems...>;
 	using This = Architecture<Desc, Systems...>;
 
 	Architecture()
@@ -1510,7 +1498,7 @@ struct Architecture : VirtualArchitecture
 	{
 		static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
 		static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
-		static const uint64_t index = inspect::indexOf<Container<Systems...>, Resource, ResourceBase>();
+		static const uint64_t index = inspect::indexOf<Rbox<Systems...>, Resource, ResourceBase>();
 		resources[index] = res;
 	}
 
@@ -1519,7 +1507,7 @@ struct Architecture : VirtualArchitecture
 	{
 		// static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
 		static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
-		static const uint64_t index = inspect::indexOf<Container<Systems...>, Resource, ResourceBase>();
+		static const uint64_t index = inspect::indexOf<Rbox<Systems...>, Resource, ResourceBase>();
 		return reinterpret_cast<Resource*>(resources[index]);
 	}
 
@@ -1641,7 +1629,7 @@ struct Architecture : VirtualArchitecture
 	template <typename ...Entities>
 	void destroyEntities()
 	{
-		NrContainer<Entities...>::template evaluate<DestroyEntitiesCallback>(this);
+		NrBox<Entities...>::template evaluate<DestroyEntitiesCallback>(this);
 	}
 
 	template <typename Component, typename System>
@@ -2438,22 +2426,22 @@ struct Accessor
 	template <typename ...Entities>
 	void destroyEntities()
 	{
-		Container<Entities...>::template evaluate<Filter<TestAlwaysTrue, TestIfContainer, EntityOrchestrationPermissionTest>>();
+		Rbox<Entities...>::template evaluate<Filter<TestAlwaysTrue, TestIfRbox, EntityOrchestrationPermissionTest>>();
 		arch->template destroyEntities<Entities...>();
 	}
 
 	template <typename T, typename ...Systems>
 	void run(T* fls, bool init)
 	{
-		Container<Systems...>::template evaluate<Filter<TestAlwaysTrue, TestIfContainer, SystemsRunPermissionTest<Container<Systems...>>>>();
+		Rbox<Systems...>::template evaluate<Filter<TestAlwaysTrue, TestIfRbox, SystemsRunPermissionTest<Rbox<Systems...>>>>();
 
 		if (init)
-			Runner<Arch, Container<Systems...>>::runForSystems(arch, Runner<Arch, Container<Systems...>>::initializeSystemCallback, fls);
+			Runner<Arch, Rbox<Systems...>>::runForSystems(arch, Runner<Arch, Rbox<Systems...>>::initializeSystemCallback, fls);
 
-		Runner<Arch, Container<Systems...>>::runForSystems(arch, Runner<Arch, Container<Systems...>>::systemCallback, fls);
+		Runner<Arch, Rbox<Systems...>>::runForSystems(arch, Runner<Arch, Rbox<Systems...>>::systemCallback, fls);
 
 		if (init)
-			Runner<Arch, Container<Systems...>>::runForSystems(arch, Runner<Arch, Container<Systems...>>::shutdownSystemCallback, fls);
+			Runner<Arch, Rbox<Systems...>>::runForSystems(arch, Runner<Arch, Rbox<Systems...>>::shutdownSystemCallback, fls);
 	}
 
 	template <typename ...Systems>
@@ -2700,7 +2688,7 @@ private:
 				&& !inspect::contains<Next, Value>()
 				&& !inspect::contains<Handled, Value>()
 				? 1 : 0)
-				+ Inner::template evaluate<uint64_t, NumCompatibleEntities<Container <Handled, NrContainer<Value>, Next>, Iterator>>()
+				+ Inner::template evaluate<uint64_t, NumCompatibleEntities<Rbox <Handled, NrBox<Value>, Next>, Iterator>>()
 				+ Next::template evaluate<uint64_t, NumCompatibleEntities<Dummy, Iterator>>();
 		}
 	};
