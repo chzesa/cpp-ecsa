@@ -326,12 +326,6 @@ constexpr T max(T a, T b)
 namespace inspect
 {
 
-template <typename Ret, typename Cont, typename Inspector>
-constexpr Ret cInspect()
-{
-	return Cont::template evaluate<Ret, Inspector>();
-}
-
 template <typename T>
 struct TypeCounter
 {
@@ -359,7 +353,7 @@ struct DerivativeCounter
 template <typename Cont, typename T>
 constexpr uint64_t numInstances()
 {
-	return cInspect<uint64_t, Cont, TypeCounter<T>>();
+	return Cont::template evaluate<uint64_t, TypeCounter<T>>();
 }
 
 template <typename Cont>
@@ -484,14 +478,14 @@ struct UniquesCounter
 template <typename Cont, typename Cat>
 constexpr uint64_t numUniques()
 {
-	return cInspect<uint64_t, Cont, UniquesCounter<Cont, Cat>>() +
-		(cInspect<uint64_t, Cont, DerivativeCounter<Cat>>() > 0 ? 1 : 0 );
+	return Cont::template evaluate<uint64_t, UniquesCounter<Cont, Cat>>()
+		+ (Cont::template evaluate<uint64_t, DerivativeCounter<Cat>>() > 0 ? 1 : 0);
 };
 
 template <typename Cont, typename T, typename Cat>
 constexpr uint64_t indexOf()
 {
-	return cInspect<uint64_t, Cont, IndexFinder<Dummy, T, Cat>>();
+	return Cont::template evaluate<uint64_t,  IndexFinder<Dummy, T, Cat>>();
 }
 
 } // namespace inspect
