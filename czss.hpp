@@ -380,10 +380,23 @@ constexpr bool containsAll()
 		== sizeof...(T);
 }
 
-template <typename Cont, typename ...T>
+template <typename Target>
+struct Contains
+{
+	template <typename Value, typename Inner, typename Next>
+	constexpr static bool inspect()
+	{
+		return std::is_same<Value, Target>()
+			? true
+			: Inner::template evaluate<bool, Contains<Target>>()
+				|| Next::template evaluate<bool, Contains<Target>>();
+	}
+};
+
+template <typename Cont, typename T>
 constexpr bool contains()
 {
-	return Rbox<T...>::template evaluate<uint64_t, NumContained<Cont>>() > 0;
+	return Cont::template evaluate<bool, Contains<T>>();
 }
 
 template <typename Cont, typename T, typename Cat>
@@ -459,13 +472,12 @@ struct IndexFinder
 			+ Next::template evaluate <uint64_t, IndexFinder<Root, T, Cat>>()
 			+ (
 				std::is_base_of<Cat, Value>()
-					? ( ( std::is_same<T, Value>() || contains<Next, Value, T>() || contains<Inner, Value, T>() || contains<Root, Value, T>() )
+					? ( ( std::is_same<T, Value>() || (contains<Next, Value>() || contains<Next, T>()) || (contains<Inner, Value>() || contains<Inner, T>())|| (contains<Root, Value>() || contains<Root, T>()) )
 						? 0 : 1
 					) : 0
 			);
 	}
 };
-
 template <typename Cont, typename Cat>
 struct UniquesCounter
 {
