@@ -402,12 +402,6 @@ constexpr bool contains()
 template <typename Cont, typename T, typename Cat>
 constexpr uint64_t indexOf();
 
-template <typename A, typename B>
-constexpr bool branch()
-{
-	return !std::is_same<A, Dummy>() && !std::is_same<B, Dummy>();
-}
-
 template <typename Cont>
 struct ContentsCheckerAll
 {
@@ -465,10 +459,7 @@ struct IndexFinder
 	template <typename Value, typename Inner, typename Next>
 	constexpr static uint64_t inspect()
 	{
-		return (	branch<Inner, Next>()
-					? Inner::template evaluate <uint64_t, IndexFinder<Rbox<Root, Next>, T, Cat>>()
-					: Inner::template evaluate <uint64_t, IndexFinder<Root, T, Cat>>()
-			)
+		return Inner::template evaluate <uint64_t, IndexFinder<Rbox<Root, Next>, T, Cat>>()
 			+ Next::template evaluate <uint64_t, IndexFinder<Root, T, Cat>>()
 			+ (
 				std::is_base_of<Cat, Value>()
