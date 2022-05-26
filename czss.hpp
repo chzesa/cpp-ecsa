@@ -2283,7 +2283,8 @@ private:
 					iterac->maxIndex = entities->size();
 				}
 
-				iterac->accessor = U(iterac->typeKey, entities->used_indices[iterac->index]);
+				if (iterac->index < iterac->maxIndex)
+					iterac->accessor = U(iterac->typeKey, entities->used_indices[iterac->index]);
 			}
 		}
 	};
