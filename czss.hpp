@@ -2054,10 +2054,15 @@ struct IteratorAccessor
 		this->entity = other.entity;
 	}
 
+	template <typename Component>
+	bool hasComponent()
+	{
+		return view<Component>() != nullptr;
+	}
+
 	template<typename Component>
 	const Component* view()
 	{
-		static_assert(inspect::contains<typename Iter::Cont, Component>(), "Iterator doesn't contain the requested component.");
 		static_assert(canRead<Sys, Component>(), "System lacks read permissions for the Iterator's components.");
 		return get_ptr<Component>();
 	}
@@ -2065,7 +2070,6 @@ struct IteratorAccessor
 	template<typename Component>
 	Component* get()
 	{
-		static_assert(inspect::contains<typename Iter::Cont, Component>(), "Iterator doesn't contain the requested component.");
 		static_assert(canWrite<Sys, Component>(), "System lacks write permissions for the Iterator's components.");
 		return get_ptr<Component>();
 	}
