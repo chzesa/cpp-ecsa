@@ -1777,7 +1777,9 @@ struct Architecture : VirtualArchitecture
 			{
 				CZSS_CONST_IF (directlyDependsOn<A, B>())
 				{
-					CZSS_CONST_IF (redundantDependency<A, B>())
+					CZSS_CONST_IF (!exclusiveWith<A, B>())
+						s += an + " -> " + bn + " [ style = dotted, color = grey ]\n";
+					else if (redundantDependency<A, B>())
 						s += an + " -> " + bn + " [ style = dotted, color = grey ]\n";
 					else
 						s += an + " -> " + bn + "\n";
