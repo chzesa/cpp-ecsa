@@ -2114,25 +2114,21 @@ private:
 	template <typename Component>
 	Component* get_ptr()
 	{
-		Data data = {typeKey, entity};
-		return Switch<typename Arch::Cont, inspect::numUniques<typename Arch::Cont, EntityBase>()>
-			::template evaluate<Component*, Getter<Component>>(typeKey, &data);
+		void* result = nullptr;
+		Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, ComponentGetter<Component>>>(typeKey, &typeKey, entity, &result);
+		return reinterpret_cast<Component*>(result);
 	}
 
 	template <typename Component>
-	struct Getter
+	struct ComponentGetter
 	{
-		template <typename Value, typename Inner, typename Next>
-		inline static Component* inspect(Data* data)
+		template <typename Value>
+		inline static void callback(uint64_t* id, void* entity, void** result)
 		{
-			if (isEntity<Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == data->typeKey)
+			if (isEntity<Value>() && inspect::contains<typename Value::Cont, Component>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == *id)
 			{
-				return reinterpret_cast<Value*>(data->entity)->template getComponent<Component>();
+				*result = reinterpret_cast<Value*>(entity)->template getComponent<Component>();
 			}
-			Component* res = Inner::template evaluate<Component*, Getter<Component>>(data);
-			if (res != nullptr)
-				return res;
-			return Next:: template evaluate<Component*, Getter<Component>>(data);
 		}
 	};
 
