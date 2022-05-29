@@ -1486,7 +1486,7 @@ struct Architecture : VirtualArchitecture
 	template<typename Entity>
 	static constexpr uint64_t entityIndex()
 	{
-		static_assert(isSystem<Entity>(), "Queried entity index for non-entity.");
+		static_assert(isEntity<Entity>(), "Queried entity index for non-entity.");
 		return inspect::indexOf<Cont, Entity, EntityBase>();
 	}
 
