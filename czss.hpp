@@ -2047,13 +2047,14 @@ struct IteratorIterator;
 template<typename Arch, typename Sys>
 struct Accessor;
 
-template <typename Iter, typename Arch, typename Sys>
-struct IteratorAccessor
+template <typename Arch, typename Sys>
+struct EntityAccessor
 {
-	IteratorAccessor(const IteratorAccessor<Iter, Arch, Sys>& other)
+	template <typename Entity>
+	EntityAccessor(const Entity* ent)
 	{
-		this->typeKey = other.typeKey;
-		this->entity = other.entity;
+		entity = const_cast<Entity*>(ent);
+		typeKey = inspect::indexOf<typename Arch::Cont, Entity, EntityBase>();
 	}
 
 	template <typename Component>
@@ -2083,33 +2084,25 @@ struct IteratorAccessor
 		return guid;
 	}
 
-private:
-	friend IteratorIterator<Iter, Arch, Sys>;
-	friend Accessor<Arch, Sys>;
+protected:
+	EntityAccessor() { }
 
-	IteratorAccessor() {}
-
-	template <typename Entity>
-	IteratorAccessor(Entity* ent)
+	EntityAccessor(const EntityAccessor<Arch, Sys>& other)
 	{
-		entity = ent;
-		typeKey = inspect::indexOf<typename Arch::Cont, Entity, EntityBase>();
+		this->typeKey = other.typeKey;
+		this->entity = other.entity;
 	}
 
-	IteratorAccessor(uint64_t key, void* entity)
+	EntityAccessor(uint64_t typeKey, void* entity)
 	{
-		this->typeKey = key;
+		this->typeKey = typeKey;
 		this->entity = entity;
 	}
 
+private:
+	friend Accessor<Arch, Sys>;
 	uint64_t typeKey;
 	void* entity;
-
-	struct Data
-	{
-		uint64_t typeKey;
-		void* entity;
-	};
 
 	template <typename Component>
 	Component* get_ptr()
@@ -2143,6 +2136,39 @@ private:
 			}
 		}
 	};
+};
+
+template <typename Iter, typename Arch, typename Sys>
+struct IteratorAccessor : EntityAccessor<Arch, Sys>
+{
+	IteratorAccessor(const IteratorAccessor<Iter, Arch, Sys>& other) : EntityAccessor<Arch, Sys>(other) { }
+
+	template <typename Component>
+	bool hasComponent()
+	{
+		return EntityAccessor<Arch, Sys>::template hasComponent<Component>();
+	}
+
+	template<typename Component>
+	const Component* view()
+	{
+		return EntityAccessor<Arch, Sys>::template view<Component>();
+	}
+
+	template<typename Component>
+	Component* get()
+	{
+		return EntityAccessor<Arch, Sys>::template get<Component>();
+	}
+
+private:
+	friend IteratorIterator<Iter, Arch, Sys>;
+	friend Accessor<Arch, Sys>;
+
+	IteratorAccessor() {}
+	template <typename Entity>
+	IteratorAccessor(Entity* ent) : EntityAccessor<Arch, Sys>(ent) { }
+	IteratorAccessor(uint64_t key, void* entity) : EntityAccessor<Arch, Sys>(key, entity) { }
 };
 
 template <typename Iter, typename Arch, typename Sys>
