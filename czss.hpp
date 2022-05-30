@@ -2370,7 +2370,7 @@ struct Accessor
 	const Entity* viewEntity(Guid guid)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		static_assert(inspect::containsAnyIn<Entity, typename Sys::Cont>(), "System cannot access any component of the entity.");
+		Entity::Cont::template evaluate<OncePerType<Dummy, HasEntityReadPermission>>();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity<Entity>(guid);
 	}
@@ -2379,7 +2379,7 @@ struct Accessor
 	const Entity* viewEntity(EntityId<Arch, Entity> id)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		static_assert(inspect::containsAnyIn<Entity, typename Sys::Cont>(), "System cannot access any component of the entity.");
+		Entity::Cont::template evaluate<OncePerType<Dummy, HasEntityReadPermission>>();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity(id);
 	}
@@ -2388,7 +2388,7 @@ struct Accessor
 	Entity* getEntity(Guid guid)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		static_assert(inspect::containsAnyIn<Entity, typename Sys::Cont>(), "System cannot access any component of the entity.");
+		Entity::Cont::template evaluate<OncePerType<Dummy, HasEntityWritePermission>>();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity<Entity>(guid);
 	}
@@ -2397,7 +2397,7 @@ struct Accessor
 	Entity* getEntity(EntityId<Arch, Entity> id)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		static_assert(inspect::containsAnyIn<Entity, typename Sys::Cont>(), "System cannot access any component of the entity.");
+		Entity::Cont::template evaluate<OncePerType<Dummy, HasEntityWritePermission>>();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity(id);
 	}
@@ -2760,6 +2760,24 @@ private:
 				return;
 		}
 	}
+
+	struct HasEntityReadPermission
+	{
+		template <typename Value>
+		static void callback()
+		{
+			static_assert(canRead<Sys, Value>(), "System cannot read component.");
+		}
+	};
+
+	struct HasEntityWritePermission
+	{
+		template <typename Value>
+		static void callback()
+		{
+			static_assert(canWrite<Sys, Value>(), "System cannot write to component.");
+		}
+	};
 };
 
 
