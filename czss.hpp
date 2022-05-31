@@ -2393,6 +2393,19 @@ struct Accessor
 	}
 
 	template <typename Entity>
+	EntityAccessor<Arch, Sys> entityAccessor(const Entity* entity)
+	{
+		return EntityAccessor<Arch, Sys>(entity);
+	}
+
+	EntityAccessor<Arch, Sys> entityAccessor(Guid guid)
+	{
+		void* ptr = arch->getEntity(guid);
+		uint64_t typeKey = Arch::typeKey(guid);
+		return EntityAccessor<Arch, Sys>(typeKey, ptr);
+	}
+
+	template <typename Entity>
 	const Entity* viewEntity(Guid guid)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
