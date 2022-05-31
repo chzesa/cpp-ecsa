@@ -1408,52 +1408,12 @@ struct Architecture : VirtualArchitecture
 		return ent;
 	}
 
-	template <typename Entity, typename A>
-	Entity* createEntity(A a)
+	template <typename Entity, typename ...Params>
+	Entity* createEntity(Params&&... params)
 	{
 		auto ent = initializeEntity<Entity>();
 		Guid guid = ent->getGuid();
-		new (ent) Entity(a);
-		setEntityId(ent, guid.get());
-		return ent;
-	}
-
-	template <typename Entity, typename A, typename B>
-	Entity* createEntity(A a, B b)
-	{
-		auto ent = initializeEntity<Entity>();
-		Guid guid = ent->getGuid();
-		new (ent) Entity(a, b);
-		setEntityId(ent, guid.get());
-		return ent;
-	}
-
-	template <typename Entity, typename A, typename B, typename C>
-	Entity* createEntity(A a, B b, C c)
-	{
-		auto ent = initializeEntity<Entity>();
-		Guid guid = ent->getGuid();
-		new (ent) Entity(a, b, c);
-		setEntityId(ent, guid.get());
-		return ent;
-	}
-
-	template <typename Entity, typename A, typename B, typename C, typename D>
-	Entity* createEntity(A a, B b, C c, D d)
-	{
-		auto ent = initializeEntity<Entity>();
-		Guid guid = ent->getGuid();
-		new (ent) Entity(a, b, c, d);
-		setEntityId(ent, guid.get());
-		return ent;
-	}
-
-	template <typename Entity, typename A, typename B, typename C, typename D, typename E>
-	Entity* createEntity(A a, B b, C c, D d, E e)
-	{
-		auto ent = initializeEntity<Entity>();
-		Guid guid = ent->getGuid();
-		new (ent) Entity(a, b, c, d, e);
+		new (ent) Entity(std::forward<Params>(params)...);
 		setEntityId(ent, guid.get());
 		return ent;
 	}
@@ -2225,39 +2185,11 @@ struct Accessor
 		return arch->template createEntity<Entity>();
 	}
 
-	template <typename Entity, typename A >
-	Entity* createEntity(A a)
+	template <typename Entity, typename ...Params>
+	Entity* createEntity(Params&&... params)
 	{
 		entityPermission<Entity>();
-		return arch->template createEntity<Entity>(a);
-	}
-
-	template <typename Entity, typename A, typename B>
-	Entity* createEntity(A a, B b)
-	{
-		entityPermission<Entity>();
-		return arch->template createEntity<Entity>(a, b);
-	}
-
-	template <typename Entity, typename A, typename B, typename C>
-	Entity* createEntity(A a, B b, C c)
-	{
-		entityPermission<Entity>();
-		return arch->template createEntity<Entity>(a, b, c);
-	}
-
-	template <typename Entity, typename A, typename B, typename C, typename D>
-	Entity* createEntity(A a, B b, C c, D d)
-	{
-		entityPermission<Entity>();
-		return arch->template createEntity<Entity>(a, b, c, d);
-	}
-
-	template <typename Entity, typename A, typename B, typename C, typename D, typename E>
-	Entity* createEntity(A a, B b, C c, D d, E e)
-	{
-		entityPermission<Entity>();
-		return arch->template createEntity<Entity>(a, b, c, d, e);
+		return arch->template createEntity<Entity>(std::forward<Params>(params)...);
 	}
 
 	template <typename Entity>
