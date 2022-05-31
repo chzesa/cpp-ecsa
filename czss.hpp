@@ -1384,6 +1384,14 @@ struct Architecture : VirtualArchitecture
 		return reinterpret_cast<EntityStore<Entity>*>(&entities[0]) + index;
 	}
 
+	void* getEntity(Guid guid)
+	{
+		void* ret;
+		uint64_t tk = typeKey(guid);
+		Switch<Cont, numEntities()>::template evaluate<OncePerType<Dummy, GetEntityVoidPtr>>(tk, this, tk, guid, &ret);
+		return ret;
+	}
+
 	template <typename Entity>
 	Entity* getEntity(Guid guid)
 	{
@@ -1855,6 +1863,16 @@ private:
 				: true,
 				"Explicit dependency missing between systems."
 			);
+		}
+	};
+
+	struct GetEntityVoidPtr
+	{
+		template <typename Value>
+		inline static void callback(This* arch, const uint64_t& typeKey, const Guid& guid, void** ret)
+		{
+			if(isEntity<Value>() && inspect::contains<Cont, Value>() && inspect::indexOf<Cont, Value, EntityBase>() == typeKey)
+				*ret = arch->getEntity<Value>(guid);
 		}
 	};
 };
