@@ -71,14 +71,8 @@ struct Dummy
 	template <typename Inspector>
 	inline static void evaluate() { }
 
-	template <typename Inspector, typename A>
-	inline static void evaluate(A a) { }
-
-	template <typename Inspector, typename A, typename B>
-	inline static void evaluate(A a, B b) { }
-
-	template <typename Inspector, typename A, typename B, typename C>
-	inline static void evaluate(A a, B b, C c) { }
+	template <typename Inspector, typename ...Params>
+	inline static void evaluate(Params&&... params) { }
 
 	template <typename Return, typename Inspector, typename A>
 	static Return evaluate(A a) { return Return(); }
@@ -117,28 +111,10 @@ struct Rbox
 		Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>();
 	}
 
-	template <typename Inspector, typename A>
-	inline static void evaluate(A* a)
+	template <typename Inspector, typename ...Params>
+	inline static void evaluate(Params&&... params)
 	{
-		Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(a);
-	}
-
-	template <typename Inspector, typename A, typename B>
-	inline static void evaluate(A* a, B* b)
-	{
-		Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(a, b);
-	}
-
-	template <typename Inspector, typename A, typename B>
-	inline static void evaluate(A a, B* b)
-	{
-		Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(a, b);
-	}
-
-	template <typename Inspector, typename A, typename B, typename C>
-	inline static void evaluate(A* a, B* b, C* c)
-	{
-		Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(a, b, c);
+		Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(std::forward<Params>(params)...);
 	}
 
 	template <typename Return, typename Inspector, typename A>
@@ -171,28 +147,10 @@ struct Rbox <Value>
 		Inspector::template inspect<Value, typename Value::Cont, Dummy>();
 	}
 
-	template <typename Inspector, typename A>
-	inline static void evaluate(A* a)
+	template <typename Inspector, typename ...Params>
+	inline static void evaluate(Params&&... params)
 	{
-		Inspector::template inspect<Value, typename Value::Cont, Dummy>(a);
-	}
-
-	template <typename Inspector, typename A, typename B>
-	inline static void evaluate(A* a, B* b)
-	{
-		Inspector::template inspect<Value, typename Value::Cont, Dummy>(a, b);
-	}
-
-	template <typename Inspector, typename A, typename B>
-	inline static void evaluate(A a, B* b)
-	{
-		Inspector::template inspect<Value, typename Value::Cont, Dummy>(a, b);
-	}
-
-	template <typename Inspector, typename A, typename B, typename C>
-	inline static void evaluate(A* a, B* b, C* c)
-	{
-		Inspector::template inspect<Value, typename Value::Cont, Dummy>(a, b, c);
+		Inspector::template inspect<Value, typename Value::Cont, Dummy>(std::forward<Params>(params)...);
 	}
 
 	template <typename Return, typename Inspector, typename A>
@@ -226,28 +184,10 @@ struct NrBox
 		Inspector::template inspect<Value, Dummy, typename Fwd::Cont>();
 	}
 
-	template <typename Inspector, typename A>
-	inline static void evaluate(A* a)
+	template <typename Inspector, typename ...Params>
+	inline static void evaluate(Params&&... params)
 	{
-		Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(a);
-	}
-
-	template <typename Inspector, typename A, typename B>
-	inline static void evaluate(A* a, B* b)
-	{
-		Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(a, b);
-	}
-
-	template <typename Inspector, typename A, typename B>
-	inline static void evaluate(A a, B* b)
-	{
-		Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(a, b);
-	}
-
-	template <typename Inspector, typename A, typename B, typename C>
-	inline static void evaluate(A* a, B* b, C* c)
-	{
-		Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(a, b, c);
+		Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(std::forward<Params>(params)...);
 	}
 
 	template <typename Return, typename Inspector, typename A>
@@ -280,28 +220,10 @@ struct NrBox <Value>
 		Inspector::template inspect<Value, Dummy, Dummy>();
 	}
 
-	template <typename Inspector, typename A>
-	inline static void evaluate(A* a)
+	template <typename Inspector, typename ...Params>
+	inline static void evaluate(Params&&... params)
 	{
-		Inspector::template inspect<Value, Dummy, Dummy>(a);
-	}
-
-	template <typename Inspector, typename A, typename B>
-	inline static void evaluate(A* a, B* b)
-	{
-		Inspector::template inspect<Value, Dummy, Dummy>(a, b);
-	}
-
-	template <typename Inspector, typename A, typename B>
-	inline static void evaluate(A a, B* b)
-	{
-		Inspector::template inspect<Value, Dummy, Dummy>(a, b);
-	}
-
-	template <typename Inspector, typename A, typename B, typename C>
-	inline static void evaluate(A* a, B* b, C* c)
-	{
-		Inspector::template inspect<Value, Dummy, Dummy>(a, b, c);
+		Inspector::template inspect<Value, Dummy, Dummy>(std::forward<Params>(params)...);
 	}
 
 	template <typename Return, typename Inspector, typename A>
@@ -519,44 +441,14 @@ struct OncePerType
 		Next::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>>, Callback>>();
 	}
 
-	template <typename Value, typename Inner, typename Next, typename A>
-	inline static void inspect(A* a)
+	template <typename Value, typename Inner, typename Next, typename ...Params>
+	inline static void inspect(Params&&... params)
 	{
 		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
-			Callback::template callback<Value>(a);
+			Callback::template callback<Value>(std::forward<Params>(params)...);
 
-		Inner::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>, Next>, Callback>>(a);
-		Next::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>>, Callback>>(a);
-	}
-
-	template <typename Value, typename Inner, typename Next, typename A, typename B>
-	inline static void inspect(A* a, B* b)
-	{
-		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
-			Callback::template callback<Value>(a, b);
-
-		Inner::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>, Next>, Callback>>(a, b);
-		Next::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>>, Callback>>(a, b);
-	}
-
-	template <typename Value, typename Inner, typename Next, typename A, typename B>
-	inline static void inspect(A a, B* b)
-	{
-		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
-			Callback::template callback<Value>(a, b);
-
-		Inner::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>, Next>, Callback>>(a, b);
-		Next::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>>, Callback>>(a, b);
-	}
-
-	template <typename Value, typename Inner, typename Next, typename A, typename B, typename C>
-	inline static void inspect(A* a, B* b, C* c)
-	{
-		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
-			Callback::template callback<Value>(a, b, c);
-
-		Inner::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>, Next>, Callback>>(a, b, c);
-		Next::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>>, Callback>>(a, b, c);
+		Inner::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>, Next>, Callback>>(std::forward<Params>(params)...);
+		Next::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>>, Callback>>(std::forward<Params>(params)...);
 	}
 };
 
@@ -693,31 +585,13 @@ struct Switch
 			: Switch<Rbox, Num - 1>::template evaluate<Return, Inspector>(i, a);
 	}
 
-	template <typename Inspector, typename A>
-	inline static void evaluate(int i, A* a)
+	template <typename Inspector, typename ...Params>
+	inline static void evaluate(int i, Params&&... params)
 	{
 		if (i == Num - 1)
-			Rbox::template evaluate<Inspector>(a);
+			Rbox::template evaluate<Inspector>(std::forward<Params>(params)...);
 		else
-			Switch<Rbox, Num - 1>::template evaluate<Inspector>(i, a);
-	}
-
-	template <typename Inspector, typename A, typename B>
-	inline static void evaluate(int i, A* a, B* b)
-	{
-		if (i == Num - 1)
-			Rbox::template evaluate<Inspector>(a, b);
-		else
-			Switch<Rbox, Num - 1>::template evaluate<Inspector>(i, a, b);
-	}
-
-	template <typename Inspector, typename A, typename B, typename C>
-	inline static void evaluate(int i, A* a, B* b, C* c)
-	{
-		if (i == Num - 1)
-			Rbox::template evaluate<Inspector>(a, b, c);
-		else
-			Switch<Rbox, Num - 1>::template evaluate<Inspector>(i, a, b, c);
+			Switch<Rbox, Num - 1>::template evaluate<Inspector>(i, std::forward<Params>(params)...);
 	}
 };
 
@@ -727,14 +601,8 @@ struct Switch <Rbox, 0>
 	template <typename Return,  typename Inspector, typename A>
 	constexpr static Return evaluate(int i, A a) { return Return(); }
 
-	template <typename Inspector, typename A>
-	inline static void evaluate(int i, A* a) { }
-
-	template <typename Inspector, typename A, typename B>
-	inline static void evaluate(int i, A* a, B* b) { }
-
-	template <typename Inspector, typename A, typename B, typename C>
-	inline static void evaluate(int i, A* a, B* b, C* c) { }
+	template <typename Inspector, typename ...Params>
+	inline static void evaluate(int i, Params&&... params) { }
 };
 
 
