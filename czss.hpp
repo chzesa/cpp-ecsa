@@ -683,7 +683,7 @@ struct Guid
 {
 	Guid();
 	Guid(uint64_t id);
-	uint64_t get();
+	uint64_t get() const;
 private:
 	uint64_t id;
 };
@@ -2785,7 +2785,7 @@ Guid::Guid(uint64_t id)
 	this->id = id;
 }
 
-uint64_t Guid::get()
+uint64_t Guid::get() const
 {
 	return id;
 }
