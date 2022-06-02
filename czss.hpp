@@ -1368,15 +1368,13 @@ struct Architecture : VirtualArchitecture
 	template <typename System>
 	static constexpr uint64_t systemIndex()
 	{
-		static_assert(isSystem<System>(), "Queried system index for non-system.");
-		return inspect::indexOf<Cont, System, SystemBase>();
+		return isSystem<System>() ? inspect::indexOf<Cont, System, SystemBase>() : -1;
 	}
 
 	template<typename Entity>
 	static constexpr uint64_t entityIndex()
 	{
-		static_assert(isEntity<Entity>(), "Queried entity index for non-entity.");
-		return inspect::indexOf<Cont, Entity, EntityBase>();
+		return isEntity<Entity>() ? inspect::indexOf<Cont, Entity, EntityBase>() : -1;
 	}
 
 	template <typename Resource>
