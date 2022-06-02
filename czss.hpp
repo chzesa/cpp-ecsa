@@ -15,6 +15,18 @@
 #include <math.h>
 #include <string>
 
+/* Timing functions
+	#define CZSS_TIMING_BEGIN timing_begin_function
+	#define CZSS_TIMING_END timing_end_function
+
+	where timing_begin/end_function definition is as follows:
+
+	template <typename Arch, typename System>
+	void timing_begin/end_function(Arch* arch);
+
+	Timing functions are called before and after system::run.
+*/
+
 namespace czss
 {
 
@@ -1246,7 +1258,16 @@ struct Runner
 			}
 
 			Subset::template evaluate<SystemBlocker<Value>>(barriers);
+
+#ifdef CZSS_TIMING_BEGIN
+			CZSS_TIMING_BEGIN<Arch, Value>(arch);
+#endif
+
 			Value::run(Accessor<Arch, Value>(arch));
+
+#ifdef CZSS_TIMING_END
+			CZSS_TIMING_END<Arch, Value>(arch);
+#endif
 			barriers[*id].signal();
 		}
 	};
