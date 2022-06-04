@@ -1405,7 +1405,7 @@ struct Architecture : VirtualArchitecture
 
 	void* getEntity(Guid guid)
 	{
-		void* ret;
+		void* ret = nullptr;
 		uint64_t tk = typeKey(guid);
 		Switch<Cont, numEntities()>::template evaluate<OncePerType<Dummy, GetEntityVoidPtr>>(tk, this, tk, guid, &ret);
 		return ret;
