@@ -1949,6 +1949,11 @@ struct EntityAccessor
 		return guid;
 	}
 
+	bool null()
+	{
+		return entity == nullptr;
+	}
+
 protected:
 	EntityAccessor() { }
 
