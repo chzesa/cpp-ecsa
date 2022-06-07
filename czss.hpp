@@ -693,9 +693,12 @@ struct BaseObjectFinder
 
 struct Guid
 {
+	Guid(const Guid& guid);
 	Guid();
 	Guid(uint64_t id);
 	uint64_t get() const;
+	bool operator ==(const Guid& other) const;
+	bool operator <(const Guid& other) const;
 private:
 	uint64_t id;
 };
@@ -2809,15 +2812,39 @@ Guid::Guid(uint64_t id)
 	this->id = id;
 }
 
+Guid::Guid(const Guid& other)
+{
+	this->id = other.id;
+}
+
 uint64_t Guid::get() const
 {
 	return id;
+}
+
+bool Guid::operator ==(const Guid& other) const
+{
+	return this->id == other.id;
+}
+
+bool Guid::operator <(const Guid& other) const
+{
+	return this->id < other.id;
 }
 
 void TemplateStubs::setGuid(Guid guid) { }
 Guid TemplateStubs::getGuid() const { return Guid(0); }
 
 } // namespace czss
+
+template<>
+struct std::hash<czss::Guid>
+{
+	std::size_t operator()(czss::Guid const& guid) const noexcept
+	{
+		return guid.get();
+	}
+};
 
 #endif	// CZSS_IMPLEMENTATION_GUARD_
 
