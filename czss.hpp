@@ -1407,12 +1407,12 @@ struct Architecture : VirtualArchitecture
 	}
 
 	template <typename Category>
-	const char* name(uint64_t id)
+	static const char* name(uint64_t id)
 	{
-		static const char d[] = "Unknown";
-		char* result = d;
-		Cont::template evaluate<OncePerType<Dummy, NameFinder<Category>>>(id, &result);
-		return result;
+		static const char* d = "Unknown";
+		const char** result = &d;
+		Cont::template evaluate<OncePerType<Dummy, NameFinder<Category>>>(id, result);
+		return *result;
 	}
 
 	void* getEntity(Guid guid)
@@ -1911,11 +1911,11 @@ private:
 	struct NameFinder
 	{
 		template <typename Value>
-		inline static void callback(uint64_t id, char** res)
+		inline static void callback(uint64_t id, const char** res)
 		{
 			if (std::is_base_of<Cat, Value>() && inspect::indexOf<Cont, Value, Cat>() == id)
 			{
-				*res = name<Value>();
+				*res = czss::name<Value>();
 			}
 		}
 	};
