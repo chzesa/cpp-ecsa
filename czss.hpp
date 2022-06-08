@@ -1406,6 +1406,15 @@ struct Architecture : VirtualArchitecture
 		return reinterpret_cast<EntityStore<Entity>*>(&entities[0]) + index;
 	}
 
+	template <typename Category>
+	const char* name(uint64_t id)
+	{
+		static const char d[] = "Unknown";
+		char* result = d;
+		Cont::template evaluate<OncePerType<Dummy, NameFinder<Category>>>(id, &result);
+		return result;
+	}
+
 	void* getEntity(Guid guid)
 	{
 		void* ret = nullptr;
@@ -1613,7 +1622,7 @@ struct Architecture : VirtualArchitecture
 			CZSS_CONST_IF(isResource<V>())
 				shape = "diamond";
 
-			a += std::to_string(absoluteIndex<V>()) + " [label = " + name<V>() + ", shape = " + shape + " ]\n";
+			a += std::to_string(absoluteIndex<V>()) + " [label = " + czss::name<V>() + ", shape = " + shape + " ]\n";
 			str->append(a);
 		}
 	};
@@ -1895,6 +1904,19 @@ private:
 		{
 			if(isEntity<Value>() && inspect::contains<Cont, Value>() && inspect::indexOf<Cont, Value, EntityBase>() == typeKey)
 				*ret = arch->getEntity<Value>(guid);
+		}
+	};
+
+	template <typename Cat>
+	struct NameFinder
+	{
+		template <typename Value>
+		inline static void callback(uint64_t id, char** res)
+		{
+			if (std::is_base_of<Cat, Value>() && inspect::indexOf<Cont, Value, Cat>() == id)
+			{
+				*res = name<Value>();
+			}
 		}
 	};
 };
