@@ -48,6 +48,9 @@ struct Repair
 		this->offset = offset;
 	}
 
+	template <typename P>
+	void operator ()(P*& ptr) const { }
+
 	void operator ()(T*& ptr) const
 	{
 		if (min <= ptr && ptr < max)
