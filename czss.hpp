@@ -2817,6 +2817,16 @@ constexpr bool exclusiveWith()
 
 } // namespace czss
 
+template<>
+struct std::hash<czss::Guid>
+{
+	std::size_t operator()(czss::Guid const& guid) const noexcept
+	{
+		return guid.get();
+	}
+};
+
+
 #endif // CZSS_HEADERS_H
 
 #ifdef CZSS_IMPLEMENTATION
@@ -2858,15 +2868,6 @@ void TemplateStubs::setGuid(Guid guid) { }
 Guid TemplateStubs::getGuid() const { return Guid(0); }
 
 } // namespace czss
-
-template<>
-struct std::hash<czss::Guid>
-{
-	std::size_t operator()(czss::Guid const& guid) const noexcept
-	{
-		return guid.get();
-	}
-};
 
 #endif	// CZSS_IMPLEMENTATION_GUARD_
 
