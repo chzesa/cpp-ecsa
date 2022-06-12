@@ -1443,21 +1443,31 @@ struct Architecture : VirtualArchitecture
 	template <typename Entity>
 	Entity* createEntity()
 	{
-		auto ent = initializeEntity<Entity>();
-		Guid guid = ent->getGuid();
-		new(ent) Entity();
-		setEntityId(ent, guid.get());
-		return ent;
+		CZSS_CONST_IF (isEntity<Entity>())
+		{
+			auto ent = initializeEntity<Entity>();
+			Guid guid = ent->getGuid();
+			new(ent) Entity();
+			setEntityId(ent, guid.get());
+			return ent;
+		}
+
+		return nullptr;
 	}
 
 	template <typename Entity, typename ...Params>
 	Entity* createEntity(Params&&... params)
 	{
-		auto ent = initializeEntity<Entity>();
-		Guid guid = ent->getGuid();
-		new (ent) Entity(std::forward<Params>(params)...);
-		setEntityId(ent, guid.get());
-		return ent;
+		CZSS_CONST_IF (isEntity<Entity>())
+		{
+			auto ent = initializeEntity<Entity>();
+			Guid guid = ent->getGuid();
+			new (ent) Entity(std::forward<Params>(params)...);
+			setEntityId(ent, guid.get());
+			return ent;
+		}
+
+		return nullptr;
 	}
 
 	template <typename Entity>
