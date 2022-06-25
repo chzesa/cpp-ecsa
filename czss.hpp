@@ -2052,13 +2052,13 @@ struct IteratorAccessor : EntityAccessor<Arch, Sys>
 	IteratorAccessor(const IteratorAccessor<Iter, Arch, Sys>& other) : EntityAccessor<Arch, Sys>(other) { }
 
 	template <typename Component>
-	bool hasComponent() const;
+	bool hasComponent() const
 	{
 		return EntityAccessor<Arch, Sys>::template hasComponent<Component>();
 	}
 
 	template<typename Component>
-	const Component* view() const;
+	const Component* view() const
 	{
 		return EntityAccessor<Arch, Sys>::template view<Component>();
 	}
