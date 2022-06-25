@@ -1961,13 +1961,13 @@ struct EntityAccessor
 	}
 
 	template <typename Component>
-	bool hasComponent()
+	bool hasComponent() const
 	{
 		return view<Component>() != nullptr;
 	}
 
 	template<typename Component>
-	const Component* view()
+	const Component* view() const
 	{
 		static_assert(canRead<Sys, Component>(), "System lacks read permissions for the Iterator's components.");
 		return get_ptr<Component>();
@@ -1980,14 +1980,14 @@ struct EntityAccessor
 		return get_ptr<Component>();
 	}
 
-	Guid guid()
+	Guid guid() const
 	{
 		Guid guid;
 		Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, GuidGetter>>(typeKey, &typeKey, &guid, entity);
 		return guid;
 	}
 
-	bool null()
+	bool null() const
 	{
 		return entity == nullptr;
 	}
