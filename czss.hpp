@@ -7,6 +7,7 @@
 #include "external/c-fiber/czsf.h"
 #endif
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <queue>
@@ -14,8 +15,6 @@
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
-
-#include <math.h>
 
 /* Timing functions
 	#define CZSS_TIMING_BEGIN timing_begin_function
