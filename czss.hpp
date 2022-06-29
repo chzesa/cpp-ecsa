@@ -1281,7 +1281,7 @@ struct Runner
 	struct SystemInitialize
 	{
 		template <typename Value, typename Inner, typename Next>
-		inline static void inspect(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
+		inline static void inspect(const uint64_t* id, czsf::Barrier* barriers, Arch* arch)
 		{
 			if (inspect::indexOf<Subset, Value, SystemBase>() != *id)
 			{
@@ -2013,7 +2013,7 @@ private:
 	void* entity;
 
 	template <typename Component>
-	Component* get_ptr()
+	Component* get_ptr() const
 	{
 		void* result = nullptr;
 		Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, ComponentGetter<Component>>>(typeKey, &typeKey, entity, &result);
@@ -2024,7 +2024,7 @@ private:
 	struct ComponentGetter
 	{
 		template <typename Value>
-		inline static void callback(uint64_t* id, void* entity, void** result)
+		inline static void callback(const uint64_t* id, void* entity, void** result)
 		{
 			if (isEntity<Value>() && inspect::contains<typename Value::Cont, Component>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == *id)
 			{
@@ -2036,7 +2036,7 @@ private:
 	struct GuidGetter
 	{
 		template <typename Value>
-		inline static void callback(uint64_t* id, Guid* guid, void* entity)
+		inline static void callback(const uint64_t* id, Guid* guid, void* entity)
 		{
 			if (isEntity<Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == *id)
 			{
