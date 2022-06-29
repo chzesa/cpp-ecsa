@@ -2394,6 +2394,12 @@ struct Accessor
 		return IterableStub<Iterator, Arch, Sys>(arch);
 	}
 
+	template <typename ...Values>
+	IterableStub<Iterator<Values...>, Arch, Sys> iterate2()
+	{
+		return iterate<Iterator<Values...>>();
+	}
+
 	template <typename Iterator, typename F>
 	void iterate(F f)
 	{
