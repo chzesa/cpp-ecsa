@@ -3,19 +3,19 @@
 
 #include "external/unique_tuple/unique_tuple.hpp"
 
-#include <cstring>
-#include <cstdint>
-#include <type_traits>
-#include <vector>
-#include <queue>
-#include <unordered_map>
-
 #ifndef CZSF_HEADERS_H
 #include "external/c-fiber/czsf.h"
 #endif
 
-#include <math.h>
+#include <cstdint>
+#include <cstring>
+#include <queue>
 #include <string>
+#include <type_traits>
+#include <unordered_map>
+#include <vector>
+
+#include <math.h>
 
 /* Timing functions
 	#define CZSS_TIMING_BEGIN timing_begin_function
