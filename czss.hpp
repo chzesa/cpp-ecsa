@@ -1,6 +1,8 @@
 #ifndef CZSS_HEADERS_H
 #define CZSS_HEADERS_H
 
+#include "external/unique_tuple/unique_tuple.hpp"
+
 #include <cstring>
 #include <cstdint>
 #include <type_traits>
