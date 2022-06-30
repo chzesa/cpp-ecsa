@@ -428,10 +428,6 @@ constexpr uint64_t indexOf()
 
 } // namespace inspect
 
-template <typename T>
-constexpr bool isDummy();
-
-
 template <typename Fold, typename Callback>
 struct OncePerTypeConst
 {
