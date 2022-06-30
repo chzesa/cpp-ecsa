@@ -640,43 +640,102 @@ struct WriterBase {};
 struct OrchestratorBase {};
 
 template <typename T>
-constexpr bool isValidType();
+constexpr bool isValidType()
+{
+	return (1
+		<< std::is_base_of<ComponentBase, T>()
+		<< std::is_base_of<IteratorBase, T>()
+		<< std::is_base_of<EntityBase, T>()
+		<< std::is_base_of<SystemBase, T>()
+		<< std::is_base_of<ResourceBase, T>()
+		<< std::is_base_of<PermissionsBase, T>()
+		<< std::is_base_of<DependencyBase, T>()
+		<< std::is_base_of<ReaderBase, T>()
+		<< std::is_base_of<WriterBase, T>()
+		<< std::is_base_of<OrchestratorBase, T>()
+	) == 2;
+}
 
 template<typename B, typename T>
-constexpr bool isBaseType();
+constexpr bool isBaseType()
+{
+	return isValidType<T>() && std::is_base_of<B, T>();
+}
 
 template<typename T>
-constexpr bool isThreadSafe();
+constexpr bool isThreadSafe()
+{
+	return isBaseType<ResourceBase, T>() && std::is_base_of<ThreadSafe, T>();
+}
 
 template<typename T>
-constexpr bool isComponent();
+constexpr bool isComponent()
+{
+	return isBaseType<ComponentBase, T>();
+}
 
 template<typename T>
-constexpr bool isIterator();
+constexpr bool isIterator()
+{
+	return isBaseType<IteratorBase, T>();
+}
 
 template<typename T>
-constexpr bool isEntity();
+constexpr bool isEntity()
+{
+	return isBaseType<EntityBase, T>();
+}
 
 template<typename T>
-constexpr bool isSystem();
+constexpr bool isSystem()
+{
+	return isBaseType<SystemBase, T>();
+}
 
 template<typename T>
-constexpr bool isResource();
+constexpr bool isResource()
+{
+	return isBaseType<ResourceBase, T>();
+}
 
 template<typename T>
-constexpr bool isPermission();
+constexpr bool isPermission()
+{
+	return isBaseType<PermissionsBase, T>();
+}
+
+template<typename T>
+constexpr bool isDependency()
+{
+	return isBaseType<DependencyBase, T>();
+}
+
+template<typename T>
+constexpr bool isReader()
+{
+	return isBaseType<ReaderBase, T>();
+}
+
+
+template<typename T>
+constexpr bool isWriter()
+{
+	return isBaseType<WriterBase, T>();
+}
+
+
+template<typename T>
+constexpr bool isOrchestrator()
+{
+	return isBaseType<OrchestratorBase, T>();
+}
+
 
 template <typename T>
-constexpr bool isDependency();
-
-template <typename T>
-constexpr bool isReader();
-
-template <typename T>
-constexpr bool isWriter();
-
-template <typename T>
-constexpr bool isOrchestrator();
+constexpr bool isDummy()
+{
+	return std::is_same<T, Dummy>();
+}
 
 template <typename B, typename T>
 struct BaseObjectFinder
@@ -2715,103 +2774,7 @@ private:
 // Type Validation
 // #####################
 
-template <typename T>
-constexpr bool isValidType()
-{
-	return (1
-		<< std::is_base_of<ComponentBase, T>()
-		<< std::is_base_of<IteratorBase, T>()
-		<< std::is_base_of<EntityBase, T>()
-		<< std::is_base_of<SystemBase, T>()
-		<< std::is_base_of<ResourceBase, T>()
-		<< std::is_base_of<PermissionsBase, T>()
-		<< std::is_base_of<DependencyBase, T>()
-		<< std::is_base_of<ReaderBase, T>()
-		<< std::is_base_of<WriterBase, T>()
-		<< std::is_base_of<OrchestratorBase, T>()
-	) == 2;
-}
 
-template<typename B, typename T>
-constexpr bool isBaseType()
-{
-	return isValidType<T>() && std::is_base_of<B, T>();
-}
-
-template<typename T>
-constexpr bool isThreadSafe()
-{
-	return isBaseType<ResourceBase, T>() && std::is_base_of<ThreadSafe, T>();
-}
-
-template<typename T>
-constexpr bool isComponent()
-{
-	return isBaseType<ComponentBase, T>();
-}
-
-template<typename T>
-constexpr bool isIterator()
-{
-	return isBaseType<IteratorBase, T>();
-}
-
-template<typename T>
-constexpr bool isEntity()
-{
-	return isBaseType<EntityBase, T>();
-}
-
-template<typename T>
-constexpr bool isSystem()
-{
-	return isBaseType<SystemBase, T>();
-}
-
-template<typename T>
-constexpr bool isResource()
-{
-	return isBaseType<ResourceBase, T>();
-}
-
-template<typename T>
-constexpr bool isPermission()
-{
-	return isBaseType<PermissionsBase, T>();
-}
-
-template<typename T>
-constexpr bool isDependency()
-{
-	return isBaseType<DependencyBase, T>();
-}
-
-template<typename T>
-constexpr bool isReader()
-{
-	return isBaseType<ReaderBase, T>();
-}
-
-
-template<typename T>
-constexpr bool isWriter()
-{
-	return isBaseType<WriterBase, T>();
-}
-
-
-template<typename T>
-constexpr bool isOrchestrator()
-{
-	return isBaseType<OrchestratorBase, T>();
-}
-
-
-template <typename T>
-constexpr bool isDummy()
-{
-	return std::is_same<T, Dummy>();
-}
 
 // #####################
 // System
