@@ -1,7 +1,7 @@
 #ifndef CZSS_HEADERS_H
 #define CZSS_HEADERS_H
 
-#include "external/unique_tuple/unique_tuple.hpp"
+#include "tuple_utils.hpp"
 
 #ifndef CZSF_HEADERS_H
 #include "external/c-fiber/czsf.h"
@@ -76,178 +76,11 @@ const static char* name()
 
 struct Dummy
 {
-	using Cont = Dummy;
-
-	template <typename Return, typename Inspector>
-	constexpr static Return evaluate() { return Return(); }
-
-	template <typename Return, typename Inspector>
-	constexpr static Return evaluate(uint64_t value) { return Return(); }
-
-	template <typename Inspector>
-	inline static void evaluate() { }
-
-	template <typename Inspector, typename ...Params>
-	inline static void evaluate(Params&&... params) { }
-
-	template <typename Return, typename Inspector, typename A>
-	static Return evaluate(A a) { return Return(); }
+	using Cont = std::tuple<>;
 };
 
-struct Root
-{
-	template <typename U>
-	constexpr static bool baseContainsType() { return false; }
-
-	template <typename U>
-	constexpr static bool containsType() { return false; }
-};
-
-template <typename Value, typename ...Rest>
-struct Rbox
-{
-	using Cont = Rbox <Value, Rest...>;
-	using Fwd = Rbox <Rest...>;
-
-	template <typename Return, typename Inspector>
-	constexpr static Return evaluate()
-	{
-		return Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>();
-	}
-
-	template <typename Return, typename Inspector>
-	constexpr static Return evaluate(uint64_t value)
-	{
-		return Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(value);
-	}
-
-	template <typename Inspector>
-	inline static void evaluate()
-	{
-		Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>();
-	}
-
-	template <typename Inspector, typename ...Params>
-	inline static void evaluate(Params&&... params)
-	{
-		Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(std::forward<Params>(params)...);
-	}
-
-	template <typename Return, typename Inspector, typename A>
-	static Return evaluate(A* a)
-	{
-		return Inspector::template inspect<Value, typename Value::Cont, typename Fwd::Cont>(a);
-	}
-};
-
-template <typename Value>
-struct Rbox <Value>
-{
-	using Cont = Rbox <Value>;
-
-	template <typename Return, typename Inspector>
-	constexpr static Return evaluate()
-	{
-		return Inspector::template inspect<Value, typename Value::Cont, Dummy>();
-	}
-
-	template <typename Return, typename Inspector>
-	constexpr static Return evaluate(uint64_t value)
-	{
-		return Inspector::template inspect<Value, typename Value::Cont, Dummy>(value);
-	}
-
-	template <typename Inspector>
-	inline static void evaluate()
-	{
-		Inspector::template inspect<Value, typename Value::Cont, Dummy>();
-	}
-
-	template <typename Inspector, typename ...Params>
-	inline static void evaluate(Params&&... params)
-	{
-		Inspector::template inspect<Value, typename Value::Cont, Dummy>(std::forward<Params>(params)...);
-	}
-
-	template <typename Return, typename Inspector, typename A>
-	static Return evaluate(A* a)
-	{
-		return Inspector::template inspect<Value, typename Value::Cont, Dummy>(a);
-	}
-};
-
-template <typename Value, typename ...Rest>
-struct NrBox
-{
-	using Cont = NrBox <Value, Rest...>;
-	using Fwd = NrBox <Rest...>;
-
-	template <typename Return, typename Inspector>
-	constexpr static Return evaluate()
-	{
-		return Inspector::template inspect<Value, Dummy, typename Fwd::Cont>();
-	}
-
-	template <typename Return, typename Inspector>
-	constexpr static Return evaluate(uint64_t value)
-	{
-		return Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(value);
-	}
-
-	template <typename Inspector>
-	inline static void evaluate()
-	{
-		Inspector::template inspect<Value, Dummy, typename Fwd::Cont>();
-	}
-
-	template <typename Inspector, typename ...Params>
-	inline static void evaluate(Params&&... params)
-	{
-		Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(std::forward<Params>(params)...);
-	}
-
-	template <typename Return, typename Inspector, typename A>
-	static Return evaluate(A* a)
-	{
-		return Inspector::template inspect<Value, Dummy, typename Fwd::Cont>(a);
-	}
-};
-
-template <typename Value>
-struct NrBox <Value>
-{
-	using Cont = NrBox <Value>;
-
-	template <typename Return, typename Inspector>
-	constexpr static Return evaluate()
-	{
-		return Inspector::template inspect<Value, Dummy, Dummy>();
-	}
-
-	template <typename Return, typename Inspector>
-	constexpr static Return evaluate(uint64_t value)
-	{
-		return Inspector::template inspect<Value, Dummy, Dummy>(value);
-	}
-
-	template <typename Inspector>
-	inline static void evaluate()
-	{
-		Inspector::template inspect<Value, Dummy, Dummy>();
-	}
-
-	template <typename Inspector, typename ...Params>
-	inline static void evaluate(Params&&... params)
-	{
-		Inspector::template inspect<Value, Dummy, Dummy>(std::forward<Params>(params)...);
-	}
-
-	template <typename Return, typename Inspector, typename A>
-	static Return evaluate(A* a)
-	{
-		return Inspector::template inspect<Value, Dummy, Dummy>(a);
-	}
-};
+template <typename ...A>
+using Rbox = unique_tuple::unique_tuple<A...>;
 
 template <typename T>
 constexpr T min(T a, T b)
@@ -264,359 +97,221 @@ constexpr T max(T a, T b)
 namespace inspect
 {
 
-template <typename T>
-struct TypeCounter
-{
-	template <typename Value, typename Inner, typename Next>
-	constexpr static uint64_t inspect()
-	{
-		return (std::is_same<T, Value>() ? 1 : 0)
-			+ Inner::template evaluate <uint64_t, TypeCounter<T>>()
-			+ Next::template evaluate <uint64_t, TypeCounter<T>>();
-	}
-};
-
-template <typename T>
-struct DerivativeCounter
-{
-	template <typename Value, typename Inner, typename Next>
-	constexpr static uint64_t inspect()
-	{
-		return (std::is_base_of<T, Value>() ? 1 : 0)
-			+ Inner::template evaluate <uint64_t, DerivativeCounter<T>>()
-			+ Next::template evaluate <uint64_t, DerivativeCounter<T>>();
-	}
-};
-
-template <typename Cont, typename T>
-constexpr uint64_t numInstances()
-{
-	return Cont::template evaluate<uint64_t, TypeCounter<T>>();
-}
-
-template <typename Cont>
-struct NumContained
-{
-	template <typename Value, typename Inner, typename Next>
-	constexpr static uint64_t inspect()
-	{
-		return (numInstances<Cont, Value>() > 0 ? 1 : 0)
-			+ Next::template evaluate<uint64_t, NumContained<Cont>>();
-	}
-};
-
-template <typename Cont, typename ...T>
-constexpr bool containsAll()
-{
-	return Rbox<T...>::template evaluate<uint64_t, NumContained<Cont>>()
-		== sizeof...(T);
-}
-
-template <typename Target>
-struct Contains
-{
-	template <typename Value, typename Inner, typename Next>
-	constexpr static bool inspect()
-	{
-		return std::is_same<Value, Target>()
-			? true
-			: Inner::template evaluate<bool, Contains<Target>>()
-				|| Next::template evaluate<bool, Contains<Target>>();
-	}
-};
-
-template <typename Cont, typename T>
+template <typename Tuple, typename T>
 constexpr bool contains()
 {
-	return Cont::template evaluate<bool, Contains<T>>();
+	return tuple_contains<Tuple, T>::value;
 }
-
-template <typename Cont, typename T, typename Cat>
-constexpr uint64_t indexOf();
-
-template <typename Cont>
-struct ContentsCheckerAll
-{
-	template <typename Value, typename Inner, typename Next>
-	constexpr static uint64_t inspect()
-	{
-		return contains<Cont, Value>()
-			&& ( std::is_same<Next, Dummy>() ? true : Next::template evaluate <bool, ContentsCheckerAll<Cont>>() )
-			&& ( std::is_same<Inner, Dummy>() ? true : Inner::template evaluate <bool, ContentsCheckerAll<Cont>>() );
-	}
-};
-
-template <typename Cont>
-struct ContentsCheckerAny
-{
-	template <typename Value, typename Inner, typename Next>
-	constexpr static uint64_t inspect()
-	{
-		return contains<Cont, Value>()
-			|| ( std::is_same<Next, Dummy>() ? true : Next::template evaluate <bool, ContentsCheckerAny<Cont>>() )
-			|| ( std::is_same<Inner, Dummy>() ? true : Inner::template evaluate <bool, ContentsCheckerAny<Cont>>() );
-	}
-};
 
 template<typename Left, typename Right>
 constexpr bool containsAllIn()
 {
-	return Right::template evaluate<bool, ContentsCheckerAll<Left>>();
-}
-
-template<typename Left, typename Right>
-constexpr bool containsAnyIn()
-{
-	return Right::template evaluate<bool, ContentsCheckerAny<Left>>();
-}
-
-/*
-	Algorithm to uniquely number each type within a Rbox.
-	Every time an item has both Next (in the "array"), and 
-	is itself a Rbox and therefore can be recursed inside,
-	the path through the Rbox splits.
-	On such a split, the Next type is folded into the current
-	root of the node and this becomes the new root of the Inner
-	branch.
-	This way the recursion in the Inner branch can test whether
-	the other branch already has an item. If the item exists in
-	the other branch, or if it exists further in the same
-	branch, it has already been counted and the counter is not
-	incremented.
-*/
-
-template <typename Root, typename T, typename Cat>
-struct IndexFinder
-{
-	template <typename Value, typename Inner, typename Next>
-	constexpr static uint64_t inspect()
-	{
-		return Inner::template evaluate <uint64_t, IndexFinder<Rbox<Root, Next>, T, Cat>>()
-			+ Next::template evaluate <uint64_t, IndexFinder<Root, T, Cat>>()
-			+ (
-				std::is_base_of<Cat, Value>()
-					? ( ( std::is_same<T, Value>() || (contains<Next, Value>() || contains<Next, T>()) || (contains<Inner, Value>() || contains<Inner, T>())|| (contains<Root, Value>() || contains<Root, T>()) )
-						? 0 : 1
-					) : 0
-			);
-	}
-};
-template <typename Cont, typename Cat>
-struct UniquesCounter
-{
-	template <typename Value, typename Inner, typename Next>
-	constexpr static uint64_t inspect()
-	{
-		return 	max(( std::is_base_of<Cat, Value>() ? indexOf<Cont, Value, Cat>() : 0 ),
-				max(Inner::template evaluate <uint64_t, UniquesCounter<Cont, Cat>>(),
-					Next::template evaluate <uint64_t, UniquesCounter<Cont, Cat>>() ));
-	}
-};
-
-template <typename Cont, typename Cat>
-constexpr uint64_t numUniques()
-{
-	return Cont::template evaluate<uint64_t, UniquesCounter<Cont, Cat>>()
-		+ (Cont::template evaluate<uint64_t, DerivativeCounter<Cat>>() > 0 ? 1 : 0);
-};
-
-template <typename Cont, typename T, typename Cat>
-constexpr uint64_t indexOf()
-{
-	return Cont::template evaluate<uint64_t,  IndexFinder<Dummy, T, Cat>>();
+	return std::tuple_size< tuple_difference<Right, Left> >::value == 0;
 }
 
 } // namespace inspect
 
-template <typename Fold, typename Callback>
-struct OncePerTypeConst
+template <size_t I, typename T>
+struct ForEach
 {
-	template <typename Value, typename Inner, typename Next>
-	constexpr static bool inspect()
+	inline static void fn()
 	{
-		return (!inspect::contains<Fold, Value>() && Callback::template callback<Value>())
-			|| Inner::template evaluate<bool, OncePerTypeConst<Rbox<Fold, NrBox<Value>, Next>, Callback>>()
-			|| Next::template evaluate<bool, OncePerTypeConst<Rbox<Fold, NrBox<Value>>, Callback>>();
+		T::template callback<I>();
+		ForEach<I - 1, T>::fn();
+	}
+
+	template<typename ...Params>
+	inline static void fn(Params&&... params)
+	{
+		T::template callback<I>(std::forward<Params>(params)...);
+		ForEach<I - 1, T>::fn(std::forward<Params>(params)...);
+	}
+
+	constexpr static bool constFn()
+	{
+		return T::template callback<I>() || ForEach<I - 1, T>::constFn();
+	}
+
+	template<typename ...Params>
+	constexpr static bool constFn(Params&&... params)
+	{
+		return T::template callback<I>(std::forward<Params>(params)...) || ForEach<I - 1, T>::constFn(std::forward<Params>(params)...);
+	}
+
+	constexpr static size_t constSum()
+	{
+		return T::template callback<I>() + ForEach<I - 1, T>::constFn();
 	}
 };
 
-template <typename Fold, typename Callback>
+template <typename T>
+struct ForEach<0, T>
+{
+	inline static void fn()
+	{
+		T::template callback<0>();
+	}
+
+	template<typename ...Params>
+	inline static void fn(Params&&... params)
+	{
+		T::template callback<0>(std::forward<Params>(params)...);
+	}
+
+	constexpr static bool constFn()
+	{
+		return T::template callback<0>() || false;
+	}
+
+	template<typename ...Params>
+	constexpr static bool constFn(Params&&... params)
+	{
+		return T::template callback<0>(std::forward<Params>(params)...) || false;
+	}
+
+	constexpr static size_t constSum()
+	{
+		return T::template callback<0>();
+	}
+};
+
+template <typename Tuple, typename Callback>
 struct OncePerType
 {
-	template < typename Value, typename Inner, typename Next>
-	inline static void inspect()
+	inline static void fn()
 	{
-		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
-			Callback::template callback<Value>();
-
-		Inner::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>, Next>, Callback>>();
-		Next::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>>, Callback>>();
+		ForEach<std::tuple_size<Tuple>::value - 1, CB>::fn();
 	}
 
-	template <typename Value, typename Inner, typename Next, typename ...Params>
-	inline static void inspect(Params&&... params)
+	template <typename ...Params>
+	inline static void fn(Params&&... params)
 	{
-		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
-			Callback::template callback<Value>(std::forward<Params>(params)...);
-
-		Inner::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>, Next>, Callback>>(std::forward<Params>(params)...);
-		Next::template evaluate<OncePerType<Rbox<Fold, NrBox<Value>>, Callback>>(std::forward<Params>(params)...);
-	}
-};
-
-template <typename Cont, typename Fold, typename Callback>
-struct OncePerPair
-{
-	template <typename Value, typename Inner, typename Next>
-	inline static void inspect()
-	{
-		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
-			Cont::template evaluate<OncePerType<Dummy, PairCallback<Value>>>();
-
-		Inner::template evaluate<OncePerPair<Cont, Rbox<Fold, NrBox<Value>, Next>, Callback>>();
-		Next::template evaluate<OncePerPair<Cont, Rbox<Fold, NrBox<Value>>, Callback>>();
+		ForEach<std::tuple_size<Tuple>::value - 1, CB>::fn(std::forward<Params>(params)...);
 	}
 
-	template <typename Value, typename Inner, typename Next, typename A>
-	inline static void inspect(A* a)
+	constexpr static bool constFn()
 	{
-		CZSS_CONST_IF (!inspect::contains<Fold, Value>())
-			Cont::template evaluate<OncePerType<Dummy, PairCallback<Value>>>(a);
+		return ForEach<std::tuple_size<Tuple>::value - 1, CB2<bool>>::constFn();
+	}
 
-		Inner::template evaluate<OncePerPair<Cont, Rbox<Fold, NrBox<Value>, Next>, Callback>>(a);
-		Next::template evaluate<OncePerPair<Cont, Rbox<Fold, NrBox<Value>>, Callback>>(a);
+	template <typename ...Params>
+	constexpr static bool constFn(Params&&... params)
+	{
+		return ForEach<std::tuple_size<Tuple>::value - 1, CB2<bool>>::constFn(std::forward<Params>(params)...);
+	}
+
+	constexpr static size_t constSum()
+	{
+		return ForEach<std::tuple_size<Tuple>::value - 1, CB2<size_t>>::constFn();
 	}
 
 private:
-	template <typename A>
-	struct PairCallback
+	struct CB
 	{
-		template <typename B>
+		template <size_t I>
 		inline static void callback()
 		{
-			Callback::template callback<A, B>();
+			Callback::template callback<typename std::tuple_element<I, Tuple>::type>();
 		}
 
-		template <typename B, typename P1>
-		inline static void callback(P1* p1)
+		template <size_t I, typename ...Params>
+		inline static void callback(Params&&... params)
 		{
-			Callback::template callback<A, B>(p1);
+			Callback::template callback<typename std::tuple_element<I, Tuple>::type>(std::forward<Params>(params)...);
+		}
+	};
+
+	template <typename Ret>
+	struct CB2
+	{
+		template <size_t I>
+		constexpr static Ret callback()
+		{
+			return Callback::template callback<typename std::tuple_element<I, Tuple>::type>();
+		}
+
+		template <size_t I, typename ...Params>
+		constexpr static Ret callback(Params&&... params)
+		{
+			return Callback::template callback<typename std::tuple_element<I, Tuple>::type>(std::forward<Params>(params)...);
 		}
 	};
 };
 
-template<typename FilterPolicy, typename RecursePolicy, typename Callback, typename Return, typename MergePolicy>
-struct FilterConst
+template <typename Tuple, int Num>
+struct SwitchImpl
 {
-	template <typename Value, typename Inner, typename Next>
-	static constexpr Return inspect()
-	{
-		return FilterPolicy::template test<Value>() && RecursePolicy::template test<Value>()
-			// Merge everything
-			? MergePolicy::template merge(Callback::template callback<Return, Value>(), MergePolicy::template merge(
-				Inner::template evaluate<FilterConst<FilterPolicy, RecursePolicy, Callback, Return, MergePolicy>>(),
-				Next::template evaluate<FilterConst<FilterPolicy, RecursePolicy, Callback, Return, MergePolicy>>()))
-			: FilterPolicy::template test<Value>() || RecursePolicy::template test<Value>()
-				// Merge either recursion or value
-				? MergePolicy::template merge(Next::template evaluate<FilterConst<FilterPolicy, RecursePolicy, Callback, Return, MergePolicy>>(), 
-					FilterPolicy::template test<Value>()
-						? Callback::template callback<Return, Value>()
-						: Inner::template evaluate<FilterConst<FilterPolicy, RecursePolicy, Callback, Return, MergePolicy>>())
-				// Merge nothing
-				: Next::template evaluate<FilterConst<FilterPolicy, RecursePolicy, Callback, Return, MergePolicy>>();
-	}
-};
-
-template<typename FilterPolicy, typename Recurse, typename Callback>
-struct Filter
-{
-	template <typename Value, typename Inner, typename Next>
-	inline static void inspect()
-	{
-		CZSS_CONST_IF (FilterPolicy::template test<Value>())
-			Callback::template callback<Value>();
-
-		CZSS_CONST_IF(Recurse::template test<Value>())
-			Inner::template evaluate<Filter<FilterPolicy, Recurse, Callback>>();
-
-		Next::template evaluate<Filter<FilterPolicy, Recurse, Callback>>();
-	}
-
-	template <typename Value, typename Inner, typename Next, typename A>
-	inline static void inspect(A* a)
-	{
-		CZSS_CONST_IF (FilterPolicy::template test<Value>())
-			Callback::template callback<Value>(a);
-
-		CZSS_CONST_IF(Recurse::template test<Value>())
-			Inner::template evaluate<Filter<FilterPolicy, Recurse, Callback>>(a);
-
-		Next::template evaluate<Filter<FilterPolicy, Recurse, Callback>>();
-	}
-};
-
-struct TestIfRbox
-{
-	template <typename V>
-	inline static constexpr bool test()
-	{
-		return std::is_same<V, typename V::Cont>();
-	}
-};
-
-struct TestAlwaysTrue
-{
-	template <typename V>
-	inline static constexpr bool test()
-	{
-		return true;
-	}
-};
-
-template <typename Rbox, typename Callback>
-void oncePerPair()
-{
-	Rbox::template evaluate<OncePerPair<Rbox, Dummy, Callback>>();
-}
-
-template <typename Rbox, typename Callback, typename A>
-void oncePerPair(A* a)
-{
-	Rbox::template evaluate<OncePerPair<Rbox, Dummy, Callback>>(a);
-}
-
-
-template <typename Rbox, int Num>
-struct Switch
-{
-	template <typename Return, typename Inspector, typename A>
-	constexpr static Return evaluate(int i, A a)
+	template <typename Return, typename Inspector, typename ...Params>
+	constexpr static Return fn(int i, Params&&... params)
 	{
 		return i == Num - 1
-			? Rbox::template evaluate<Return, Inspector>(a)
-			: Switch<Rbox, Num - 1>::template evaluate<Return, Inspector>(i, a);
+			? Inspector::template callback<typename std::tuple_element<Num - 1, Tuple>::type>(std::forward<Params>(params)...)
+			: SwitchImpl<Tuple, Num - 1>::template fn<Return, Inspector>(i, std::forward<Params>(params)...);
 	}
 
 	template <typename Inspector, typename ...Params>
-	inline static void evaluate(int i, Params&&... params)
+	inline static void fn(int i, Params&&... params)
 	{
 		if (i == Num - 1)
-			Rbox::template evaluate<Inspector>(std::forward<Params>(params)...);
+			Inspector::template callback<typename std::tuple_element<Num - 1, Tuple>::type>(std::forward<Params>(params)...);
 		else
-			Switch<Rbox, Num - 1>::template evaluate<Inspector>(i, std::forward<Params>(params)...);
+			SwitchImpl<Tuple, Num - 1>::template fn<Inspector>(i, std::forward<Params>(params)...);
 	}
 };
 
-template <typename Rbox>
-struct Switch <Rbox, 0>
+template <typename Tuple>
+struct SwitchImpl <Tuple, 0>
 {
-	template <typename Return,  typename Inspector, typename A>
-	constexpr static Return evaluate(int i, A a) { return Return(); }
+	template <typename Return,  typename Inspector, typename ...Params>
+	constexpr static Return fn(int i, Params&&... params) { return Return(); }
 
 	template <typename Inspector, typename ...Params>
-	inline static void evaluate(int i, Params&&... params) { }
+	inline static void fn(int i, Params&&... params) { }
 };
 
+template <typename Tuple>
+struct Switch
+{
+	template <typename Return, typename Inspector, typename ...Params>
+	constexpr static Return fn(int i, Params&&... params)
+	{
+		return SwitchImpl<Tuple, std::tuple_size<Tuple>::value>::template fn<Return, Inspector>(i, std::forward<Params>(params)...);
+	}
+
+	template <typename Inspector, typename ...Params>
+	inline static void fn(int i, Params&&... params)
+	{
+		SwitchImpl<Tuple, std::tuple_size<Tuple>::value>::template fn<Inspector>(i, std::forward<Params>(params)...);
+	}
+};
+
+template <typename Tuple, typename Callback>
+struct OncePerTypeCallback
+{
+	template <typename Value1>
+	struct CB
+	{
+		template <typename Value2, typename ...Params>
+		static void callback(Params&&... params)
+		{
+			Callback::template callback<Value1, Value2>(std::forward<Params>(params)...);
+		}
+	};
+
+	template <typename Value, typename ...Params>
+	static void callback(Params&&... params)
+	{
+		for (int i = 0; i < std::tuple_size<Tuple>::value; i++)
+			Switch<Tuple>::template fn<CB<Value>>(i, std::forward<Params>(params)...);
+	}
+};
+
+template <typename Tuple, typename Callback, typename ...Params>
+void oncePerPair(Params&&... params)
+{
+	for (int i = 0; i < std::tuple_size<Tuple>::value; i++)
+		Switch<Tuple>::template fn<OncePerTypeCallback<Tuple, Callback>>(i, std::forward<Params>(params)...);
+}
 
 // #####################
 // Tags & Validation
@@ -733,18 +428,154 @@ constexpr bool isDummy()
 	return std::is_same<T, Dummy>();
 }
 
-template <typename B, typename T>
-struct BaseObjectFinder
+template <typename F, typename A, typename ...R>
+struct Filter2Impl;
+
+template <typename F, typename ...A, typename V, typename ...R>
+struct Filter2Impl<F, std::tuple<A...>, V, R...>
 {
-	template <typename Value, typename Inner, typename Next>
-	constexpr static bool inspect()
-	{
-		return (isBaseType<B, Value>()
-				? T::template callback<Value>()
-				: Inner::template evaluate<bool, BaseObjectFinder<B, T>>())
-			|| Next::template evaluate<bool, BaseObjectFinder<B, T>>();
-	}
+	using type = typename std::conditional<
+		F::template test<V>()
+		, Filter2Impl<F, std::tuple<V, A...>, R...>
+		, Filter2Impl<F, std::tuple<A...>, R...>
+	>::type::type;
 };
+
+template <typename F, typename ...A, typename V>
+struct Filter2Impl<F, std::tuple<A...>, V>
+{
+	using type = typename std::conditional<
+		F::template test<V>()
+		, unique_tuple::unique_tuple<V, A...>
+		, unique_tuple::unique_tuple<A...>
+	>::type;
+};
+
+template <typename T, typename F>
+struct Filter2Impl2;
+
+template <typename ...A, typename F>
+struct Filter2Impl2<std::tuple<A...>, F>
+{
+	using type = typename Filter2Impl<F, std::tuple<>, A...>::type;
+};
+
+template<typename Tuple, typename F>
+using Filter2 = typename Filter2Impl2<Tuple, F>::type;
+
+
+template <typename Cat, typename A, typename ...R>
+struct FilterImpl;
+
+template <typename Cat, typename ...A, typename V, typename ...R>
+struct FilterImpl<Cat, std::tuple<A...>, V, R...>
+{
+	using type = typename std::conditional<
+		std::is_base_of<Cat, V>() ? true : false
+		, FilterImpl<Cat, std::tuple<V, A...>, R...>
+		, FilterImpl<Cat, std::tuple<A...>, R...>
+	>::type::type;
+};
+
+template <typename Cat, typename ...A, typename V>
+struct FilterImpl<Cat, std::tuple<A...>, V>
+{
+	using type = typename std::conditional<
+		std::is_base_of<Cat, V>() ? true : false
+		, unique_tuple::unique_tuple<V, A...>
+		, unique_tuple::unique_tuple<A...>
+	>::type;
+};
+
+template <typename T, typename Cat>
+struct FilterImpl2;
+
+template <typename ...A, typename Cat>
+struct FilterImpl2<std::tuple<A...>, Cat>
+{
+	using type = typename FilterImpl<Cat, std::tuple<>, A...>::type;
+};
+
+template<typename Tuple, typename Cat>
+using Filter = typename FilterImpl2<Tuple, Cat>::type;
+
+template <typename Tuple, typename T, typename Cat>
+constexpr uint64_t indexOf()
+{
+	return inspect::contains<Filter<Tuple, Cat>, T>() ? tuple_type_index<T, Filter<Tuple, Cat>>::value : -1;
+}
+
+template <typename T>
+struct FlattenImpl2;
+
+template <typename Tuple>
+using Flatten = typename FlattenImpl2<Tuple>::type;
+
+template <typename A, typename ...R>
+struct FlattenImpl;
+
+template <typename ...A, typename V, typename ...R>
+struct FlattenImpl<std::tuple<A...>, V, R...>
+{
+	using type = typename FlattenImpl<tuple_union<std::tuple<A...>, std::tuple<V>, Flatten<typename V::Cont>>, R...>::type;
+};
+
+template <typename ...A, typename V>
+struct FlattenImpl<std::tuple<A...>, V>
+{
+	using type = tuple_union<std::tuple<A...>, std::tuple<V>, Flatten<typename V::Cont>>;
+};
+
+template <typename ...A>
+struct FlattenImpl2<std::tuple<A...>>
+{
+	using type = typename FlattenImpl<std::tuple<>, A...>::type;
+};
+
+template <>
+struct FlattenImpl2<std::tuple<>>
+{
+	using type = std::tuple<>;
+};
+
+template <typename A, typename ...R>
+struct ExpandImpl;
+
+template <typename ...A, typename V, typename ...R>
+struct ExpandImpl<std::tuple<A...>, V, R...>
+{
+	using type = typename ExpandImpl<tuple_union<typename V::Cont, std::tuple<A...>>, R...>::type;
+};
+
+template <typename ...A, typename V>
+struct ExpandImpl<std::tuple<A...>, V>
+{
+	using type = tuple_union<typename V::Cont, std::tuple<A...>>;
+};
+
+template <typename A>
+struct ExpandImpl2;
+
+template <typename ...A>
+struct ExpandImpl2<std::tuple<A...>>
+{
+	using type = typename ExpandImpl<std::tuple<>, A...>::type;
+};
+
+template <>
+struct ExpandImpl2<std::tuple<>>
+{
+	using type = std::tuple<>;
+};
+
+template <typename Tuple>
+using Expand = typename ExpandImpl2<Tuple>::type;
+
+template <typename Tuple, typename Cat>
+constexpr size_t numUniques()
+{
+	return std::tuple_size<Filter<Tuple, Cat>>::value;
+}
 
 // #####################
 // Data Rbox
@@ -927,7 +758,7 @@ struct TemplateStubs
 template <typename C>
 struct Component : Dummy, ComponentBase, TemplateStubs
 {
-	using Cont = Dummy;
+	using Cont = std::tuple<>;
 
 	friend C;
 private:
@@ -937,9 +768,10 @@ private:
 template<typename R>
 struct Resource : Dummy, ResourceBase, TemplateStubs
 {
-	using Cont = Dummy;
+	using Cont = std::tuple<>;
 
 	friend R;
+private:
 	Resource() {};
 };
 
@@ -947,97 +779,10 @@ struct Resource : Dummy, ResourceBase, TemplateStubs
 // Component collection types
 // #####################
 
-template <typename Value, bool Decision, typename Inherit>
-struct ConditionalValue : Inherit { };
-
-template <typename Value, typename Inherit>
-struct ConditionalValue <Value, true, Inherit> : Inherit
-{
-	template <typename T>
-	const T* viewComponent() const
-	{
-		CZSS_CONST_IF (std::is_same<T, Value>())
-			return reinterpret_cast<const T*>(&value);
-
-		return Inherit::template viewComponent<T>();
-	}
-
-	template<typename T>
-	T* getComponent()
-	{
-		CZSS_CONST_IF (std::is_same<T, Value>())
-			return reinterpret_cast<T*>(&value);
-
-		return Inherit::template getComponent<T>();
-	}
-
-private:
-	Value value;
-};
-
-template <typename Value>
-struct ConditionalValue <Value, true, Dummy>
-{
-	template <typename T>
-	const T* viewComponent() const
-	{
-		CZSS_CONST_IF (std::is_same<T, Value>())
-			return reinterpret_cast<const T*>(&value);
-
-		return nullptr;
-	}
-
-	template<typename T>
-	T* getComponent()
-	{
-		CZSS_CONST_IF (std::is_same<T, Value>())
-			return reinterpret_cast<T*>(&value);
-
-		return nullptr;
-	}
-
-private:
-	Value value;
-};
-
-template <typename Value>
-struct ConditionalValue <Value, false, Dummy>
-{
-	template <typename T>
-	const T* viewComponent() const
-	{
-		return nullptr;
-	}
-
-	template<typename T>
-	T* getComponent()
-	{
-		return nullptr;
-	}
-};
-
-template <typename Base, typename Value, typename ...Rest>
-struct ComponentInheritor
-	: ConditionalValue <
-		Value,
-		!inspect::contains<Base, Value>(),
-		ComponentInheritor<Rbox<Base, NrBox<Value>>, Rest...>
-	>
-{ };
-
-template <typename Base, typename Value>
-struct ComponentInheritor<Base, Value>
-	: ConditionalValue <
-		Value,
-		!inspect::contains<Base, Value>(),
-		Dummy
-	>
-{ };
-
 template <typename ...Components>
-struct Iterator : Rbox<Components...>, IteratorBase, TemplateStubs
+struct Iterator : IteratorBase, TemplateStubs
 {
-	using Cont = Rbox<Components...>;
+	using Cont = unique_tuple::unique_tuple<Components...>;
 
 	void setGuid(Guid guid) { this->id = guid; }
 	Guid getGuid() const { return id; }
@@ -1049,23 +794,47 @@ private:
 struct VirtualArchitecture;
 
 template <typename ...Components>
-struct Entity : ComponentInheritor<Dummy, Components...>, Rbox<Components...>, EntityBase
+struct Entity : EntityBase
 {
-	using Cont = Rbox<Components...>;
+	using Cont = unique_tuple::unique_tuple<Components...>;
+
+	template <typename T>
+	const T* viewComponent() const
+	{
+		CZSS_CONST_IF(tuple_contains<Cont, T>::value)
+		{
+			return &std::get<min(tuple_type_index<T, Cont>::value, std::tuple_size<Cont>::value - 1)>(storage);
+		}
+
+		return nullptr;
+	}
+
+	template<typename T>
+	T* getComponent()
+	{
+		CZSS_CONST_IF(tuple_contains<Cont, T>::value)
+		{
+			return &std::get<min(tuple_type_index<T, Cont>::value, std::tuple_size<Cont>::value - 1)>(storage);
+		}
+
+		return nullptr;
+	}
 
 	Guid getGuid() const { return {id}; }
 private:
 	void setGuid(Guid guid) { this->id = guid.get(); }
 	friend VirtualArchitecture;
 	uint64_t id;
+
+	Cont storage;
 };
 
 template <typename Iterator, typename Entity>
 constexpr static bool isIteratorCompatibleWithEntity()
 {
-	return isIterator<Iterator>() && isEntity<Entity>()
-		? inspect::containsAllIn<typename Entity::Cont, typename Iterator::Cont>()
-		: false;
+	return isIterator<Iterator>()
+		&& isEntity<Entity>()
+		&& inspect::containsAllIn<Flatten<typename Entity::Cont>, Flatten<typename Iterator::Cont>>();
 }
 
 // #####################
@@ -1075,132 +844,80 @@ constexpr static bool isIteratorCompatibleWithEntity()
 template <typename ...T>
 struct Reader : TemplateStubs, ReaderBase
 {
-	using Cont = Rbox<T...>;
+	using Cont = unique_tuple::unique_tuple<T...>;
 };
 
 template <typename ...T>
 struct Writer : TemplateStubs, WriterBase
 {
-	using Cont = Rbox<T...>;
+	using Cont = unique_tuple::unique_tuple<T...>;
 };
 
 template <typename ...Entities>
 struct Orchestrator : TemplateStubs, OrchestratorBase
 {
-	using Cont = Rbox<Entities...>;
-};
-
-template <typename Target>
-struct ValueExists
-{
-	template <typename Value>
-	constexpr static bool callback()
-	{
-		return inspect::contains<typename Value::Cont, Target>();
-	}
+	using Cont = unique_tuple::unique_tuple<Entities...>;
 };
 
 template <typename Sys, typename T>
 constexpr bool canRead()
 {
-	return Sys::Cont::template evaluate<bool, BaseObjectFinder<ReaderBase, ValueExists<T>>>()
-		|| Sys::Cont::template evaluate<bool, BaseObjectFinder<WriterBase, ValueExists<T>>>()
-		|| Sys::Cont::template evaluate<bool, BaseObjectFinder<OrchestratorBase, ValueExists<T>>>();
+	return inspect::contains<Flatten<Filter<typename Sys::Cont, ReaderBase>>, T>()
+		|| inspect::contains<Flatten<Filter<typename Sys::Cont, WriterBase>>, T>()
+		|| inspect::contains<Flatten<Filter<typename Sys::Cont, OrchestratorBase>>, T>();
 }
 
 template <typename Sys, typename T>
 constexpr bool canWrite()
 {
-	return Sys::Cont::template evaluate<bool, BaseObjectFinder<WriterBase, ValueExists<T>>>()
-		|| Sys::Cont::template evaluate<bool, BaseObjectFinder<OrchestratorBase, ValueExists<T>>>();
+	return inspect::contains<Flatten<Filter<typename Sys::Cont, WriterBase>>, T>()
+		|| inspect::contains<Flatten<Filter<typename Sys::Cont, OrchestratorBase>>, T>();
 }
 
 template <typename Sys, typename T>
 constexpr bool canOrchestrate()
 {
-	return Sys::Cont::template evaluate<bool, BaseObjectFinder<OrchestratorBase, ValueExists<T>>>();
+	return inspect::contains<Flatten<Filter<typename Sys::Cont, OrchestratorBase>>, T>();
 }
-
 
 // #####################
 // Graphs
 // #####################
 
 template <typename ...N>
-struct Dependency : NrBox<N...>, DependencyBase, TemplateStubs
+struct Dependency : DependencyBase, TemplateStubs
 {
-	using Cont = NrBox<N...>;
+	using Cont = unique_tuple::unique_tuple<N...>;
 };
 
 template <>
-struct Dependency<> : Dummy, DependencyBase, TemplateStubs
+struct Dependency<> : DependencyBase, TemplateStubs
 {
-	using Cont = Dummy;
-};
-
-template <typename Left, typename Right>
-constexpr static bool dependsOn();
-
-template <typename Target>
-struct DirectDependencyCheck
-{
-	template <typename Value, typename Inner, typename Next>
-	constexpr static bool inspect()
-	{
-		return std::is_same<Target, Value>() || Next::template evaluate<bool, DirectDependencyCheck<Target>>();
-	}
-
-	// Base object finder calls callback with Value = Dependency<A, B, C...>
-	// Value::Cont is NrBox of systems
-	template <typename Value>
-	constexpr static bool callback()
-	{
-		return Value::Cont::template evaluate<bool, DirectDependencyCheck<Target>>();
-	}
-};
-
-template <typename Target>
-struct TransitiveDependencyCheck
-{
-	template <typename Value, typename Inner, typename Next>
-	constexpr static bool inspect()
-	{
-		return dependsOn<Value, Target>() || Next::template evaluate<bool, TransitiveDependencyCheck<Target>>();
-	}
-
-	// Base object finder calls callback with Value = Dependency<A, B, C...>
-	// Value::Cont is NrBox of systems
-	template <typename Value>
-	constexpr static bool callback()
-	{
-		return Value::Cont::template evaluate<bool, TransitiveDependencyCheck<Target>>();
-	}
+	using Cont = std::tuple<>;
 };
 
 template <typename Left, typename Right>
 constexpr static bool directlyDependsOn()
 {
-	return isSystem<Left>() && isSystem<Right>()
-		? Left::Cont::template evaluate<bool, BaseObjectFinder<DependencyBase, DirectDependencyCheck<Right>>>()
-		: false;
+	return isSystem<Left>() && isSystem<Right>() && inspect::contains<Expand<Filter<typename Left::Cont, DependencyBase>>, Right>();
 }
 
 template <typename Left, typename Right>
 constexpr static bool dependsOn()
 {
-	return directlyDependsOn<Left, Right> () || Left::Cont::template evaluate<bool, BaseObjectFinder<DependencyBase, TransitiveDependencyCheck<Right>>>();
+	return isSystem<Left>() && isSystem<Right>() && inspect::contains<Flatten<typename Left::Cont>, Right>();
 }
 
 template <typename Left, typename Right>
 constexpr static bool redundantDependency()
 {
-	return directlyDependsOn<Left, Right> () && Left::Cont::template evaluate<bool, BaseObjectFinder<DependencyBase, TransitiveDependencyCheck<Right>>>();
+	return directlyDependsOn<Left, Right> () && inspect::contains<Flatten<Expand<Expand<Filter<typename Left::Cont, DependencyBase>>>>, Right>();
 }
 
 template <typename Left, typename Right>
 constexpr static bool transitivelyDependsOn()
 {
-	return dependsOn<Left, Right>() && !directlyDependsOn<Left, Right>() && !redundantDependency<Left, Right>();
+	return isSystem<Left>() && isSystem<Right>() && dependsOn<Left, Right>() && !directlyDependsOn<Left, Right>() && !redundantDependency<Left, Right>();
 }
 
 // #####################
@@ -1210,13 +927,15 @@ constexpr static bool transitivelyDependsOn()
 template<typename Arch, typename Sys>
 struct Accessor;
 
-template <typename Dependencies, typename ...Permissions>
-struct System : Rbox<Permissions...>, SystemBase, TemplateStubs
+template <typename ...Permissions>
+struct System : SystemBase, TemplateStubs
 {
-	using This = System<Dependencies, Permissions...>;
-	using Cont = Rbox<Dependencies, Permissions...>;
-	using Dep = Dependencies;
+	using Cont = unique_tuple::unique_tuple<Permissions...>;
 };
+
+template <typename Sys>
+using SystemAccesses = Flatten<tuple_difference<typename Sys::Cont, Filter<typename Sys::Cont, DependencyBase>>>;
+// using SystemAccesses = Flatten<tuple_union<Filter<typename Sys::Cont, ReaderBase>, Filter<typename Sys::Cont, WriterBase>, Filter<typename Sys::Cont, OrchestratorBase>>>;
 
 template <typename A, typename B>
 constexpr bool exclusiveWith();
@@ -1281,45 +1000,35 @@ struct Runner
 	template <typename Sys>
 	struct SystemBlocker
 	{
-		template <typename Value, typename Inner, typename Next>
-		inline static void inspect(czsf::Barrier* barriers)
+		template <typename Value>
+		inline static void callback(czsf::Barrier* barriers)
 		{
 			CZSS_CONST_IF (directlyDependsOn<Sys, Value>() && !transitivelyDependsOn<Sys, Value>())
 			{
-				barriers[inspect::indexOf<Subset, Value, SystemBase>()].wait();
+				barriers[indexOf<Subset, Value, SystemBase>()].wait();
 			}
-
-			Next::template evaluate<SystemBlocker<Sys>>(barriers);
 		}
 	};
 
 	template <typename Sys>
 	struct DependeeBlocker
 	{
-		template <typename Value, typename Inner, typename Next>
-		inline static void inspect(czsf::Barrier* barriers)
+		template <typename Value>
+		inline static void callback(czsf::Barrier* barriers)
 		{
 			CZSS_CONST_IF (directlyDependsOn<Value, Sys>() && !transitivelyDependsOn<Value, Sys>())
 			{
-				barriers[inspect::indexOf<Subset, Value, SystemBase>()].wait();
+				barriers[indexOf<Subset, Value, SystemBase>()].wait();
 			}
-
-			Next::template evaluate<DependeeBlocker<Sys>>(barriers);
 		}
 	};
 
 	struct SystemRunner
 	{
-		template <typename Value, typename Inner, typename Next>
-		inline static void inspect(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
+		template <typename Value>
+		inline static void callback(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
 		{
-			if (inspect::indexOf<Subset, Value, SystemBase>() != *id)
-			{
-				Next::template evaluate<SystemRunner>(id, barriers, arch);
-				return;
-			}
-
-			Subset::template evaluate<SystemBlocker<Value>>(barriers);
+			OncePerType<Subset, SystemBlocker<Value>>::fn(barriers);
 
 #ifdef CZSS_TIMING_BEGIN
 			CZSS_TIMING_BEGIN<Arch, Value>(arch);
@@ -1336,16 +1045,10 @@ struct Runner
 
 	struct SystemInitialize
 	{
-		template <typename Value, typename Inner, typename Next>
-		inline static void inspect(const uint64_t* id, czsf::Barrier* barriers, Arch* arch)
+		template <typename Value>
+		inline static void callback(const uint64_t* id, czsf::Barrier* barriers, Arch* arch)
 		{
-			if (inspect::indexOf<Subset, Value, SystemBase>() != *id)
-			{
-				Next::template evaluate<SystemInitialize>(id, barriers, arch);
-				return;
-			}
-
-			Subset::template evaluate<SystemBlocker<Value>>(barriers);
+			OncePerType<Subset, SystemBlocker<Value>>::fn(barriers);
 			Value::initialize(Accessor<Arch, Value>(arch));
 			barriers[*id].signal();
 		}
@@ -1353,16 +1056,10 @@ struct Runner
 
 	struct SystemShutdown
 	{
-		template <typename Value, typename Inner, typename Next>
-		inline static void inspect(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
+		template <typename Value>
+		inline static void callback(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
 		{
-			if (inspect::indexOf<Subset, Value, SystemBase>() != *id)
-			{
-				Next::template evaluate<SystemShutdown>(id, barriers, arch);
-				return;
-			}
-
-			Subset::template evaluate<DependeeBlocker<Value>>(barriers);
+			OncePerType<Subset, DependeeBlocker<Value>>::fn(barriers);
 			Value::shutdown(Accessor<Arch, Value>(arch));
 			barriers[*id].signal();
 		}
@@ -1370,23 +1067,23 @@ struct Runner
 
 	static void systemCallback(RunTaskData<Arch>* data)
 	{
-		Switch<Subset, inspect::numUniques<Subset, SystemBase>()>::template evaluate<SystemRunner>(data->id, &data->id, data->barriers, data->arch);
+		Switch<Subset>::template fn<SystemRunner>(data->id, &data->id, data->barriers, data->arch);
 	}
 
 	static void initializeSystemCallback(RunTaskData<Arch>* data)
 	{
-		Switch<Subset, inspect::numUniques<Subset, SystemBase>()>::template evaluate<SystemInitialize>(data->id, &data->id, data->barriers, data->arch);
+		Switch<Subset>::template fn<SystemInitialize>(data->id, &data->id, data->barriers, data->arch);
 	}
 
 	static void shutdownSystemCallback(RunTaskData<Arch>* data)
-	{
-		Switch<Subset, inspect::numUniques<Subset, SystemBase>()>::template evaluate<SystemShutdown>(data->id, &data->id, data->barriers, data->arch);
+	{ 
+		Switch<Subset>::template fn<SystemShutdown>(data->id, &data->id, data->barriers, data->arch);
 	}
 
 	template <typename T>
 	static void runForSystems(Arch* arch, void (*fn)(RunTaskData<Arch>*), T* fls)
 	{
-		static const uint64_t sysCount = inspect::numUniques<Subset, SystemBase>();
+		static const uint64_t sysCount = numUniques<Subset, SystemBase>();
 		czsf::Barrier barriers[sysCount];
 		RunTaskData<Arch> taskData[sysCount];
 
@@ -1410,7 +1107,7 @@ struct Runner
 template <typename Desc, typename ...Systems>
 struct Architecture : VirtualArchitecture
 {
-	using Cont = Rbox<Systems...>;
+	using Cont = Flatten<Rbox<Systems...>>;
 	using This = Architecture<Desc, Systems...>;
 
 	Architecture()
@@ -1418,25 +1115,23 @@ struct Architecture : VirtualArchitecture
 		static_assert(!isSystem<Desc>(), "The first template parameter for Architecture must be the inheriting object");
 		// TODO assert all components are used in at least one entity
 		// TODO assert every entity can be instantiated
-		oncePerPair<Cont, SystemDependencyCheck>();
-		static_assert(!Cont::template evaluate<bool, SystemDependencyIterator>(), "Some System A depends on some System B which is not included in Architecture.");
-
-		Cont::template evaluate<OncePerType<Dummy, ConstructorCallback>>(this);
+		oncePerPair<Filter<Cont, SystemBase>, SystemDependencyCheck>(0);
+		OncePerType<Cont, ConstructorCallback>::fn(this);
 	}
 
-	static constexpr uint64_t numSystems() { return inspect::numUniques<Cont, SystemBase>(); }
-	static constexpr uint64_t numEntities() { return inspect::numUniques<Cont, EntityBase>(); }
+	static constexpr uint64_t numSystems() { return numUniques<Cont, SystemBase>(); }
+	static constexpr uint64_t numEntities() { return numUniques<Cont, EntityBase>(); }
 
 	template <typename System>
 	static constexpr uint64_t systemIndex()
 	{
-		return isSystem<System>() ? inspect::indexOf<Cont, System, SystemBase>() : -1;
+		return isSystem<System>() ? indexOf<Cont, System, SystemBase>() : -1;
 	}
 
 	template<typename Entity>
 	static constexpr uint64_t entityIndex()
 	{
-		return isEntity<Entity>() ? inspect::indexOf<Cont, Entity, EntityBase>() : -1;
+		return isEntity<Entity>() ? indexOf<Cont, Entity, EntityBase>() : -1;
 	}
 
 	template <typename Resource>
@@ -1444,7 +1139,7 @@ struct Architecture : VirtualArchitecture
 	{
 		static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
 		static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
-		static const uint64_t index = inspect::indexOf<Rbox<Systems...>, Resource, ResourceBase>();
+		static const uint64_t index = indexOf<Cont, Resource, ResourceBase>();
 		resources[index] = res;
 	}
 
@@ -1453,7 +1148,7 @@ struct Architecture : VirtualArchitecture
 	{
 		// static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
 		static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
-		static const uint64_t index = inspect::indexOf<Rbox<Systems...>, Resource, ResourceBase>();
+		static const uint64_t index = indexOf<Cont, Resource, ResourceBase>();
 		return reinterpret_cast<Resource*>(resources[index]);
 	}
 
@@ -1461,8 +1156,7 @@ struct Architecture : VirtualArchitecture
 	EntityStore<Entity>* getEntities()
 	{
 		// assert(isEntity<Entity>());
-		static const uint64_t index = inspect::indexOf<Cont, Entity, EntityBase>();
-		return reinterpret_cast<EntityStore<Entity>*>(&entities[0]) + index;
+		return reinterpret_cast<EntityStore<Entity>*>(&entities[0]) + entityIndex<Entity>();
 	}
 
 	template <typename Category>
@@ -1470,7 +1164,7 @@ struct Architecture : VirtualArchitecture
 	{
 		static const char* d = "Unknown";
 		const char** result = &d;
-		Cont::template evaluate<OncePerType<Dummy, NameFinder<Category>>>(id, result);
+		OncePerType<Cont, NameFinder<Category>>::fn(id, result);
 		return *result;
 	}
 
@@ -1478,14 +1172,14 @@ struct Architecture : VirtualArchitecture
 	{
 		void* ret = nullptr;
 		uint64_t tk = typeKey(guid);
-		Switch<Cont, numEntities()>::template evaluate<OncePerType<Dummy, GetEntityVoidPtr>>(tk, this, tk, guid, &ret);
+		Switch<Filter<Cont, EntityBase>>::template fn<GetEntityVoidPtr>(tk, this, tk, guid, &ret);
 		return ret;
 	}
 
 	template <typename Entity>
 	Entity* getEntity(Guid guid)
 	{
-		return inspect::indexOf<Cont, Entity, EntityBase>() == typeKey(guid)
+		return indexOf<Cont, Entity, EntityBase>() == typeKey(guid)
 			? getEntity<Entity>(guidId(guid))
 			: nullptr;
 	}
@@ -1530,7 +1224,7 @@ struct Architecture : VirtualArchitecture
 	static Guid getEntityGuid(Entity* ent)
 	{
 		return Guid(VirtualArchitecture::getEntityId(ent)
-			+ (inspect::indexOf<Cont, Entity, EntityBase>()) << (63 - typeKeyLength()));
+			+ (indexOf<Cont, Entity, EntityBase>()) << (63 - typeKeyLength()));
 	}
 
 	template <typename Entity>
@@ -1550,7 +1244,7 @@ struct Architecture : VirtualArchitecture
 	{
 		uint64_t tk = typeKey(guid);
 		uint64_t id = guidId(guid);
-		Switch<Cont, numEntities()>::template evaluate<OncePerType<Dummy, EntityDestructorCallback>>(tk, this, &tk, &id);
+		Switch<Filter<Cont, EntityBase>>::template fn<EntityDestructorCallback>(tk, this, &tk, &id);
 	}
 
 	template <typename Entity>
@@ -1562,15 +1256,15 @@ struct Architecture : VirtualArchitecture
 	template <typename ...Entities>
 	void destroyEntities()
 	{
-		NrBox<Entities...>::template evaluate<DestroyEntitiesCallback>(this);
+		OncePerType<unique_tuple::unique_tuple<Entities...>, DestroyEntitiesCallback>(this);
 	}
 
 	template <typename Component, typename System>
 	bool componentReallocated()
 	{
-		static const uint64_t index = inspect::indexOf<Cont, Component, ComponentBase>()
-			* inspect::numUniques<Cont, SystemBase>()
-			+ inspect::indexOf<Cont, System, SystemBase>();
+		static const uint64_t index = indexOf<Cont, Component, ComponentBase>()
+			* numUniques<Cont, SystemBase>()
+			+ systemIndex<System>();
 		bool ret = reallocated[index];
 		reallocated[index] = false;
 		return ret;
@@ -1579,34 +1273,34 @@ struct Architecture : VirtualArchitecture
 	template <typename T>
 	void run(T* fls)
 	{
-		Runner<Desc, Cont>::template runForSystems(reinterpret_cast<Desc*>(this), Runner<Desc, Cont>::systemCallback, fls);
+		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::systemCallback, fls);
 	}
 
 	template <typename T>
 	void initialize(T* fls)
 	{
-		Runner<Desc, Cont>::template runForSystems(reinterpret_cast<Desc*>(this), Runner<Desc, Cont>::initializeSystemCallback, fls);
+		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::initializeSystemCallback, fls);
 	}
 
 	template <typename T>
 	void shutdown(T* fls)
 	{
-		Runner<Desc, Cont>::template runForSystems(reinterpret_cast<Desc*>(this), Runner<Desc, Cont>::shutdownSystemCallback, fls);
+		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::shutdownSystemCallback, fls);
 	}
 
 	void run()
 	{
-		Runner<Desc, Cont>::template runForSystems<Dummy>(reinterpret_cast<Desc*>(this), Runner<Desc, Cont>::systemCallback, nullptr);
+		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems<Dummy>(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::systemCallback, nullptr);
 	}
 
 	void initialize()
 	{
-		Runner<Desc, Cont>::template runForSystems<Dummy>(reinterpret_cast<Desc*>(this), Runner<Desc, Cont>::initializeSystemCallback, nullptr);
+		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems<Dummy>(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::initializeSystemCallback, nullptr);
 	}
 
 	void shutdown()
 	{
-		Runner<Desc, Cont>::template runForSystems<Dummy>(reinterpret_cast<Desc*>(this), Runner<Desc, Cont>::shutdownSystemCallback, nullptr);
+		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems<Dummy>(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::shutdownSystemCallback, nullptr);
 	}
 
 	template <typename Sys>
@@ -1617,7 +1311,7 @@ struct Architecture : VirtualArchitecture
 
 	static constexpr uint64_t typeKeyLength()
 	{
-		return ceil(log2(inspect::numUniques<Cont, EntityBase>()));
+		return ceil(log2(numUniques<Cont, EntityBase>()));
 	}
 
 	static uint64_t typeKey(Guid guid)
@@ -1636,36 +1330,22 @@ struct Architecture : VirtualArchitecture
 
 	~Architecture()
 	{
-		Cont::template evaluate<OncePerType<Dummy, DestructorCallback>>(this);
+		OncePerType<Cont, DestructorCallback>::fn(this);
 	}
 
 	template <typename V>
 	static constexpr uint64_t absoluteIndex()
 	{
-		return isComponent<V>()
-			? inspect::indexOf<Cont, V, ComponentBase>()
-			: inspect::numUniques<Cont, ComponentBase>()
-				+ (isIterator<V>()
-					? inspect::indexOf<Cont, V, IteratorBase>()
-					: inspect::numUniques<Cont, IteratorBase>()
-						+ (isEntity<V>()
-						? inspect::indexOf<Cont, V, EntityBase>()
-						: inspect::numUniques<Cont, EntityBase>()
-							+ (isSystem<V>()
-							? inspect::indexOf<Cont, V, SystemBase>()
-							: inspect::numUniques<Cont, SystemBase>()
-								+ (isResource<V>()
-								? inspect::indexOf<Cont, V, ResourceBase>()
-								: inspect::numUniques<Cont, ResourceBase>()))));
+		return tuple_type_index<V, Cont>::value;
 	}
 
 	static std::string dotGraphString()
 	{
 		std::string ret("digraph {\n");
 
-		Cont::template evaluate<OncePerType<Dummy, DotGenerateNodes>>(&ret);
-		oncePerPair<Cont, DotGenerateEdges, std::string>(&ret);
-
+		OncePerType<Cont, DotGenerateNodes>::fn(&ret);
+		using Filtered = tuple_union< Filter<Cont, EntityBase>, Filter<Cont, SystemBase>, Filter<Cont, ComponentBase>, Filter<Cont, IteratorBase>, Filter<Cont, ResourceBase>>;
+		oncePerPair<Filtered, DotGenerateEdges>(&ret);
 		ret += "}\n";
 
 		return ret;
@@ -1750,7 +1430,7 @@ struct Architecture : VirtualArchitecture
 					s += an + " -> " + bn + " [ color = green ]\n";
 			}
 
-			CZSS_CONST_IF((isEntity<A>() || isIterator<A>()) && isComponent<B>() && inspect::contains<typename A::Cont, B>())
+			CZSS_CONST_IF((isEntity<A>() || isIterator<A>()) && isComponent<B>() && inspect::contains<Flatten<typename A::Cont>, B>())
 				s += an + " -> " + bn + "\n";
 
 			str->append(s);
@@ -1758,9 +1438,9 @@ struct Architecture : VirtualArchitecture
 	};
 
 private:
-	void* resources[max(inspect::numUniques<Cont, ResourceBase>(), uint64_t(1))] = {0};
-	char entities[max(inspect::numUniques<Cont, EntityBase>(), uint64_t(1)) * sizeof(EntityStore<uint64_t>)] = {0};
-	bool reallocated[max(inspect::numUniques<Cont, ComponentBase>() * inspect::numUniques<Cont, SystemBase>(), uint64_t(1))] = {0};
+	void* resources[max(numUniques<Cont, ResourceBase>(), uint64_t(1))] = {0};
+	char entities[max(numUniques<Cont, EntityBase>(), uint64_t(1)) * sizeof(EntityStore<uint64_t>)] = {0};
+	bool reallocated[max(numUniques<Cont, ComponentBase>() * numUniques<Cont, SystemBase>(), uint64_t(1))] = {0};
 
 	template <typename Entity>
 	struct PointerFixupData
@@ -1782,7 +1462,7 @@ private:
 		uint64_t id;
 		auto ent = entities->create(id);
 
-		uint64_t tk = inspect::indexOf<Cont, Entity, EntityBase>() << 63 - typeKeyLength();
+		uint64_t tk = indexOf<Cont, Entity, EntityBase>() << 63 - typeKeyLength();
 		id += tk;
 
 		setEntityId(ent, id);
@@ -1790,8 +1470,8 @@ private:
 		if (loc != entities->entities)
 		{
 			PointerFixupData<Entity> data = {this, loc, loc + count};
-			Cont::template evaluate<OncePerType<Dummy, MarkReallocatedCallback<Entity>>>(this);
-			Cont::template evaluate<OncePerType<Dummy, ManagedPointerCallback<Entity>>>(&data);
+			OncePerType<Cont, MarkReallocatedCallback<Entity>>::fn(this);
+			OncePerType<Cont, ManagedPointerCallback<Entity>>::fn(&data);
 		}
 
 		return ent;
@@ -1805,8 +1485,8 @@ private:
 		{
 			CZSS_CONST_IF (isComponent<Value>() && inspect::contains<typename Entity::Cont, Value>())
 			{
-				static const uint64_t begin = inspect::indexOf<Cont, Value, ComponentBase>() * inspect::numUniques<Cont, SystemBase>();
-				static const uint64_t end = (inspect::indexOf<Cont, Value, ComponentBase>() + 1) * inspect::numUniques<Cont, SystemBase>();
+				static const uint64_t begin = indexOf<Cont, Value, ComponentBase>() * numUniques<Cont, SystemBase>();
+				static const uint64_t end = (indexOf<Cont, Value, ComponentBase>() + 1) * numUniques<Cont, SystemBase>();
 				for (uint64_t i = begin; i < end; i++)
 					arch->reallocated[i] = true;
 			}
@@ -1823,7 +1503,7 @@ private:
 			{
 				auto entities = data->arch->template getEntities<Value>();
 				for (auto ptr : entities->used_indices)
-					Cont::template evaluate<OncePerType<Dummy, EntityComponentManagedPointerCallback<Entity, Value>>>(data, ptr);
+					OncePerType<Filter<Cont, ComponentBase>, EntityComponentManagedPointerCallback<Entity, Value>>::fn(data, ptr);
 			}
 
 			CZSS_CONST_IF (isResource<Value>())
@@ -1836,7 +1516,7 @@ private:
 					Entity* max = data->oldMaxLoc;
 					Repair<Entity> repair(min, max, loc - min);
 					managePointer(*resource, repair);
-					Cont::template evaluate<OncePerType<Dummy, ComponentManagedPointerCallback<Entity, Value>>>(data, resource);
+					OncePerType<Filter<Cont, ComponentBase>, ComponentManagedPointerCallback<Entity, Value>>::fn(data, resource);
 				}
 			}
 		}
@@ -1845,12 +1525,12 @@ private:
 	template <typename Entity, typename IterateEntity>
 	struct EntityComponentManagedPointerCallback
 	{
-		template <typename Value>
+		template <typename Component>
 		static inline void callback(PointerFixupData<Entity>* data, IterateEntity* ptr)
 		{
-			CZSS_CONST_IF (isComponent<Value>() && inspect::contains<typename IterateEntity::Cont, Value>())
+			CZSS_CONST_IF (inspect::contains<typename IterateEntity::Cont, Component>())
 			{
-				Cont::template evaluate<OncePerType<Dummy, ManagedComponentPointerFixupCallback<Entity, Value>>>(data, ptr->template getComponent<Value>());
+				OncePerType<Filter<Cont, ComponentBase>, ManagedComponentPointerFixupCallback<Entity, Component>>::fn(data, ptr->template getComponent<Component>());
 			}
 		}
 	};
@@ -1858,13 +1538,10 @@ private:
 	template <typename Entity, typename Update>
 	struct ComponentManagedPointerCallback
 	{
-		template <typename Value>
+		template <typename Component>
 		static inline void callback(PointerFixupData<Entity>* data, Update* ptr)
 		{
-			CZSS_CONST_IF (isComponent<Value>())
-			{
-				Cont::template evaluate<OncePerType<Dummy, ManagedComponentPointerFixupCallback<Entity, Update>>>(data, ptr);
-			}
+			OncePerType<Filter<Cont, ComponentBase>, ManagedComponentPointerFixupCallback<Entity, Update>>::fn(data, ptr);
 		}
 	};
 
@@ -1900,8 +1577,10 @@ private:
 		template <typename Value>
 		inline static void callback(This* arch, uint64_t* typeKey, uint64_t* id)
 		{
-			if(isEntity<Value>() && inspect::contains<Cont, Value>() && inspect::indexOf<Cont, Value, EntityBase>() == *typeKey)
+			if(isEntity<Value>() && inspect::contains<Cont, Value>() && indexOf<Cont, Value, EntityBase>() == *typeKey)
+			{
 				arch->template destroyEntity<Value>(*id);
+			}
 		}
 	};
 
@@ -1955,10 +1634,9 @@ private:
 	struct SystemDependencyCheck
 	{
 		template <typename A, typename B>
-		static constexpr void callback()
+		static void callback(int i)
 		{
-			static_assert(
-				isSystem<A>() && isSystem<B>() && !std::is_same<A, B>() && (exclusiveWith<A, B>() || exclusiveWith<B, A>())
+			static_assert(!std::is_same<A, B>() && (exclusiveWith<A, B>() || exclusiveWith<B, A>())
 				? (dependsOn<A, B>() || dependsOn<B, A>())
 				: true,
 				"Explicit dependency missing between systems."
@@ -1971,7 +1649,7 @@ private:
 		template <typename Value>
 		inline static void callback(This* arch, const uint64_t& typeKey, const Guid& guid, void** ret)
 		{
-			if(isEntity<Value>() && inspect::contains<Cont, Value>() && inspect::indexOf<Cont, Value, EntityBase>() == typeKey)
+			if(isEntity<Value>() && inspect::contains<Cont, Value>() && indexOf<Cont, Value, EntityBase>() == typeKey)
 				*ret = arch->getEntity<Value>(guid);
 		}
 	};
@@ -1982,7 +1660,7 @@ private:
 		template <typename Value>
 		inline static void callback(uint64_t id, const char** res)
 		{
-			if (std::is_base_of<Cat, Value>() && inspect::indexOf<Cont, Value, Cat>() == id)
+			if (std::is_base_of<Cat, Value>() && indexOf<Cont, Value, Cat>() == id)
 			{
 				*res = czss::name<Value>();
 			}
@@ -2013,7 +1691,7 @@ struct EntityAccessor
 	EntityAccessor(const Entity* ent)
 	{
 		entity = const_cast<Entity*>(ent);
-		typeKey = inspect::indexOf<typename Arch::Cont, Entity, EntityBase>();
+		typeKey = indexOf<typename Arch::Cont, Entity, EntityBase>();
 	}
 
 	template <typename Component>
@@ -2039,7 +1717,8 @@ struct EntityAccessor
 	Guid guid() const
 	{
 		Guid guid;
-		Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, GuidGetter>>(typeKey, &typeKey, &guid, entity);
+
+		Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<GuidGetter>(typeKey, &guid, entity);
 		return guid;
 	}
 
@@ -2049,7 +1728,10 @@ struct EntityAccessor
 	}
 
 protected:
-	EntityAccessor() { }
+	EntityAccessor()
+	{
+		entity = nullptr;
+	}
 
 	EntityAccessor(const EntityAccessor<Arch, Sys>& other)
 	{
@@ -2072,7 +1754,7 @@ private:
 	Component* get_ptr() const
 	{
 		void* result = nullptr;
-		Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, ComponentGetter<Component>>>(typeKey, &typeKey, entity, &result);
+		Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<ComponentGetter<Component>>(typeKey, entity, &result);
 		return reinterpret_cast<Component*>(result);
 	}
 
@@ -2080,9 +1762,9 @@ private:
 	struct ComponentGetter
 	{
 		template <typename Value>
-		inline static void callback(const uint64_t* id, void* entity, void** result)
+		inline static void callback(void* entity, void** result)
 		{
-			if (isEntity<Value>() && inspect::contains<typename Value::Cont, Component>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == *id)
+			if (inspect::contains<typename Value::Cont, Component>())
 			{
 				*result = reinterpret_cast<Value*>(entity)->template getComponent<Component>();
 			}
@@ -2092,12 +1774,9 @@ private:
 	struct GuidGetter
 	{
 		template <typename Value>
-		inline static void callback(const uint64_t* id, Guid* guid, void* entity)
+		inline static void callback(Guid* guid, void* entity)
 		{
-			if (isEntity<Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == *id)
-			{
-				*guid = reinterpret_cast<Value*>(entity)->getGuid();
-			}
+			*guid = reinterpret_cast<Value*>(entity)->getGuid();
 		}
 	};
 };
@@ -2138,6 +1817,15 @@ private:
 template <typename Iter, typename Arch, typename Sys>
 struct IteratorIterator
 {
+	struct CompatabilityFilter
+	{
+		template <typename Entity>
+		static constexpr bool test()
+		{
+			return isEntity<Entity>() && isIteratorCompatibleWithEntity<Iter, Entity>();
+		}
+	};
+
 	using This = IteratorIterator<Iter, Arch, Sys>;
 	using U = IteratorAccessor<Iter, Arch, Sys>;
 
@@ -2150,7 +1838,7 @@ struct IteratorIterator
 	IteratorIterator()
 	{
 		arch = nullptr;
-		typeKey = Arch::numEntities();
+		typeKey = limit();
 	}
 
 	IteratorIterator(const IteratorIterator& other)
@@ -2174,7 +1862,7 @@ struct IteratorIterator
 
 	friend bool operator== (const This& a, const This& b)
 	{
-		if (a.typeKey >= Arch::numEntities() && b.typeKey  >= Arch::numEntities())
+		if (a.typeKey >= limit() && b.typeKey >= limit())
 			return true;
 
 		return a.typeKey == b.typeKey
@@ -2192,18 +1880,17 @@ struct IteratorIterator
 		++(*this);
 		return ret;
 	}
-	
+
 	This& operator++()
 	{
-		Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, IncrementerCallback>>(typeKey, this);
+		using CompatibleEntities = Filter2<typename Arch::Cont, CompatabilityFilter>;
+		Switch<CompatibleEntities>::template fn<IncrementerCallback>(typeKey, this);
 
-		while (index >= maxIndex && typeKey < Arch::numEntities())
+		while (index >= maxIndex && typeKey < limit())
 		{
-			typeKey = Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<uint64_t, NextKey>(typeKey, typeKey);
-			if (typeKey < Arch::numEntities())
-			{
-				Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<OncePerType<Dummy, IncrementerCallback>>(typeKey, this);
-			}
+			typeKey++;
+			if (typeKey < limit())
+				Switch<CompatibleEntities>::template fn<IncrementerCallback>(typeKey, this);
 		}
 
 		return *this;
@@ -2217,12 +1904,7 @@ private:
 		this->arch = arch;
 		index = 0;
 		maxIndex = 0;
-
-		CZSS_CONST_IF(!Arch::Cont::template evaluate<bool, OncePerTypeConst<Dummy, ConstructorKeyCallback>>())
-			typeKey = Switch<typename Arch::Cont, Arch::numEntities()>::template evaluate<uint64_t, NextKey>(0, 0);
-		else
-			typeKey = 0;
-
+		typeKey = 0;
 		++(*this);
 	}
 
@@ -2232,59 +1914,31 @@ private:
 	uint64_t maxIndex;
 	uint64_t typeKey;
 
-	struct NextKey
+	static constexpr size_t limit()
 	{
-		template <typename Value, typename Inner, typename Next>
-		static constexpr uint64_t inspect(uint64_t key)
-		{
-			return min(
-				min((Inner::template evaluate<uint64_t, NextKey>(key) > key
-					? Inner::template evaluate<uint64_t, NextKey>(key)
-					: -1),
-					(Next::template evaluate<uint64_t, NextKey>(key) > key
-					? Next::template evaluate<uint64_t, NextKey>(key)
-					: -1)
-				),
-				isEntity<Value>() && isIteratorCompatibleWithEntity<Iter, Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() > key
-					? inspect::indexOf<typename Arch::Cont, Value, EntityBase>()
-					: -1
-			);
-		};
-	};
+		using CompatibleEntities = Filter2<typename Arch::Cont, CompatabilityFilter>;
+		return std::tuple_size<CompatibleEntities>::value;
+	}
 
 	struct IncrementerCallback
 	{
 		template <typename Value>
 		static inline void callback(This* iterac)
 		{
-			if (isEntity<Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == iterac->typeKey)
+			auto entities = iterac->arch->template getEntities<Value>();
+
+			if (iterac->index < iterac->maxIndex)
 			{
-				auto entities = iterac->arch->template getEntities<Value>();
-
-				if (iterac->index < iterac->maxIndex)
-				{
-					iterac->index++;
-				}
-				else
-				{
-					iterac->index = 0;
-					iterac->maxIndex = entities->size();
-				}
-
-				if (iterac->index < iterac->maxIndex)
-					iterac->accessor = U(iterac->typeKey, entities->used_indices[iterac->index]);
+				iterac->index++;
 			}
-		}
-	};
+			else
+			{
+				iterac->index = 0;
+				iterac->maxIndex = entities->size();
+			}
 
-	struct ConstructorKeyCallback
-	{
-		template <typename Value>
-		static constexpr bool callback()
-		{
-			return isEntity<Value>() && inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == 0
-				? isIteratorCompatibleWithEntity<Iter, Value>()
-				: false;
+			if (iterac->index < iterac->maxIndex)
+				iterac->accessor = U(entities->used_indices[iterac->index]);
 		}
 	};
 };
@@ -2345,7 +1999,7 @@ struct Accessor
 	const Entity* viewEntity(Guid guid)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		Entity::Cont::template evaluate<OncePerType<Dummy, HasEntityReadPermission>>();
+		OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermission>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity<Entity>(guid);
 	}
@@ -2354,7 +2008,7 @@ struct Accessor
 	const Entity* viewEntity(EntityId<Arch, Entity> id)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		Entity::Cont::template evaluate<OncePerType<Dummy, HasEntityReadPermission>>();
+		OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermission>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity(id);
 	}
@@ -2363,7 +2017,7 @@ struct Accessor
 	Entity* getEntity(Guid guid)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		Entity::Cont::template evaluate<OncePerType<Dummy, HasEntityWritePermission>>();
+		OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermission>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity<Entity>(guid);
 	}
@@ -2372,7 +2026,7 @@ struct Accessor
 	Entity* getEntity(EntityId<Arch, Entity> id)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		Entity::Cont::template evaluate<OncePerType<Dummy, HasEntityWritePermission>>();
+		OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermission>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity(id);
 	}
@@ -2385,7 +2039,7 @@ struct Accessor
 
 	void destroyEntity(Guid guid)
 	{
-		if (Arch::Cont::template evaluate<bool, EntityDestructionPermission>(Arch::typeKey(guid)))
+		if (OncePerType<typename Arch::Cont, EntityDestructionPermission>::constFn(Arch::typeKey(guid)))
 		{
 			arch->destroyEntity(guid);
 		}
@@ -2401,14 +2055,14 @@ struct Accessor
 	template <typename ...Entities>
 	void destroyEntities()
 	{
-		Rbox<Entities...>::template evaluate<Filter<TestAlwaysTrue, TestIfRbox, EntityOrchestrationPermissionTest>>();
+		OncePerType<Rbox<Entities...>, EntityOrchestrationPermissionTest>::fn();
 		arch->template destroyEntities<Entities...>();
 	}
 
 	template <typename T, typename ...Systems>
 	void run(T* fls, bool init)
 	{
-		Rbox<Systems...>::template evaluate<Filter<TestAlwaysTrue, TestIfRbox, SystemsRunPermissionTest<Rbox<Systems...>>>>();
+		// Rbox<Systems...>::template evaluate<Filter<TestAlwaysTrue, TestIfRbox, SystemsRunPermissionTest<Rbox<Systems...>>>>();
 
 		if (init)
 			Runner<Arch, Rbox<Systems...>>::runForSystems(arch, Runner<Arch, Rbox<Systems...>>::initializeSystemCallback, fls);
@@ -2460,7 +2114,7 @@ struct Accessor
 	void iterate(F f)
 	{
 		iteratorPermission<Iterator>();
-		Arch::Cont::template evaluate<OncePerType<Dummy, IteratorCallback<Iterator, F>>>(f, arch);
+		OncePerType<typename Arch::Cont, IteratorCallback<Iterator, F>>::fn(f, arch);
 	}
 
 	template <typename Iterator, typename F>
@@ -2500,14 +2154,14 @@ struct Accessor
 	uint64_t countCompatibleEntities()
 	{
 		uint64_t entityCount = 0;
-		Arch::Cont::template evaluate<OncePerType<Dummy, EntityCountCallback<Iterator>>>(&entityCount, arch);
+		OncePerType<Filter<typename Arch::Cont, EntityBase>, EntityCountCallback<Iterator>>::fn(&entityCount, arch);
 		return entityCount;
 	}
 
 	template <typename Iterator>
 	static constexpr uint64_t numCompatibleEntities()
 	{
-		return Arch::Cont::template evaluate<uint64_t, NumCompatibleEntities<Dummy, Iterator>>();
+		return OncePerType<typename Arch::Cont, NumCompatibleEntities<Iterator>>::constSum();
 	}
 
 	template <typename Component>
@@ -2548,7 +2202,7 @@ private:
 	static void iteratorPermission()
 	{
 		static_assert(isIterator<Iterator>(), "Attempted to iterate non-iterator.");
-		static_assert(inspect::containsAllIn<Sys, Iterator>(), "System doesn't have access to all components of Iterator.");
+		static_assert(inspect::containsAllIn<SystemAccesses<Sys>, typename Iterator::Cont>(), "System doesn't have access to all components of Iterator.");
 		static_assert(inspect::contains<typename Arch::Cont, Iterator>(), "Architecture doesn't contain the Iterator.");
 	}
 
@@ -2562,14 +2216,12 @@ private:
 
 	struct EntityDestructionPermission
 	{
-		template <typename Value, typename Inner, typename Next>
-		static constexpr bool inspect(uint64_t key)
+		template <typename Value>
+		static constexpr bool callback(const uint64_t& key)
 		{
 			return isEntity<Value>()
-				&& inspect::indexOf<typename Arch::Cont, Value, EntityBase>() == key
-				&& canOrchestrate<Sys, Value>()
-				|| Inner::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(key)
-				|| Next::template evaluate<bool, Accessor<Arch, Sys>::EntityDestructionPermission>(key);
+				&& indexOf<typename Arch::Cont, Value, EntityBase>() == key
+				&& canOrchestrate<Sys, Value>();
 		}
 	};
 
@@ -2647,30 +2299,24 @@ private:
 	template <typename Iterator>
 	struct EntityCountCallback
 	{
-		template <typename Value>
+		template <typename Entity>
 		static inline void callback(uint64_t* count, Arch* arch)
 		{
-			CZSS_CONST_IF (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
+			CZSS_CONST_IF (isIteratorCompatibleWithEntity<Iterator, Entity>())
 			{
-				auto entities = arch->template getEntities<Value>();
+				auto entities = arch->template getEntities<Entity>();
 				*count += entities->size();
 			}
 		}
 	};
 
-	template <typename Handled, typename Iterator>
+	template <typename Iterator>
 	struct NumCompatibleEntities
 	{
-		template <typename Value, typename Inner, typename Next>
-		static constexpr uint64_t inspect()
+		template <typename Value>
+		static constexpr uint64_t callback()
 		{
-			return (isEntity<Value>()
-				&& isIteratorCompatibleWithEntity<Iterator, Value>()
-				&& !inspect::contains<Next, Value>()
-				&& !inspect::contains<Handled, Value>()
-				? 1 : 0)
-				+ Inner::template evaluate<uint64_t, NumCompatibleEntities<Rbox <Handled, NrBox<Value>, Next>, Iterator>>()
-				+ Next::template evaluate<uint64_t, NumCompatibleEntities<Dummy, Iterator>>();
+			return isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>() ? 1 : 0;
 		}
 	};
 
@@ -2733,10 +2379,9 @@ private:
 	{
 		static const uint64_t limit = Accessor<Arch, Sys>::numCompatibleEntities<Iterator>();
 
-		
 		for (uint64_t i = 0; i < limit; i++)
 		{
-			Switch<typename Arch::Cont, limit>::template evaluate<OncePerType<Dummy, ParallelIterateTaskCallback<Iterator, F>>>(i, data);
+			Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<ParallelIterateTaskCallback<Iterator, F>>(i, data);
 			if (data->entityCount == 0)
 				return;
 		}
@@ -2790,8 +2435,8 @@ struct SystemExclusiveCheck
 template <typename A, typename B>
 constexpr bool exclusiveWith()
 {
-	return A::Cont::template evaluate<bool, OncePerTypeConst<Dummy, SystemExclusiveCheck<B>>>()
-		|| B::Cont::template evaluate<bool, OncePerTypeConst<Dummy, SystemExclusiveCheck<A>>>();
+	return OncePerType<SystemAccesses<A>, SystemExclusiveCheck<B>>::constFn()
+		|| OncePerType<SystemAccesses<B>, SystemExclusiveCheck<A>>::constFn();
 }
 
 } // namespace czss
