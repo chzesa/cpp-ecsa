@@ -2317,7 +2317,6 @@ private:
 	{
 		static_assert(isIterator<Iterator>(), "Attempted to iterate non-iterator.");
 		static_assert(inspect::containsAllIn<SystemAccesses<Sys>, typename Iterator::Cont>(), "System doesn't have access to all components of Iterator.");
-		static_assert(inspect::contains<typename Arch::Cont, Iterator>(), "Architecture doesn't contain the Iterator.");
 	}
 
 	template <typename Entity>
