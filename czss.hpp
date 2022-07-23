@@ -15,6 +15,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
+#include <functional>
 
 /* Timing functions
 	#define CZSS_TIMING_BEGIN timing_begin_function
@@ -1104,11 +1105,39 @@ struct Runner
 	}
 };
 
+template <template<typename> typename T, typename ...Values>
+struct RewrapImpl;
+
+template <template<typename> typename T, typename ...Values>
+struct RewrapImpl<T, std::tuple<Values...>>
+{
+	using type = T<Values...>;
+};
+
+template <template<typename> typename T, typename ...Values>
+using Rewrap = typename RewrapImpl<T, Values...>::type;
+
+template <typename Entity, typename Accessor>
+void onCreate(Entity& entity, Accessor& accessor) {};
+
+template <typename Component, typename Entity, typename Accessor>
+void onCreate(Component& component, Entity& entity, Accessor& accessor) {};
+
+template <typename Entity, typename Accessor>
+void onDestroy(Entity& entity, Accessor& accessor) {};
+
+template <typename Component, typename Entity, typename Accessor>
+void onDestroy(Component& component, Entity& entity, Accessor& accessor) {};
+
 template <typename Desc, typename ...Systems>
 struct Architecture : VirtualArchitecture
 {
 	using Cont = Flatten<Rbox<Systems...>>;
 	using This = Architecture<Desc, Systems...>;
+	using OmniSystem = Rewrap<System, std::tuple<
+		Rewrap<Orchestrator, Filter<Cont, EntityBase>>,
+		Rewrap<Writer, Filter<Cont, ResourceBase>>
+	>>;
 
 	Architecture()
 	{
@@ -1190,7 +1219,7 @@ struct Architecture : VirtualArchitecture
 		return getEntities<Entity>()->get(id);
 	}
 
-	template <typename Entity>
+	template <typename Entity, typename System>
 	Entity* createEntity()
 	{
 		CZSS_CONST_IF (isEntity<Entity>())
@@ -1199,6 +1228,33 @@ struct Architecture : VirtualArchitecture
 			Guid guid = ent->getGuid();
 			new(ent) Entity();
 			setEntityId(ent, guid.get());
+			auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
+			onCreate(*ent, accessor);
+			OncePerType<typename Entity::Cont, OnCreateCallback>::fn(*ent, accessor);
+			return ent;
+		}
+
+		return nullptr;
+	}
+
+	template <typename Entity>
+	Entity* createEntity()
+	{
+		return createEntity<Entity, OmniSystem>();
+	}
+
+	template <typename Entity, typename System, typename ...Params>
+	Entity* createEntity(Params&&... params)
+	{
+		CZSS_CONST_IF (isEntity<Entity>())
+		{
+			auto ent = initializeEntity<Entity>();
+			Guid guid = ent->getGuid();
+			new (ent) Entity(std::forward<Params>(params)...);
+			setEntityId(ent, guid.get());
+			auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
+			onCreate(*ent, accessor);
+			OncePerType<typename Entity::Cont, OnCreateCallback>::fn(*ent, accessor);
 			return ent;
 		}
 
@@ -1208,16 +1264,7 @@ struct Architecture : VirtualArchitecture
 	template <typename Entity, typename ...Params>
 	Entity* createEntity(Params&&... params)
 	{
-		CZSS_CONST_IF (isEntity<Entity>())
-		{
-			auto ent = initializeEntity<Entity>();
-			Guid guid = ent->getGuid();
-			new (ent) Entity(std::forward<Params>(params)...);
-			setEntityId(ent, guid.get());
-			return ent;
-		}
-
-		return nullptr;
+		return createEntity<Entity, OmniSystem>(std::forward<Params>(params)...);
 	}
 
 	template <typename Entity>
@@ -1233,18 +1280,50 @@ struct Architecture : VirtualArchitecture
 		return VirtualArchitecture::getEntityId<Desc, Entity>(ent);
 	}
 
-	template <typename Entity>
-	void destroyEntity(uint64_t id)
+	template <typename System, typename Entity>
+	void destroyEntity(Entity& entity)
 	{
 		auto entities = getEntities<Entity>();
+		auto id = guidId(entity.getGuid());
+		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
+		OncePerType<typename Entity::Cont, OnDestroyCallback>::fn(entity, accessor);
+		onDestroy(entity, accessor);
 		entities->destroy(id);
 	}
 
+	template <typename Entity>
+	void destroyEntity(Entity& entity)
+	{
+		destroyEntity<OmniSystem, Entity>(entity);
+	}
+
+	template <typename System, typename Entity>
+	void destroyEntity(uint64_t id)
+	{
+		auto entities = getEntities<Entity>();
+		auto res = entities->get(id);
+		if (res != nullptr)
+			destroyEntity<System>(*res);
+	}
+
+	// todo system parameter, this is used in callback
+	template <typename Entity>
+	void destroyEntity(uint64_t id)
+	{
+		destroyEntity<OmniSystem, Entity>(id);
+	}
+
+	template <typename System>
 	void destroyEntity(Guid guid)
 	{
 		uint64_t tk = typeKey(guid);
 		uint64_t id = guidId(guid);
-		Switch<Filter<Cont, EntityBase>>::template fn<EntityDestructorCallback>(tk, this, &tk, &id);
+		Switch<Filter<Cont, EntityBase>>::template fn<EntityDestructorCallback<System>>(tk, this, id);
+	}
+
+	void destroyEntity(Guid guid)
+	{
+		destroyEntity<OmniSystem>(guid);
 	}
 
 	template <typename Entity>
@@ -1572,15 +1651,13 @@ private:
 		}
 	};
 
+	template <typename System>
 	struct EntityDestructorCallback
 	{
 		template <typename Value>
-		inline static void callback(This* arch, uint64_t* typeKey, uint64_t* id)
+		inline static void callback(This* arch, const uint64_t& id)
 		{
-			if(isEntity<Value>() && inspect::contains<Cont, Value>() && indexOf<Cont, Value, EntityBase>() == *typeKey)
-			{
-				arch->template destroyEntity<Value>(*id);
-			}
+			arch->template destroyEntity<System, Value>(id);
 		}
 	};
 
@@ -1666,6 +1743,24 @@ private:
 			}
 		}
 	};
+
+	struct OnCreateCallback
+	{
+		template <typename Component, typename Entity, typename Accessor>
+		inline static void callback(Entity& value, Accessor& accessor)
+		{
+			onCreate(*value.template getComponent<Component>(), value, accessor);
+		}
+	};
+
+	struct OnDestroyCallback
+	{
+		template <typename Component, typename Entity, typename Accessor>
+		inline static void callback(Entity& value, Accessor& accessor)
+		{
+			onDestroy(*value.template getComponent<Component>(), value, accessor);
+		}
+	};
 };
 
 // #####################
@@ -1683,6 +1778,37 @@ struct IteratorIterator;
 
 template<typename Arch, typename Sys>
 struct Accessor;
+
+template<typename Sys, typename Entity>
+struct TypedEntityAccessor
+{
+	TypedEntityAccessor(const Entity* ent)
+	{
+		entity = const_cast<Entity*>(ent);
+	}
+
+	template<typename Component>
+	const Component* viewComponent() const
+	{
+		static_assert(canRead<Sys, Component>(), "System lacks read permissions for the Iterator's components.");
+		return entity->template getComponent<Component>();
+	}
+
+	template<typename Component>
+	Component* getComponent()
+	{
+		static_assert(canWrite<Sys, Component>(), "System lacks write permissions for the Iterator's components.");
+		return entity->template getComponent<Component>();
+	}
+
+	Guid getGuid() const
+	{
+		return entity->getGuid();
+	}
+
+private:
+	Entity* entity;
+};
 
 template <typename Arch, typename Sys>
 struct EntityAccessor
@@ -2110,12 +2236,21 @@ struct Accessor
 		return iterate<Iterator<Values...>>();
 	}
 
-	template <typename Iterator, typename F>
-	void iterate(F f)
+	template <typename Iterator>
+	void iterate(std::function<void(IteratorAccessor<Iterator, Arch, Sys>&)> f)
 	{
 		iteratorPermission<Iterator>();
-		OncePerType<typename Arch::Cont, IteratorCallback<Iterator, F>>::fn(f, arch);
+		OncePerType<typename Arch::Cont, IteratorCallback<Iterator>>::fn(f, arch);
 	}
+
+#if __cplusplus >= 202002L
+	template <typename Iterator>
+	void iterate(std::function<void(auto)> f)
+	{
+		iteratorPermission<Iterator>();
+		OncePerType<typename Arch::Cont, TypedIteratorCallback<Iterator>>::fn(f, arch);
+	}
+#endif
 
 	template <typename Iterator, typename F>
 	void parallelIterate(uint64_t numTasks, F f)
@@ -2277,10 +2412,10 @@ private:
 		}
 	};
 
-	template <typename Iterator, typename F>
+	template <typename Iterator>
 	struct IteratorCallback
 	{
-		template <typename Value>
+		template <typename Value, typename F>
 		static inline void callback(F& f, Arch* arch)
 		{
 			CZSS_CONST_IF (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
@@ -2289,7 +2424,26 @@ private:
 				for (auto& ent : ents->used_indices)
 				{
 					IteratorAccessor<Iterator, Arch, Sys> accessor(ent);
-					F lambda = f;
+					auto lambda = f;
+					lambda(accessor);
+				}
+			}
+		}
+	};
+
+	template <typename Iterator>
+	struct TypedIteratorCallback
+	{
+		template <typename Value, typename F>
+		static inline void callback(F& f, Arch* arch)
+		{
+			CZSS_CONST_IF (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
+			{
+				auto ents = arch->template getEntities<Value>();
+				for (auto& ent : ents->used_indices)
+				{
+					auto accessor = TypedEntityAccessor<Sys, Value>(ent);
+					auto lambda = f;
 					lambda(accessor);
 				}
 			}
