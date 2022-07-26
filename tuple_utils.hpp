@@ -154,3 +154,38 @@ struct cartesian_product_impl_3<std::tuple<A...>, std::tuple<B...>>
 
 template <typename A, typename B>
 using cartesian_product = typename cartesian_product_impl_3<A, B>::type;
+
+template <typename F, typename A, typename ...R>
+struct subset_impl;
+
+template <typename F, typename ...A, typename V, typename ...R>
+struct subset_impl<F, std::tuple<A...>, V, R...>
+{
+	using type = typename std::conditional<
+		F::template test<V>()
+		, subset_impl<F, std::tuple<V, A...>, R...>
+		, subset_impl<F, std::tuple<A...>, R...>
+	>::type::type;
+};
+
+template <typename F, typename ...A, typename V>
+struct subset_impl<F, std::tuple<A...>, V>
+{
+	using type = typename std::conditional<
+		F::template test<V>()
+		, unique_tuple::unique_tuple<V, A...>
+		, unique_tuple::unique_tuple<A...>
+	>::type;
+};
+
+template <typename T, typename F>
+struct subset_impl_2;
+
+template <typename ...A, typename F>
+struct subset_impl_2<std::tuple<A...>, F>
+{
+	using type = typename subset_impl<F, std::tuple<>, A...>::type;
+};
+
+template<typename Tuple, typename F>
+using subset = typename subset_impl_2<Tuple, F>::type;
