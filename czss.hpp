@@ -2370,6 +2370,41 @@ struct Accessor
 		barrier.wait();
 	}
 
+#if __cplusplus >= 202002L
+	template <typename Iterator, typename F>
+	void parallelIterate2(uint64_t numTasks, F f)
+	{
+		iteratorPermission<Iterator>();
+		uint64_t counter = countCompatibleEntities<Iterator>();
+
+		ParallelIterateTaskData<F> tasks[numTasks];
+
+		for (uint64_t i = 0; i < numTasks; i++)
+		{
+			tasks[i].index = i;
+			tasks[i].arch = arch;
+			tasks[i].func = &f;
+			tasks[i].entityCount = min(counter, max(uint64_t(1), counter / (numTasks - i)));
+			counter -= tasks[i].entityCount;
+
+			if (i > 0)
+			{
+				tasks[i].beginIndex = tasks[i - 1].beginIndex + tasks[i - 1].entityCount;
+			}
+
+			if (counter == 0)
+			{
+				numTasks = i + 1;
+				break;
+			}
+		}
+
+		czsf::Barrier barrier(numTasks);
+		czsf::run(TypedParallelIterateTask<Iterator, F>, tasks, numTasks, &barrier);
+		barrier.wait();
+	}
+#endif
+
 	template <typename Iterator>
 	uint64_t countCompatibleEntities()
 	{
@@ -2599,6 +2634,61 @@ private:
 		for (uint64_t i = 0; i < limit; i++)
 		{
 			Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<ParallelIterateTaskCallback<Iterator, F>>(i, data);
+			if (data->entityCount == 0)
+				return;
+		}
+	}
+
+	template <typename Iterator, typename F>
+	struct TypedParallelIterateTaskCallback
+	{
+		template <typename Value>
+		static inline void callback(ParallelIterateTaskData<F>* data)
+		{
+			CZSS_CONST_IF (!isEntity<Value>() || !isIteratorCompatibleWithEntity<Iterator, Value>())
+				return;
+
+			auto entities = data->arch->template getEntities<Value>();
+			if (entities->size() == 0 || entities->size() < data->beginIndex)
+			{
+				data->beginIndex -= entities->size();
+				return;
+			}
+
+			auto it = entities->used_indices.begin();
+			it += data->beginIndex;
+
+			auto end = entities->used_indices.end();
+			uint64_t handled;
+
+			if (data->entityCount < end - it)
+			{
+				handled = data->entityCount;
+				end = it + data->entityCount;
+			} else {
+				handled = end - it;
+			}
+
+			for (; it != end; it++)
+			{
+				auto accessor = TypedEntityAccessor<Sys, Value>(*it);
+				F lambda = *data->func;
+				lambda(data->index, accessor);
+			}
+
+			data->entityCount -= handled;
+			data->beginIndex = 0;
+		}
+	};
+
+	template <typename Iterator, typename F>
+	static void TypedParallelIterateTask(ParallelIterateTaskData<F>* data)
+	{
+		static const uint64_t limit = Accessor<Arch, Sys>::numCompatibleEntities<Iterator>();
+
+		for (uint64_t i = 0; i < limit; i++)
+		{
+			Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<TypedParallelIterateTaskCallback<Iterator, F>>(i, data);
 			if (data->entityCount == 0)
 				return;
 		}
