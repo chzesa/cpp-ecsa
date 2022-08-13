@@ -1105,16 +1105,16 @@ struct Runner
 	}
 };
 
-template <template<typename> typename T, typename ...Values>
+template <template<typename...> class T, typename ...Values>
 struct RewrapImpl;
 
-template <template<typename> typename T, typename ...Values>
+template <template<typename...> class T, typename ...Values>
 struct RewrapImpl<T, std::tuple<Values...>>
 {
 	using type = T<Values...>;
 };
 
-template <template<typename> typename T, typename ...Values>
+template <template<typename...> class T, typename ...Values>
 using Rewrap = typename RewrapImpl<T, Values...>::type;
 
 template <typename Entity, typename Accessor>
