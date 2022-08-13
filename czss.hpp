@@ -1123,6 +1123,12 @@ void onCreate(Entity& entity, Accessor& accessor) {};
 template <typename Component, typename Entity, typename Accessor>
 void onCreate(Component& component, Entity& entity, Accessor& accessor) {};
 
+template <typename Entity, typename Accessor, typename Context>
+void onCreate(Entity& entity, Accessor& accessor, const Context& context) {};
+
+template <typename Component, typename Entity, typename Accessor, typename Context>
+void onCreate(Component& component, Entity& entity, Accessor& accessor, const Context& context) {};
+
 template <typename Entity, typename Accessor>
 void onDestroy(Entity& entity, Accessor& accessor) {};
 
@@ -1219,6 +1225,26 @@ struct Architecture : VirtualArchitecture
 		return getEntities<Entity>()->get(id);
 	}
 
+private:
+	template <typename System, typename Entity>
+	void postInitializeEntity(Guid guid, Entity* ent)
+	{
+		setEntityId(ent, guid.get());
+		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
+		onCreate(*ent, accessor);
+		OncePerType<typename Entity::Cont, OnCreateCallback>::fn(*ent, accessor);
+	}
+
+	template <typename System, typename Entity, typename Context>
+	void postInitializeEntity(Guid guid, Entity* ent, const Context& context)
+	{
+		setEntityId(ent, guid.get());
+		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
+		onCreate(*ent, accessor, context);
+		OncePerType<typename Entity::Cont, OnCreateContextCallback>::fn(*ent, accessor, context);
+	}
+
+public:
 	template <typename Entity, typename System>
 	Entity* createEntity()
 	{
@@ -1227,10 +1253,22 @@ struct Architecture : VirtualArchitecture
 			auto ent = initializeEntity<Entity>();
 			Guid guid = ent->getGuid();
 			new(ent) Entity();
-			setEntityId(ent, guid.get());
-			auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
-			onCreate(*ent, accessor);
-			OncePerType<typename Entity::Cont, OnCreateCallback>::fn(*ent, accessor);
+			postInitializeEntity<System>(guid, ent);
+			return ent;
+		}
+
+		return nullptr;
+	}
+
+	template <typename Entity, typename System, typename ...Params>
+	Entity* createEntity(Params&&... params)
+	{
+		CZSS_CONST_IF (isEntity<Entity>())
+		{
+			auto ent = initializeEntity<Entity>();
+			Guid guid = ent->getGuid();
+			new (ent) Entity(std::forward<Params>(params)...);
+			postInitializeEntity<System>(guid, ent);
 			return ent;
 		}
 
@@ -1243,28 +1281,52 @@ struct Architecture : VirtualArchitecture
 		return createEntity<Entity, OmniSystem>();
 	}
 
-	template <typename Entity, typename System, typename ...Params>
+	template <typename Entity, typename ...Params>
 	Entity* createEntity(Params&&... params)
+	{
+		return createEntity<Entity, OmniSystem>(std::forward(params)...);
+	}
+
+	template <typename Entity, typename System, typename Context>
+	Entity* createEntityWithContext(const Context& context)
 	{
 		CZSS_CONST_IF (isEntity<Entity>())
 		{
 			auto ent = initializeEntity<Entity>();
 			Guid guid = ent->getGuid();
-			new (ent) Entity(std::forward<Params>(params)...);
-			setEntityId(ent, guid.get());
-			auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
-			onCreate(*ent, accessor);
-			OncePerType<typename Entity::Cont, OnCreateCallback>::fn(*ent, accessor);
+			new(ent) Entity();
+			postInitializeEntity<System>(guid, ent, context);
 			return ent;
 		}
 
 		return nullptr;
 	}
 
-	template <typename Entity, typename ...Params>
-	Entity* createEntity(Params&&... params)
+	template <typename Entity, typename System, typename Context, typename ...Params>
+	Entity* createEntityWithContext(const Context& context, Params&&... params)
 	{
-		return createEntity<Entity, OmniSystem>(std::forward<Params>(params)...);
+		CZSS_CONST_IF (isEntity<Entity>())
+		{
+			auto ent = initializeEntity<Entity>();
+			Guid guid = ent->getGuid();
+			new (ent) Entity(std::forward<Params>(params)...);
+			postInitializeEntity<System>(guid, ent, context);
+			return ent;
+		}
+
+		return nullptr;
+	}
+
+	template <typename Entity, typename Context>
+	Entity* createEntityWithContext(const Context& context)
+	{
+		return createEntityWithContext<Entity, OmniSystem>(context);
+	}
+
+	template <typename Entity, typename Context, typename ...Params>
+	Entity* createEntityWithContext(const Context& context, Params&&... params)
+	{
+		return createEntityWithContext<Entity, OmniSystem>(context, std::forward(params)...);
 	}
 
 	template <typename Entity>
@@ -1753,6 +1815,15 @@ private:
 		}
 	};
 
+	struct OnCreateContextCallback
+	{
+		template <typename Component, typename Entity, typename Accessor, typename Context>
+		inline static void callback(Entity& value, Accessor& accessor, const Context& context)
+		{
+			onCreate(*value.template getComponent<Component>(), value, accessor, context);
+		}
+	};
+
 	struct OnDestroyCallback
 	{
 		template <typename Component, typename Entity, typename Accessor>
@@ -2106,6 +2177,20 @@ struct Accessor
 	{
 		entityPermission<Entity>();
 		return arch->template createEntity<Entity>(std::forward<Params>(params)...);
+	}
+
+	template <typename Entity, typename Context>
+	Entity* createEntityWithContext(Context&& context)
+	{
+		entityPermission<Entity>();
+		return arch->template createEntity<Entity>(std::forward(context));
+	}
+
+	template <typename Entity, typename Context, typename ...Params>
+	Entity* createEntityWithContext(Context&& context, Params&&... params)
+	{
+		entityPermission<Entity>();
+		return arch->template createEntity<Entity>(std::forward(context, params)...);
 	}
 
 	template <typename Entity>
