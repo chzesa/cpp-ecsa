@@ -1134,10 +1134,10 @@ struct Architecture : VirtualArchitecture
 {
 	using Cont = Flatten<Rbox<Systems...>>;
 	using This = Architecture<Desc, Systems...>;
-	using OmniSystem = Rewrap<System, std::tuple<
+	using OmniSystem = System <
 		Rewrap<Orchestrator, Filter<Cont, EntityBase>>,
 		Rewrap<Writer, Filter<Cont, ResourceBase>>
-	>>;
+	>;
 
 	Architecture()
 	{
