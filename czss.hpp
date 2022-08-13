@@ -2329,8 +2329,8 @@ struct Accessor
 	}
 
 #if __cplusplus >= 202002L
-	template <typename Iterator>
-	void iterate(std::function<void(auto)> f)
+	template <typename Iterator, typename F>
+	void iterate2(F f)
 	{
 		iteratorPermission<Iterator>();
 		OncePerType<typename Arch::Cont, TypedIteratorCallback<Iterator>>::fn(f, arch);
