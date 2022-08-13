@@ -695,7 +695,6 @@ struct EntityStore
 	{
 		for (E* ptr : used_indices)
 		{
-			uint64_t index = ptr - entities;
 			ptr->~E();
 		}
 
