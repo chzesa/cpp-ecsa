@@ -2340,68 +2340,14 @@ struct Accessor
 	template <typename Iterator, typename F>
 	void parallelIterate(uint64_t numTasks, F f)
 	{
-		iteratorPermission<Iterator>();
-		uint64_t counter = countCompatibleEntities<Iterator>();
-
-		ParallelIterateTaskData<F> tasks[numTasks];
-
-		for (uint64_t i = 0; i < numTasks; i++)
-		{
-			tasks[i].index = i;
-			tasks[i].arch = arch;
-			tasks[i].func = &f;
-			tasks[i].entityCount = min(counter, max(uint64_t(1), counter / (numTasks - i)));
-			counter -= tasks[i].entityCount;
-
-			if (i > 0)
-			{
-				tasks[i].beginIndex = tasks[i - 1].beginIndex + tasks[i - 1].entityCount;
-			}
-
-			if (counter == 0)
-			{
-				numTasks = i + 1;
-				break;
-			}
-		}
-
-		czsf::Barrier barrier(numTasks);
-		czsf::run(ParallelIterateTask<Iterator, F>, tasks, numTasks, &barrier);
-		barrier.wait();
+		parallelIterateImpl<Iterator>(numTasks, f, ParallelIterateTask<Iterator, F>);
 	}
 
 #if __cplusplus >= 202002L
 	template <typename Iterator, typename F>
 	void parallelIterate2(uint64_t numTasks, F f)
 	{
-		iteratorPermission<Iterator>();
-		uint64_t counter = countCompatibleEntities<Iterator>();
-
-		ParallelIterateTaskData<F> tasks[numTasks];
-
-		for (uint64_t i = 0; i < numTasks; i++)
-		{
-			tasks[i].index = i;
-			tasks[i].arch = arch;
-			tasks[i].func = &f;
-			tasks[i].entityCount = min(counter, max(uint64_t(1), counter / (numTasks - i)));
-			counter -= tasks[i].entityCount;
-
-			if (i > 0)
-			{
-				tasks[i].beginIndex = tasks[i - 1].beginIndex + tasks[i - 1].entityCount;
-			}
-
-			if (counter == 0)
-			{
-				numTasks = i + 1;
-				break;
-			}
-		}
-
-		czsf::Barrier barrier(numTasks);
-		czsf::run(TypedParallelIterateTask<Iterator, F>, tasks, numTasks, &barrier);
-		barrier.wait();
+		parallelIterateImpl<Iterator>(numTasks, f, TypedParallelIterateTask<Iterator, F>);
 	}
 #endif
 
@@ -2432,6 +2378,39 @@ struct Accessor
 	Arch* arch;
 
 private:
+	template <typename Iterator, typename F, typename CB>
+	void parallelIterateImpl(uint64_t numTasks, F f, CB* cb)
+	{
+		iteratorPermission<Iterator>();
+		uint64_t counter = countCompatibleEntities<Iterator>();
+
+		ParallelIterateTaskData<F> tasks[numTasks];
+
+		for (uint64_t i = 0; i < numTasks; i++)
+		{
+			tasks[i].index = i;
+			tasks[i].arch = arch;
+			tasks[i].func = &f;
+			tasks[i].entityCount = min(counter, max(uint64_t(1), counter / (numTasks - i)));
+			counter -= tasks[i].entityCount;
+
+			if (i > 0)
+			{
+				tasks[i].beginIndex = tasks[i - 1].beginIndex + tasks[i - 1].entityCount;
+			}
+
+			if (counter == 0)
+			{
+				numTasks = i + 1;
+				break;
+			}
+		}
+
+		czsf::Barrier barrier(numTasks);
+		czsf::run(cb, tasks, numTasks, &barrier);
+		barrier.wait();
+	}
+
 	template <typename Iterator>
 	static void iteratorPermission()
 	{
