@@ -57,6 +57,32 @@ struct Iterb : Iterator<B>{};
 struct Enta : Entity<A, B> {};
 struct Entb : Entity<A> {};
 
+struct V : czss::Component<V> {};
+
+struct VirtualA : czss::Entity<V>, czss::Virtual
+{
+	virtual void quack()
+	{
+		std::cout << "Quack" << std::endl;
+	}
+};
+
+struct VirtualB : VirtualA
+{
+	void quack() override
+	{
+		std::cout << "Woof" << std::endl;
+	}
+};
+
+struct VirtualC : VirtualA
+{
+	void quack() override
+	{
+		std::cout << "Meow" << std::endl;
+	}
+};
+
 CZSS_NAME(Enta, "Enta")
 CZSS_NAME(Entb, "Entb")
 
@@ -141,7 +167,29 @@ struct Sysc : System<Dependency<Sysb>, Orchestrator<Enta>, Reader<Iter, Iterb>, 
 	};
 };
 
-struct MyArch : Architecture <MyArch, Sysb, Sysa, Sysc> {};
+struct Sysd : System<Orchestrator<VirtualA>>
+{
+	static void run(Accessor<MyArch, Sysd> arch) { };
+
+	static void initialize(Accessor<MyArch, Sysd> arch)
+	{
+		std::cout << "Initialize Sysd" << std::endl;
+		arch.createEntity<VirtualA>();
+		arch.createEntity<VirtualB>();
+		arch.createEntity<VirtualC>();
+
+		arch.iterate2<czss::Iterator<V>>([&] (auto accessor) {
+			accessor.getEntity()->quack();
+		});
+	};
+
+	static void shutdown(Accessor<MyArch, Sysd> arch)
+	{
+		std::cout << "Shutdown Sysd" << std::endl;
+	};
+};
+
+struct MyArch : Architecture <MyArch, Sysb, Sysa, Sysc, Sysd> {};
 
 void fmain()
 {

@@ -319,6 +319,7 @@ void oncePerPair(Params&&... params)
 // #####################
 
 struct ThreadSafe {};
+struct Virtual {};
 
 struct ComponentBase {};
 struct IteratorBase {};
@@ -358,6 +359,12 @@ template<typename T>
 constexpr bool isThreadSafe()
 {
 	return isBaseType<ResourceBase, T>() && std::is_base_of<ThreadSafe, T>();
+}
+
+template<typename T>
+constexpr bool isVirtual()
+{
+	return isBaseType<EntityBase, T>() && std::is_base_of<Virtual, T>();
 }
 
 template<typename T>
@@ -463,7 +470,6 @@ struct Filter2Impl2<std::tuple<A...>, F>
 
 template<typename Tuple, typename F>
 using Filter2 = typename Filter2Impl2<Tuple, F>::type;
-
 
 template <typename Cat, typename A, typename ...R>
 struct FilterImpl;
@@ -599,59 +605,121 @@ struct EntityStore
 {
 	EntityStore()
 	{
-		entities = reinterpret_cast<E*>(malloc(sizeof (E) * 32));
 		nextId = 1;
-		for (uint64_t i = 0; i < 32; i++)
-			free_indices.push(i);
+
+		CZSS_CONST_IF (!isVirtual<E>())
+		{
+			entities = reinterpret_cast<E*>(malloc(sizeof (E) * 32));
+			for (uint64_t i = 0; i < 32; i++)
+				free_indices.push(i);
+		}
 	}
 
 	E* get(uint64_t id)
 	{
-		auto res = index_map.find(id);
-		if (res == index_map.end())
-			return nullptr;
+		CZSS_CONST_IF (isVirtual<E>())
+		{
+			auto res = used_indices_map.find(id);
+			if (res == used_indices_map.end())
+				return nullptr;
+			return used_indices[res->second];
+		}
+		else
+		{
+			auto res = index_map.find(id);
+			if (res == index_map.end())
+				return nullptr;
 
-		return &entities[res->second];
+			return &entities[res->second];
+		}
 	}
 
-	E* create(uint64_t& id)
+	template <typename T>
+	T* create(uint64_t& id)
 	{
 		id = nextId++;
-		if(free_indices.size() == 0)
-		{
-			E* old = reinterpret_cast<E*>(entities);
-			expand(size());
-			for (auto& p : used_indices)
-				p = p - old + reinterpret_cast<E*>(entities);
-		}
 
-		uint64_t index = free_indices.top();
-		free_indices.pop();
-
+		T* res;
 		uint64_t used_indices_index = used_indices.size();
 
-		used_indices.push_back(reinterpret_cast<E*>(entities) + index);
+		CZSS_CONST_IF (isVirtual<T>())
+		{
+			res = new T();
+		}
+		else
+		{
+			if(free_indices.size() == 0)
+				expand(size());
 
+			uint64_t index = free_indices.top();
+			free_indices.pop();
+
+			res = reinterpret_cast<T*>(entities) + index;
+			new(res) T();
+			index_map.insert({id, index});
+		}
+
+		used_indices.push_back(res);
 		used_indices_map.insert({id, used_indices_index});
 		used_indices_map_reverse.insert({used_indices_index, id});
 
-		index_map.insert({id, index});
+		return res;
+	}
 
-		return &entities[index];
+	template <typename T, typename ...Params>
+	T* create(uint64_t& id, Params&&... params)
+	{
+		id = nextId++;
+
+		T* res;
+		uint64_t used_indices_index = used_indices.size();
+
+		CZSS_CONST_IF (isVirtual<T>())
+		{
+			res = new T(std::forward<Params>(params)...);
+		}
+		else
+		{
+			if(free_indices.size() == 0)
+				expand(size());
+
+			uint64_t index = free_indices.top();
+			free_indices.pop();
+
+			res = reinterpret_cast<T*>(entities) + index;
+			new(res) T(std::forward<Params>(params)...);
+			index_map.insert({id, index});
+		}
+
+		used_indices.push_back(res);
+		used_indices_map.insert({id, used_indices_index});
+		used_indices_map_reverse.insert({used_indices_index, id});
+
+		return res;
 	}
 
 	void destroy(uint64_t id)
 	{
-		auto res = index_map.find(id);
-		if (res == index_map.end())
-			return;
+		CZSS_CONST_IF (isVirtual<E>())
+		{
+			auto res = used_indices_map.find(id);
+			if (res == used_indices_map.end())
+				return;
 
-		uint64_t index = res->second;
+			delete(used_indices[res->second]);
+		}
+		else
+		{
+			auto res = index_map.find(id);
+			if (res == index_map.end())
+				return;
 
-		entities[index].~E();
-		memset(&entities[index], 0, sizeof(E));
-
-		index_map.erase(id);
+			uint64_t index = res->second;
+			entities[index].~E();
+			memset(&entities[index], 0, sizeof(E));
+			free_indices.push(index);
+			index_map.erase(id);
+		}
 
 		uint64_t ui_index = used_indices_map[id];
 
@@ -665,8 +733,6 @@ struct EntityStore
 		used_indices_map.erase(id);
 
 		used_indices.pop_back();
-
-		free_indices.push(index);
 	}
 
 	uint64_t size()
@@ -683,28 +749,39 @@ struct EntityStore
 
 		for (E* ptr : used_indices)
 		{
-			uint64_t index = ptr - entities;
 			ptr->~E();
-			free_indices.push(index);
+			CZSS_CONST_IF (!isVirtual<E>())
+			{
+				uint64_t index = ptr - entities;
+				free_indices.push(index);
+			}
 		}
-
-		memset(entities, 0, sizeof(E) * free_indices.size());
+		CZSS_CONST_IF (!isVirtual<E>())
+		{
+			memset(entities, 0, sizeof(E) * free_indices.size());
+		}
 	}
 
 	~EntityStore()
 	{
+
 		for (E* ptr : used_indices)
 		{
-			ptr->~E();
+			CZSS_CONST_IF (isVirtual<E>())
+				delete(ptr);
+			else
+				ptr->~E();
 		}
 
-		free(entities);
+		CZSS_CONST_IF (!isVirtual<E>())
+			free(entities);
 	}
 
 // private:
 
 	void expand(uint64_t by)
 	{
+		E* old = reinterpret_cast<E*>(entities);
 		uint64_t size = used_indices.size();
 		E* next = reinterpret_cast<E*>(malloc(sizeof (E) * (size + by)));
 
@@ -719,6 +796,9 @@ struct EntityStore
 			free_indices.push(size);
 			size++;
 		}
+
+		for (auto& p : used_indices)
+			p = p - old + reinterpret_cast<E*>(entities);
 	}
 
 	uint64_t nextId;
@@ -859,25 +939,40 @@ struct Orchestrator : TemplateStubs, OrchestratorBase
 	using Cont = unique_tuple::unique_tuple<Entities...>;
 };
 
-template <typename Sys, typename T>
-constexpr bool canRead()
+template <typename Base>
+struct BaseTypeOfFilter
 {
-	return inspect::contains<Flatten<Filter<typename Sys::Cont, ReaderBase>>, T>()
-		|| inspect::contains<Flatten<Filter<typename Sys::Cont, WriterBase>>, T>()
-		|| inspect::contains<Flatten<Filter<typename Sys::Cont, OrchestratorBase>>, T>();
+	template <typename Entity>
+	static constexpr bool test()
+	{
+		return isEntity<Entity>() && std::is_base_of<Entity, Base>();
+	}
+};
+
+template <typename Sys, typename T>
+constexpr bool canOrchestrate()
+{
+	return isVirtual<T>()
+		? std::tuple_size<
+			Filter2<Flatten<Filter<typename Sys::Cont, OrchestratorBase>>, BaseTypeOfFilter<T>>
+		>::value > 0
+		: inspect::contains<Flatten<Filter<typename Sys::Cont, OrchestratorBase>>, T>();
 }
 
 template <typename Sys, typename T>
 constexpr bool canWrite()
 {
 	return inspect::contains<Flatten<Filter<typename Sys::Cont, WriterBase>>, T>()
-		|| inspect::contains<Flatten<Filter<typename Sys::Cont, OrchestratorBase>>, T>();
+		|| canOrchestrate<Sys, T>();
 }
 
+
 template <typename Sys, typename T>
-constexpr bool canOrchestrate()
+constexpr bool canRead()
 {
-	return inspect::contains<Flatten<Filter<typename Sys::Cont, OrchestratorBase>>, T>();
+	return inspect::contains<Flatten<Filter<typename Sys::Cont, ReaderBase>>, T>()
+		|| canWrite<Sys, T>()
+		|| canOrchestrate<Sys, T>();
 }
 
 // #####################
@@ -1251,7 +1346,6 @@ public:
 		{
 			auto ent = initializeEntity<Entity>();
 			Guid guid = ent->getGuid();
-			new(ent) Entity();
 			postInitializeEntity<System>(guid, ent);
 			return ent;
 		}
@@ -1264,9 +1358,8 @@ public:
 	{
 		CZSS_CONST_IF (isEntity<Entity>())
 		{
-			auto ent = initializeEntity<Entity>();
+			auto ent = initializeEntity<Entity>(std::forward<Params>(params)...);
 			Guid guid = ent->getGuid();
-			new (ent) Entity(std::forward<Params>(params)...);
 			postInitializeEntity<System>(guid, ent);
 			return ent;
 		}
@@ -1293,7 +1386,6 @@ public:
 		{
 			auto ent = initializeEntity<Entity>();
 			Guid guid = ent->getGuid();
-			new(ent) Entity();
 			postInitializeEntity<System>(guid, ent, context);
 			return ent;
 		}
@@ -1306,9 +1398,8 @@ public:
 	{
 		CZSS_CONST_IF (isEntity<Entity>())
 		{
-			auto ent = initializeEntity<Entity>();
+			auto ent = initializeEntity<Entity>(std::forward<Params>(params)...);
 			Guid guid = ent->getGuid();
-			new (ent) Entity(std::forward<Params>(params)...);
 			postInitializeEntity<System>(guid, ent, context);
 			return ent;
 		}
@@ -1591,28 +1682,92 @@ private:
 	};
 
 	template <typename Entity>
+	struct InitializeEntityCallback
+	{
+		template <typename T>
+		static void callback(This* arch, uint64_t& id, Entity*& ent)
+		{
+			CZSS_CONST_IF (std::is_base_of<T, Entity>())
+			{
+				CZSS_CONST_IF(isVirtual<Entity>())
+				{
+					auto entities = arch->getEntities<T>();
+					ent = entities->template create<Entity>(id);
+				}
+				else
+				{
+					auto entities = arch->getEntities<Entity>();
+					Entity* loc = entities->entities;
+					uint64_t count = entities->size();
+
+					ent = entities->template create<Entity>(id);
+
+					if (loc != entities->entities)
+					{
+						PointerFixupData<Entity> data = {arch, loc, loc + count};
+						OncePerType<Cont, MarkReallocatedCallback<Entity>>::fn(arch);
+						OncePerType<Cont, ManagedPointerCallback<Entity>>::fn(&data);
+					}
+				}
+			}
+		}
+
+		template <typename T, typename ...Params>
+		static void callback(This* arch, uint64_t& id, Entity*& ent, Params&&... params)
+		{
+			CZSS_CONST_IF (std::is_base_of<T, Entity>())
+			{
+				CZSS_CONST_IF(isVirtual<Entity>())
+				{
+					auto entities = arch->getEntities<T>();
+					ent = entities->template create<Entity>(id, std::forward<Params>(params)...);
+				}
+				else
+				{
+					auto entities = arch->getEntities<Entity>();
+					Entity* loc = entities->entities;
+					uint64_t count = entities->size();
+
+					ent = entities->template create<Entity>(id, std::forward<Params>(params)...);
+
+					if (loc != entities->entities)
+					{
+						PointerFixupData<Entity> data = {arch, loc, loc + count};
+						OncePerType<Cont, MarkReallocatedCallback<Entity>>::fn(arch);
+						OncePerType<Cont, ManagedPointerCallback<Entity>>::fn(&data);
+					}
+				}
+			}
+		}
+	};
+
+	template <typename Entity>
 	Entity* initializeEntity()
 	{
 		static_assert(isEntity<Entity>(), "Template parameter must be an Entity.");
-
-		auto entities = getEntities<Entity>();
-		Entity* loc = entities->entities;
-		uint64_t count = entities->size();
-
+		Entity* ent;
 		uint64_t id;
-		auto ent = entities->create(id);
+		OncePerType<Filter<Cont, EntityBase>, InitializeEntityCallback<Entity>>::fn(this, id, ent);
 
 		uint64_t tk = indexOf<Cont, Entity, EntityBase>() << 63 - typeKeyLength();
 		id += tk;
-
 		setEntityId(ent, id);
 
-		if (loc != entities->entities)
-		{
-			PointerFixupData<Entity> data = {this, loc, loc + count};
-			OncePerType<Cont, MarkReallocatedCallback<Entity>>::fn(this);
-			OncePerType<Cont, ManagedPointerCallback<Entity>>::fn(&data);
-		}
+		return ent;
+	}
+
+	template <typename Entity, typename ...Params>
+	Entity* initializeEntity(Params&&... params)
+	{
+		static_assert(isEntity<Entity>(), "Template parameter must be an Entity.");
+
+		Entity* ent;
+		uint64_t id;
+		OncePerType<Filter<Cont, EntityBase>, InitializeEntityCallback<Entity>>::fn(this, id, ent, std::forward<Params>(params)...);
+
+		uint64_t tk = indexOf<Cont, Entity, EntityBase>() << 63 - typeKeyLength();
+		id += tk;
+		setEntityId(ent, id);
 
 		return ent;
 	}
@@ -1874,6 +2029,11 @@ struct TypedEntityAccessor
 	Guid getGuid() const
 	{
 		return entity->getGuid();
+	}
+
+	Entity* getEntity()
+	{
+		return entity;
 	}
 
 private:
@@ -2422,7 +2582,7 @@ private:
 	{
 		static_assert(isEntity<Entity>(), "Attempted to orchestrate non-entity.");
 		static_assert(canOrchestrate<Sys, Entity>(), "System lacks permission to orchestrate the Entity.");
-		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
+		// static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 	}
 
 	struct EntityDestructionPermission
@@ -2597,12 +2757,10 @@ private:
 				lambda(data->index, accessor);
 			}
 
-
 			data->entityCount -= handled;
 			data->beginIndex = 0;
 		}
 	};
-
 
 	template <typename Iterator, typename F>
 	static void ParallelIterateTask(ParallelIterateTaskData<F>* data)
