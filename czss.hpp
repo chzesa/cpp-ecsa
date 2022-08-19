@@ -2486,8 +2486,8 @@ struct Accessor
 		return iterate<Iterator<Values...>>();
 	}
 
-	template <typename Iterator>
-	void iterate(std::function<void(IteratorAccessor<Iterator, Arch, Sys>&)> f)
+	template <typename Iterator, typename F>
+	void iterate(F f)
 	{
 		iteratorPermission<Iterator>();
 		OncePerType<typename Arch::Cont, IteratorCallback<Iterator>>::fn(f, arch);
