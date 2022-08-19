@@ -179,7 +179,7 @@ struct Sysd : System<Orchestrator<VirtualA>>
 		arch.createEntity<VirtualC>();
 
 		arch.iterate2<czss::Iterator<V>>([&] (auto accessor) {
-			accessor.getEntity()->quack();
+			accessor.entity()->quack();
 		});
 	};
 

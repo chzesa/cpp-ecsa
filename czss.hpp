@@ -2015,35 +2015,35 @@ struct TypedEntityAccessor
 {
 	TypedEntityAccessor(const Entity* ent)
 	{
-		entity = const_cast<Entity*>(ent);
+		_entity = const_cast<Entity*>(ent);
 	}
 
 	template<typename Component>
 	const Component* viewComponent() const
 	{
 		static_assert(canRead<Sys, Component>(), "System lacks read permissions for the Iterator's components.");
-		return entity->template getComponent<Component>();
+		return _entity->template getComponent<Component>();
 	}
 
 	template<typename Component>
 	Component* getComponent()
 	{
 		static_assert(canWrite<Sys, Component>(), "System lacks write permissions for the Iterator's components.");
-		return entity->template getComponent<Component>();
+		return _entity->template getComponent<Component>();
 	}
 
-	Guid getGuid() const
+	Guid guid() const
 	{
-		return entity->getGuid();
+		return _entity->getGuid();
 	}
 
-	Entity* getEntity()
+	Entity* entity()
 	{
-		return entity;
+		return _entity;
 	}
 
 private:
-	Entity* entity;
+	Entity* _entity;
 };
 
 template <typename Arch, typename Sys>
