@@ -2493,14 +2493,12 @@ struct Accessor
 		OncePerType<typename Arch::Cont, IteratorCallback<Iterator>>::fn(f, arch);
 	}
 
-#if __cplusplus >= 202002L
 	template <typename Iterator, typename F>
 	void iterate2(F f)
 	{
 		iteratorPermission<Iterator>();
 		OncePerType<typename Arch::Cont, TypedIteratorCallback<Iterator>>::fn(f, arch);
 	}
-#endif
 
 	template <typename Iterator, typename F>
 	void parallelIterate(uint64_t numTasks, F f)
@@ -2508,13 +2506,11 @@ struct Accessor
 		parallelIterateImpl<Iterator>(numTasks, f, ParallelIterateTask<Iterator, F>);
 	}
 
-#if __cplusplus >= 202002L
 	template <typename Iterator, typename F>
 	void parallelIterate2(uint64_t numTasks, F f)
 	{
 		parallelIterateImpl<Iterator>(numTasks, f, TypedParallelIterateTask<Iterator, F>);
 	}
-#endif
 
 	template <typename Iterator>
 	uint64_t countCompatibleEntities()
