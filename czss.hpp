@@ -468,6 +468,12 @@ struct Filter2Impl2<std::tuple<A...>, F>
 	using type = typename Filter2Impl<F, std::tuple<>, A...>::type;
 };
 
+template <typename F>
+struct Filter2Impl2<std::tuple<>, F>
+{
+	using type = std::tuple<>;
+};
+
 template<typename Tuple, typename F>
 using Filter2 = typename Filter2Impl2<Tuple, F>::type;
 
