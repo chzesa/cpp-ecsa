@@ -2116,7 +2116,7 @@ private:
 		template <typename Value, typename Entity>
 		static void callback(Entity* entity, void** result)
 		{
-			if (std::is_same<Component, Value>())
+			CZSS_CONST_IF (std::is_same<Component, Value>())
 				*result = entity->template getComponent<Value>();
 		}
 	};
