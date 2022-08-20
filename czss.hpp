@@ -1693,27 +1693,24 @@ private:
 		template <typename T>
 		static void callback(This* arch, uint64_t& id, Entity*& ent)
 		{
-			CZSS_CONST_IF (std::is_base_of<T, Entity>())
+			CZSS_CONST_IF(isVirtual<Entity>())
 			{
-				CZSS_CONST_IF(isVirtual<Entity>())
-				{
-					auto entities = arch->getEntities<T>();
-					ent = entities->template create<Entity>(id);
-				}
-				else
-				{
-					auto entities = arch->getEntities<Entity>();
-					Entity* loc = entities->entities;
-					uint64_t count = entities->size();
+				auto entities = arch->getEntities<T>();
+				ent = entities->template create<Entity>(id);
+			}
+			else
+			{
+				auto entities = arch->getEntities<T>();
+				T* loc = entities->entities;
+				uint64_t count = entities->size();
 
-					ent = entities->template create<Entity>(id);
+				ent = entities->template create<T>(id);
 
-					if (loc != entities->entities)
-					{
-						PointerFixupData<Entity> data = {arch, loc, loc + count};
-						OncePerType<Cont, MarkReallocatedCallback<Entity>>::fn(arch);
-						OncePerType<Cont, ManagedPointerCallback<Entity>>::fn(&data);
-					}
+				if (loc != entities->entities)
+				{
+					PointerFixupData<T> data = {arch, loc, loc + count};
+					OncePerType<Filter<Cont, EntityBase>, ManagedPointerCallback<T>>::fn(&data);
+					OncePerType<Filter<Cont, ResourceBase>, ManagedPointerCallback2<T>>::fn(&data);
 				}
 			}
 		}
@@ -1721,27 +1718,24 @@ private:
 		template <typename T, typename ...Params>
 		static void callback(This* arch, uint64_t& id, Entity*& ent, Params&&... params)
 		{
-			CZSS_CONST_IF (std::is_base_of<T, Entity>())
+			CZSS_CONST_IF(isVirtual<Entity>())
 			{
-				CZSS_CONST_IF(isVirtual<Entity>())
-				{
-					auto entities = arch->getEntities<T>();
-					ent = entities->template create<Entity>(id, std::forward<Params>(params)...);
-				}
-				else
-				{
-					auto entities = arch->getEntities<Entity>();
-					Entity* loc = entities->entities;
-					uint64_t count = entities->size();
+				auto entities = arch->getEntities<T>();
+				ent = entities->template create<Entity>(id, std::forward<Params>(params)...);
+			}
+			else
+			{
+				auto entities = arch->getEntities<T>();
+				T* loc = entities->entities;
+				uint64_t count = entities->size();
 
-					ent = entities->template create<Entity>(id, std::forward<Params>(params)...);
+				ent = entities->template create<T>(id, std::forward<Params>(params)...);
 
-					if (loc != entities->entities)
-					{
-						PointerFixupData<Entity> data = {arch, loc, loc + count};
-						OncePerType<Cont, MarkReallocatedCallback<Entity>>::fn(arch);
-						OncePerType<Cont, ManagedPointerCallback<Entity>>::fn(&data);
-					}
+				if (loc != entities->entities)
+				{
+					PointerFixupData<T> data = {arch, loc, loc + count};
+					OncePerType<Filter<Cont, EntityBase>, ManagedPointerCallback<T>>::fn(&data);
+					OncePerType<Filter<Cont, ResourceBase>, ManagedPointerCallback2<T>>::fn(&data);
 				}
 			}
 		}
@@ -1753,7 +1747,7 @@ private:
 		static_assert(isEntity<Entity>(), "Template parameter must be an Entity.");
 		Entity* ent;
 		uint64_t id;
-		OncePerType<Filter<Cont, EntityBase>, InitializeEntityCallback<Entity>>::fn(this, id, ent);
+		OncePerType<Filter2<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, ent);
 
 		uint64_t tk = indexOf<Cont, Entity, EntityBase>() << 63 - typeKeyLength();
 		id += tk;
@@ -1769,7 +1763,7 @@ private:
 
 		Entity* ent;
 		uint64_t id;
-		OncePerType<Filter<Cont, EntityBase>, InitializeEntityCallback<Entity>>::fn(this, id, ent, std::forward<Params>(params)...);
+		OncePerType<Filter2<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, ent, std::forward<Params>(params)...);
 
 		uint64_t tk = indexOf<Cont, Entity, EntityBase>() << 63 - typeKeyLength();
 		id += tk;
@@ -1800,25 +1794,27 @@ private:
 		template <typename Value>
 		static inline void callback(PointerFixupData<Entity>* data)
 		{
-			CZSS_CONST_IF (isEntity<Value>())
-			{
-				auto entities = data->arch->template getEntities<Value>();
-				for (auto ptr : entities->used_indices)
-					OncePerType<Filter<Cont, ComponentBase>, EntityComponentManagedPointerCallback<Entity, Value>>::fn(data, ptr);
-			}
+			auto entities = data->arch->template getEntities<Value>();
+			for (auto ptr : entities->used_indices)
+				OncePerType<typename Value::Cont, EntityComponentManagedPointerCallback<Entity, Value>>::fn(data, ptr);
+		}
+	};
 
-			CZSS_CONST_IF (isResource<Value>())
+	template <typename Entity>
+	struct ManagedPointerCallback2
+	{
+		template <typename Value>
+		static inline void callback(PointerFixupData<Entity>* data)
+		{
+			auto resource = data->arch->template getResource<Value>();
+			if (resource != nullptr)
 			{
-				auto resource = data->arch->template getResource<Value>();
-				if (resource != nullptr)
-				{
-					Entity* loc = data->arch->template getEntities<Entity>()->entities;
-					Entity* min = data->oldLoc;
-					Entity* max = data->oldMaxLoc;
-					Repair<Entity> repair(min, max, loc - min);
-					managePointer(*resource, repair);
-					OncePerType<Filter<Cont, ComponentBase>, ComponentManagedPointerCallback<Entity, Value>>::fn(data, resource);
-				}
+				Entity* loc = data->arch->template getEntities<Entity>()->entities;
+				Entity* min = data->oldLoc;
+				Entity* max = data->oldMaxLoc;
+				Repair<Entity> repair(min, max, loc - min);
+				managePointer(*resource, repair);
+				OncePerType<Filter<Cont, ComponentBase>, ComponentManagedPointerCallback<Entity, Value>>::fn(data, resource);
 			}
 		}
 	};
@@ -1829,10 +1825,7 @@ private:
 		template <typename Component>
 		static inline void callback(PointerFixupData<Entity>* data, IterateEntity* ptr)
 		{
-			CZSS_CONST_IF (inspect::contains<typename IterateEntity::Cont, Component>())
-			{
-				OncePerType<Filter<Cont, ComponentBase>, ManagedComponentPointerFixupCallback<Entity, Component>>::fn(data, ptr->template getComponent<Component>());
-			}
+			OncePerType<typename Entity::Cont, ManagedComponentPointerFixupCallback<Entity, Component>>::fn(data, ptr->template getComponent<Component>());
 		}
 	};
 
@@ -1842,7 +1835,7 @@ private:
 		template <typename Component>
 		static inline void callback(PointerFixupData<Entity>* data, Update* ptr)
 		{
-			OncePerType<Filter<Cont, ComponentBase>, ManagedComponentPointerFixupCallback<Entity, Update>>::fn(data, ptr);
+			OncePerType<typename Entity::Cont, ManagedComponentPointerFixupCallback<Entity, Update>>::fn(data, ptr);
 		}
 	};
 
@@ -1852,14 +1845,11 @@ private:
 		template <typename Value>
 		static inline void callback(PointerFixupData<Entity>* data, Update* ptr)
 		{
-			CZSS_CONST_IF (isComponent<Value>() && inspect::contains<typename Entity::Cont, Value>())
-			{
-				Value* min = data->oldLoc->template getComponent<Value>();
-				Value* max = reinterpret_cast<Value*>(data->oldMaxLoc);
-				Entity* loc = data->arch->template getEntities<Entity>()->entities;
-				Repair<Value> repair(min, max, loc->template getComponent<Value>() - min);
-				managePointer(*ptr, repair);
-			}
+			Value* min = data->oldLoc->template getComponent<Value>();
+			Value* max = reinterpret_cast<Value*>(data->oldMaxLoc);
+			Entity* loc = data->arch->template getEntities<Entity>()->entities;
+			Repair<Value> repair(min, max, loc->template getComponent<Value>() - min);
+			managePointer(*ptr, repair);
 		}
 	};
 
@@ -2121,15 +2111,23 @@ private:
 	}
 
 	template <typename Component>
+	struct Callback
+	{
+		template <typename Value, typename Entity>
+		static void callback(Entity* entity, void** result)
+		{
+			if (std::is_same<Component, Value>())
+				*result = entity->template getComponent<Value>();
+		}
+	};
+
+	template <typename Component>
 	struct ComponentGetter
 	{
 		template <typename Value>
 		inline static void callback(void* entity, void** result)
 		{
-			if (inspect::contains<typename Value::Cont, Component>())
-			{
-				*result = reinterpret_cast<Value*>(entity)->template getComponent<Component>();
-			}
+			OncePerType<typename Value::Cont, Callback<Component>>::fn(reinterpret_cast<Value*>(entity), result);
 		}
 	};
 
