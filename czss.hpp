@@ -2417,7 +2417,7 @@ struct Accessor
 	{
 		if (OncePerType<typename Arch::Cont, EntityDestructionPermission>::constFn(Arch::typeKey(guid)))
 		{
-			arch->destroyEntity(guid);
+			arch->template destroyEntity<Sys>(guid);
 		}
 	}
 
@@ -2425,7 +2425,7 @@ struct Accessor
 	void destroyEntity(EntityId<Arch, Entity> key)
 	{
 		static_assert(Sys::template canOrchestrate<Entity>(), "System does not have the permission to destroy this entity.");
-		arch->destroyEntity(key);
+		arch->template destroyEntity<Sys>(key);
 	}
 
 	template <typename ...Entities>
