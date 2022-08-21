@@ -2346,14 +2346,14 @@ struct Accessor
 	Entity* createEntityWithContext(Context&& context)
 	{
 		entityPermission<Entity>();
-		return arch->template createEntity<Entity>(std::forward(context));
+		return arch->template createEntityWithContext<Entity>(context);
 	}
 
 	template <typename Entity, typename Context, typename ...Params>
 	Entity* createEntityWithContext(Context&& context, Params&&... params)
 	{
 		entityPermission<Entity>();
-		return arch->template createEntity<Entity>(std::forward(context, params)...);
+		return arch->template createEntityWithContext<Entity>(context, std::forward(params)...);
 	}
 
 	template <typename Entity>
