@@ -1691,8 +1691,10 @@ private:
 	struct InitializeEntityCallback
 	{
 		template <typename T>
-		static void callback(This* arch, uint64_t& id, Entity*& ent)
+		static void callback(This* arch, uint64_t& id, uint64_t& tk, Entity*& ent)
 		{
+			tk = indexOf<Cont, T, EntityBase>() << 63 - typeKeyLength();
+
 			CZSS_CONST_IF(isVirtual<Entity>())
 			{
 				auto entities = arch->getEntities<T>();
@@ -1716,8 +1718,10 @@ private:
 		}
 
 		template <typename T, typename ...Params>
-		static void callback(This* arch, uint64_t& id, Entity*& ent, Params&&... params)
+		static void callback(This* arch, uint64_t& id, uint64_t& tk, Entity*& ent, Params&&... params)
 		{
+			tk = indexOf<Cont, T, EntityBase>() << 63 - typeKeyLength();
+
 			CZSS_CONST_IF(isVirtual<Entity>())
 			{
 				auto entities = arch->getEntities<T>();
@@ -1746,10 +1750,9 @@ private:
 	{
 		static_assert(isEntity<Entity>(), "Template parameter must be an Entity.");
 		Entity* ent;
-		uint64_t id;
-		OncePerType<Filter2<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, ent);
+		uint64_t id, tk;
+		OncePerType<Filter2<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, tk, ent);
 
-		uint64_t tk = indexOf<Cont, Entity, EntityBase>() << 63 - typeKeyLength();
 		id += tk;
 		setEntityId(ent, id);
 
@@ -1762,10 +1765,9 @@ private:
 		static_assert(isEntity<Entity>(), "Template parameter must be an Entity.");
 
 		Entity* ent;
-		uint64_t id;
-		OncePerType<Filter2<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, ent, std::forward<Params>(params)...);
+		uint64_t id, tk;
+		OncePerType<Filter2<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, tk, ent, std::forward<Params>(params)...);
 
-		uint64_t tk = indexOf<Cont, Entity, EntityBase>() << 63 - typeKeyLength();
 		id += tk;
 		setEntityId(ent, id);
 
