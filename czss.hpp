@@ -176,6 +176,15 @@ struct ForEach<0, T>
 	}
 };
 
+template <typename T>
+struct ForEach<uint64_t(-1), T>
+{
+	inline static void fn() { }
+
+	template<typename ...Params>
+	inline static void fn(Params&&... params) { }
+};
+
 template <typename Tuple, typename Callback>
 struct OncePerType
 {
