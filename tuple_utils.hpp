@@ -1,3 +1,5 @@
+#pragma once
+
 #include "external/unique_tuple/unique_tuple.hpp"
 
 #include <tuple>
