@@ -924,6 +924,9 @@ private:
 	Cont storage;
 };
 
+template<typename Sys, typename Entity>
+struct TypedEntityAccessor;
+
 template <typename Iterator, typename Entity>
 constexpr static bool isIteratorCompatibleWithEntity()
 {
@@ -1332,6 +1335,54 @@ struct Architecture : VirtualArchitecture
 	Entity* getEntity(uint64_t id)
 	{
 		return getEntities<Entity>()->get(id);
+	}
+
+private:
+	template <typename System>
+	struct ResolveGuid
+	{
+		template <typename T, typename F>
+		static void callback(This* arch, uint64_t key, uint64_t id, F f, bool& result)
+		{
+			if (entityIndex<T>() == key)
+			{
+				auto entities = arch->getEntities<T>();
+				auto entity = entities->get(id);
+				if (entity != nullptr)
+				{
+					auto accessor = TypedEntityAccessor<System, T>(entity);
+					f(accessor);
+					result = true;
+				}
+			}
+		}
+	};
+
+	template <typename ...Components>
+	struct ContainsAllComponentsFilter
+	{
+		template <typename Entity>
+		static constexpr bool test()
+		{
+			return inspect::containsAllIn<typename Entity::Cont, Filter<Flatten<std::tuple<Components...>>, ComponentBase>>();
+		}
+	};
+
+public:
+	template <typename Sys, typename F>
+	bool accessEntity(Guid guid, F f)
+	{
+		bool result = false;
+		OncePerType<Filter<Cont, EntityBase>, ResolveGuid<Sys>>::fn(this, typeKey(guid), guidId(guid), f, result);
+		return result;
+	}
+
+	template <typename Sys, typename F, typename ...Components>
+	bool accessEntityFiltered(Guid guid, F f)
+	{
+		bool result = false;
+		OncePerType<Filter2<Cont, ContainsAllComponentsFilter<Components...>>, ResolveGuid<Sys>>::fn(this, typeKey(guid), guidId(guid), f, result);
+		return result;
 	}
 
 private:
@@ -2336,6 +2387,21 @@ private:
 	Arch* arch;
 };
 
+template <typename Arch, typename Sys, typename ...Components>
+struct FilterAccessor
+{
+	template <typename F>
+	bool accessEntity(Guid guid, F f)
+	{
+		return arch->template accessEntityFiltered<Sys, F, Components...>(guid, f);
+	}
+
+private:
+	Arch* arch;
+	FilterAccessor(Arch* arch) : arch(arch) {}
+	friend Accessor<Arch, Sys>;
+};
+
 template<typename Arch, typename Sys>
 struct Accessor
 {
@@ -2378,6 +2444,18 @@ struct Accessor
 		void* ptr = arch->getEntity(guid);
 		uint64_t typeKey = Arch::typeKey(guid);
 		return EntityAccessor<Arch, Sys>(typeKey, ptr);
+	}
+
+	template <typename F>
+	bool accessEntity(Guid guid, F f)
+	{
+		return arch->template accessEntity<Sys>(guid, f);
+	}
+
+	template <typename ...Components>
+	FilterAccessor<Arch, Sys, Components...> filterEntities()
+	{
+		return FilterAccessor<Arch, Sys, Components...>(arch);
 	}
 
 	template <typename Entity>
