@@ -2050,6 +2050,26 @@ private:
 // Accessors
 // #####################
 
+template<typename Sys>
+struct HasEntityReadPermissionCallback
+{
+	template <typename Value>
+	static void callback()
+	{
+		static_assert(canRead<Sys, Value>(), "System cannot read component.");
+	}
+};
+
+template<typename Sys>
+struct HasEntityWritePermissionCallback
+{
+	template <typename Value>
+	static void callback()
+	{
+		static_assert(canWrite<Sys, Value>(), "System cannot write to component.");
+	}
+};
+
 template <typename Iter, typename Arch, typename Sys>
 struct IteratorAccessor;
 
@@ -2074,7 +2094,7 @@ struct TypedEntityAccessor
 	const Component* viewComponent() const
 	{
 		static_assert(canRead<Sys, Component>(), "System lacks read permissions for the Iterator's components.");
-		return _entity->template getComponent<Component>();
+		return _entity->template viewComponent<Component>();
 	}
 
 	template<typename Component>
@@ -2089,8 +2109,15 @@ struct TypedEntityAccessor
 		return _entity->getGuid();
 	}
 
-	Entity* entity()
+	const Entity* viewEntity() const
 	{
+		OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermissionCallback<Sys>>::fn();
+		return _entity;
+	}
+
+	Entity* getEntity()
+	{
+		OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermissionCallback<Sys>>::fn();
 		return _entity;
 	}
 
@@ -2462,7 +2489,7 @@ struct Accessor
 	const Entity* viewEntity(Guid guid)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermission>::fn();
+		OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermissionCallback<Sys>>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity<Entity>(guid);
 	}
@@ -2471,7 +2498,7 @@ struct Accessor
 	const Entity* viewEntity(EntityId<Arch, Entity> id)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermission>::fn();
+		OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermissionCallback<Sys>>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity(id);
 	}
@@ -2480,7 +2507,7 @@ struct Accessor
 	Entity* getEntity(Guid guid)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermission>::fn();
+		OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermissionCallback<Sys>>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity<Entity>(guid);
 	}
@@ -2489,7 +2516,7 @@ struct Accessor
 	Entity* getEntity(EntityId<Arch, Entity> id)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermission>::fn();
+		OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermissionCallback<Sys>>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity(id);
 	}
@@ -2918,24 +2945,6 @@ private:
 				return;
 		}
 	}
-
-	struct HasEntityReadPermission
-	{
-		template <typename Value>
-		static void callback()
-		{
-			static_assert(canRead<Sys, Value>(), "System cannot read component.");
-		}
-	};
-
-	struct HasEntityWritePermission
-	{
-		template <typename Value>
-		static void callback()
-		{
-			static_assert(canWrite<Sys, Value>(), "System cannot write to component.");
-		}
-	};
 };
 
 
