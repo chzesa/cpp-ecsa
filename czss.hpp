@@ -40,34 +40,6 @@ namespace czss
 
 #define CZSS_NAME(A, B) template <> const char* czss::name<A>() { const static char name[] = B; return name; }
 
-template<typename T>
-struct Repair
-{
-	Repair(T* min, T* max, int64_t offset)
-	{
-		this->min = min;
-		this->max = max;
-		this->offset = offset;
-	}
-
-	template <typename P>
-	void operator ()(P*& ptr) const { }
-
-	void operator ()(T*& ptr) const
-	{
-		if (min <= ptr && ptr < max)
-			ptr += offset;
-	}
-
-private:
-	T* min;
-	T* max;
-	int64_t offset;
-};
-
-template <typename Component, typename PointerType>
-void managePointer(Component& component, const Repair<PointerType>& rep) { }
-
 template <typename Value>
 const static char* name()
 {
@@ -620,34 +592,36 @@ struct EntityStore
 {
 	EntityStore()
 	{
-		nextId = 1;
-
 		CZSS_CONST_IF (!isVirtual<E>())
-		{
-			entities = reinterpret_cast<E*>(malloc(sizeof (E) * 32));
-			for (uint64_t i = 0; i < 32; i++)
-				free_indices.push(i);
-		}
+			expand();
 	}
 
 	E* get(uint64_t id)
 	{
-		CZSS_CONST_IF (isVirtual<E>())
-		{
-			auto res = used_indices_map.find(id);
-			if (res == used_indices_map.end())
-				return nullptr;
-			return used_indices[res->second];
-		}
-		else
-		{
-			auto res = index_map.find(id);
-			if (res == index_map.end())
-				return nullptr;
-
-			return &entities[res->second];
-		}
+		auto res = used_indices_map.find(id);
+		if (res == used_indices_map.end())
+			return nullptr;
+		return used_indices[res->second];
 	}
+
+private:
+	struct Index
+	{
+		bool operator< (const Index& other) const
+		{
+			return tier == other.tier ? index < other.index : tier < other.tier;
+		}
+
+		size_t tier;
+		size_t index;
+	};
+
+	E* get(const Index& index)
+	{
+		return &entities[index.tier][index.index];
+	}
+
+public:
 
 	template <typename T>
 	T* create(uint64_t& id)
@@ -655,7 +629,7 @@ struct EntityStore
 		id = nextId++;
 
 		T* res;
-		uint64_t used_indices_index = used_indices.size();
+		auto used_indices_index = used_indices.size();
 
 		CZSS_CONST_IF (isVirtual<T>())
 		{
@@ -664,12 +638,11 @@ struct EntityStore
 		else
 		{
 			if(free_indices.size() == 0)
-				expand(size());
+				expand();
 
-			uint64_t index = free_indices.top();
+			auto index = free_indices.top();
 			free_indices.pop();
-
-			res = reinterpret_cast<T*>(entities) + index;
+			res = get(index);
 			new(res) T();
 			index_map.insert({id, index});
 		}
@@ -687,7 +660,7 @@ struct EntityStore
 		id = nextId++;
 
 		T* res;
-		uint64_t used_indices_index = used_indices.size();
+		auto used_indices_index = used_indices.size();
 
 		CZSS_CONST_IF (isVirtual<T>())
 		{
@@ -696,12 +669,11 @@ struct EntityStore
 		else
 		{
 			if(free_indices.size() == 0)
-				expand(size());
+				expand();
 
-			uint64_t index = free_indices.top();
+			auto index = free_indices.top();
 			free_indices.pop();
-
-			res = reinterpret_cast<T*>(entities) + index;
+			res = get(index);
 			new(res) T(std::forward<Params>(params)...);
 			index_map.insert({id, index});
 		}
@@ -729,18 +701,19 @@ struct EntityStore
 			if (res == index_map.end())
 				return;
 
-			uint64_t index = res->second;
-			entities[index].~E();
-			memset(&entities[index], 0, sizeof(E));
+			auto index = res->second;
+			auto p = get(index);
+			p->~E();
+			memset(p, 0, sizeof(E));
 			free_indices.push(index);
 			index_map.erase(id);
 		}
 
-		uint64_t ui_index = used_indices_map[id];
+		auto ui_index = used_indices_map[id];
 
-		uint64_t replace_index = used_indices.size() - 1;
+		auto replace_index = used_indices.size() - 1;
 		used_indices[ui_index] = used_indices[replace_index];
-		uint64_t replace_id = used_indices_map_reverse[replace_index];
+		auto replace_id = used_indices_map_reverse[replace_index];
 
 		used_indices_map_reverse[ui_index] = replace_id;
 		used_indices_map_reverse.erase(replace_index);
@@ -757,29 +730,65 @@ struct EntityStore
 
 	void clear()
 	{
-
 		index_map.clear();
 		used_indices_map.clear();
 		used_indices_map_reverse.clear();
+		free_indices.clear();
 
-		for (E* ptr : used_indices)
+		callDestructors();
+
+		for (size_t k = 0; k < tierCount; k++)
 		{
-			ptr->~E();
-			CZSS_CONST_IF (!isVirtual<E>())
-			{
-				uint64_t index = ptr - entities;
-				free_indices.push(index);
-			}
+			addArrayKeys(k);
+			size_t n = 2 << (k + 5);
 		}
 		CZSS_CONST_IF (!isVirtual<E>())
 		{
 			memset(entities, 0, sizeof(E) * free_indices.size());
 		}
+
+		used_indices.clear();
 	}
 
 	~EntityStore()
 	{
+		callDestructors();
 
+		for (size_t i = 0; i < tierCount; i++)
+			free(entities[i]);
+	}
+
+	std::vector<E*> used_indices;
+
+private:
+	E* entities[26];
+
+	// empty slots in entities Index
+	std::priority_queue<Index, std::vector<Index>> free_indices;
+
+	// maps entity id to entities array
+	std::unordered_map<uint64_t, Index> index_map;
+
+	// maps entity id to index in used_indices
+	std::unordered_map<uint64_t, uint64_t> used_indices_map;
+
+	// reverse of the above
+	std::unordered_map<uint64_t, uint64_t> used_indices_map_reverse;
+
+	uint64_t nextId = 1;
+	size_t tierCount = 0;
+
+	void expand()
+	{
+		uint64_t n = 2 << (tierCount + 5);
+		addArrayKeys(tierCount);
+		E* p = reinterpret_cast<E*>(malloc(sizeof (E) * n));
+		entities[tierCount] = p;
+		tierCount++;
+	}
+
+	void callDestructors()
+	{
 		for (E* ptr : used_indices)
 		{
 			CZSS_CONST_IF (isVirtual<E>())
@@ -787,50 +796,14 @@ struct EntityStore
 			else
 				ptr->~E();
 		}
-
-		CZSS_CONST_IF (!isVirtual<E>())
-			free(entities);
 	}
 
-// private:
-
-	void expand(uint64_t by)
+	void addArrayKeys(size_t tier)
 	{
-		E* old = reinterpret_cast<E*>(entities);
-		uint64_t size = used_indices.size();
-		E* next = reinterpret_cast<E*>(malloc(sizeof (E) * (size + by)));
-
-		memcpy(next, entities, sizeof (E) * size);
-		free(entities);
-
-		entities = next;
-
-		uint64_t new_size = size + by;
-		while(size < new_size)
-		{
-			free_indices.push(size);
-			size++;
-		}
-
-		for (auto& p : used_indices)
-			p = p - old + reinterpret_cast<E*>(entities);
+		size_t n = 2 << (tier + 5);
+		for (size_t i = 0; i < n; i++)
+			free_indices.push({tier, i});
 	}
-
-	uint64_t nextId;
-	E* entities;
-	std::vector<E*> used_indices;
-
-	// empty slots in entities array
-	std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> free_indices;
-
-	// maps entity id to entities array
-	std::unordered_map<uint64_t, uint64_t> index_map;
-
-	// maps entity id to index in used_indices
-	std::unordered_map<uint64_t, uint64_t> used_indices_map;
-
-	// reverse of the above
-	std::unordered_map<uint64_t, uint64_t> used_indices_map_reverse;
 };
 
 // #####################
@@ -1556,17 +1529,6 @@ public:
 		OncePerType<unique_tuple::unique_tuple<Entities...>, DestroyEntitiesCallback>(this);
 	}
 
-	template <typename Component, typename System>
-	bool componentReallocated()
-	{
-		static const uint64_t index = indexOf<Cont, Component, ComponentBase>()
-			* numUniques<Cont, SystemBase>()
-			+ systemIndex<System>();
-		bool ret = reallocated[index];
-		reallocated[index] = false;
-		return ret;
-	}
-
 	template <typename T>
 	void run(T* fls)
 	{
@@ -1737,15 +1699,6 @@ public:
 private:
 	void* resources[max(numUniques<Cont, ResourceBase>(), uint64_t(1))] = {0};
 	char entities[max(numUniques<Cont, EntityBase>(), uint64_t(1)) * sizeof(EntityStore<uint64_t>)] = {0};
-	bool reallocated[max(numUniques<Cont, ComponentBase>() * numUniques<Cont, SystemBase>(), uint64_t(1))] = {0};
-
-	template <typename Entity>
-	struct PointerFixupData
-	{
-		This* arch;
-		Entity* oldLoc;
-		Entity* oldMaxLoc;
-	};
 
 	template <typename Entity>
 	struct InitializeEntityCallback
@@ -1754,54 +1707,16 @@ private:
 		static void callback(This* arch, uint64_t& id, uint64_t& tk, Entity*& ent)
 		{
 			tk = indexOf<Cont, T, EntityBase>() << 63 - typeKeyLength();
-
-			CZSS_CONST_IF(isVirtual<Entity>())
-			{
-				auto entities = arch->getEntities<T>();
-				ent = entities->template create<Entity>(id);
-			}
-			else
-			{
-				auto entities = arch->getEntities<T>();
-				T* loc = entities->entities;
-				uint64_t count = entities->size();
-
-				ent = entities->template create<T>(id);
-
-				if (loc != entities->entities)
-				{
-					PointerFixupData<T> data = {arch, loc, loc + count};
-					OncePerType<Filter<Cont, EntityBase>, ManagedPointerCallback<T>>::fn(&data);
-					OncePerType<Filter<Cont, ResourceBase>, ManagedPointerCallback2<T>>::fn(&data);
-				}
-			}
+			auto entities = arch->getEntities<T>();
+			ent = entities->template create<Entity>(id);
 		}
 
 		template <typename T, typename ...Params>
 		static void callback(This* arch, uint64_t& id, uint64_t& tk, Entity*& ent, Params&&... params)
 		{
 			tk = indexOf<Cont, T, EntityBase>() << 63 - typeKeyLength();
-
-			CZSS_CONST_IF(isVirtual<Entity>())
-			{
-				auto entities = arch->getEntities<T>();
-				ent = entities->template create<Entity>(id, std::forward<Params>(params)...);
-			}
-			else
-			{
-				auto entities = arch->getEntities<T>();
-				T* loc = entities->entities;
-				uint64_t count = entities->size();
-
-				ent = entities->template create<T>(id, std::forward<Params>(params)...);
-
-				if (loc != entities->entities)
-				{
-					PointerFixupData<T> data = {arch, loc, loc + count};
-					OncePerType<Filter<Cont, EntityBase>, ManagedPointerCallback<T>>::fn(&data);
-					OncePerType<Filter<Cont, ResourceBase>, ManagedPointerCallback2<T>>::fn(&data);
-				}
-			}
+			auto entities = arch->getEntities<T>();
+			ent = entities->template create<Entity>(id, std::forward<Params>(params)...);
 		}
 	};
 
@@ -1833,87 +1748,6 @@ private:
 
 		return ent;
 	}
-
-	template <typename Entity>
-	struct MarkReallocatedCallback
-	{
-		template <typename Value>
-		static inline void callback(This* arch)
-		{
-			CZSS_CONST_IF (isComponent<Value>() && inspect::contains<typename Entity::Cont, Value>())
-			{
-				static const uint64_t begin = indexOf<Cont, Value, ComponentBase>() * numUniques<Cont, SystemBase>();
-				static const uint64_t end = (indexOf<Cont, Value, ComponentBase>() + 1) * numUniques<Cont, SystemBase>();
-				for (uint64_t i = begin; i < end; i++)
-					arch->reallocated[i] = true;
-			}
-		}
-	};
-
-	template <typename Entity>
-	struct ManagedPointerCallback
-	{
-		template <typename Value>
-		static inline void callback(PointerFixupData<Entity>* data)
-		{
-			auto entities = data->arch->template getEntities<Value>();
-			for (auto ptr : entities->used_indices)
-				OncePerType<typename Value::Cont, EntityComponentManagedPointerCallback<Entity, Value>>::fn(data, ptr);
-		}
-	};
-
-	template <typename Entity>
-	struct ManagedPointerCallback2
-	{
-		template <typename Value>
-		static inline void callback(PointerFixupData<Entity>* data)
-		{
-			auto resource = data->arch->template getResource<Value>();
-			if (resource != nullptr)
-			{
-				Entity* loc = data->arch->template getEntities<Entity>()->entities;
-				Entity* min = data->oldLoc;
-				Entity* max = data->oldMaxLoc;
-				Repair<Entity> repair(min, max, loc - min);
-				managePointer(*resource, repair);
-				OncePerType<Filter<Cont, ComponentBase>, ComponentManagedPointerCallback<Entity, Value>>::fn(data, resource);
-			}
-		}
-	};
-
-	template <typename Entity, typename IterateEntity>
-	struct EntityComponentManagedPointerCallback
-	{
-		template <typename Component>
-		static inline void callback(PointerFixupData<Entity>* data, IterateEntity* ptr)
-		{
-			OncePerType<typename Entity::Cont, ManagedComponentPointerFixupCallback<Entity, Component>>::fn(data, ptr->template getComponent<Component>());
-		}
-	};
-
-	template <typename Entity, typename Update>
-	struct ComponentManagedPointerCallback
-	{
-		template <typename Component>
-		static inline void callback(PointerFixupData<Entity>* data, Update* ptr)
-		{
-			OncePerType<typename Entity::Cont, ManagedComponentPointerFixupCallback<Entity, Update>>::fn(data, ptr);
-		}
-	};
-
-	template <typename Entity, typename Update>
-	struct ManagedComponentPointerFixupCallback
-	{
-		template <typename Value>
-		static inline void callback(PointerFixupData<Entity>* data, Update* ptr)
-		{
-			Value* min = data->oldLoc->template getComponent<Value>();
-			Value* max = reinterpret_cast<Value*>(data->oldMaxLoc);
-			Entity* loc = data->arch->template getEntities<Entity>()->entities;
-			Repair<Value> repair(min, max, loc->template getComponent<Value>() - min);
-			managePointer(*ptr, repair);
-		}
-	};
 
 	struct DestroyEntitiesCallback
 	{
@@ -2639,14 +2473,6 @@ struct Accessor
 	{
 		return OncePerType<typename Arch::Cont, NumCompatibleEntities<Iterator>>::constSum();
 	}
-
-	template <typename Component>
-	bool componentReallocated()
-	{
-		return arch->template componentReallocated<Component, Sys>();
-	}
-
-
 // private:
 	// friend Arch;
 	Accessor(Arch* arch) { this->arch = arch; }
