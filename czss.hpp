@@ -2263,6 +2263,21 @@ private:
 	friend Accessor<Arch, Sys>;
 };
 
+template <typename Arch, typename Sys, typename ...Components>
+struct ConstFilterAccessor
+{
+	template <typename F>
+	bool accessEntity(Guid guid, F f) const
+	{
+		return arch->template accessEntityFiltered<Sys, F, Components...>(guid, f);
+	}
+
+private:
+	Arch* arch;
+	ConstFilterAccessor(Arch* arch) : arch(arch) {}
+	friend Accessor<Arch, Sys>;
+};
+
 template<typename Arch, typename Sys>
 struct Accessor
 {
@@ -2319,8 +2334,14 @@ struct Accessor
 		return FilterAccessor<Arch, Sys, Components...>(arch);
 	}
 
+	template <typename ...Components>
+	ConstFilterAccessor<Arch, Sys, Components...> filterEntitiesConst() const
+	{
+		return ConstFilterAccessor<Arch, Sys, Components...>(arch);
+	}
+
 	template <typename Entity>
-	const Entity* viewEntity(Guid guid)
+	const Entity* viewEntity(Guid guid) const
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
 		OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermissionCallback<Sys>>::fn();
@@ -2329,7 +2350,7 @@ struct Accessor
 	}
 
 	template <typename Entity>
-	const Entity* viewEntity(EntityId<Arch, Entity> id)
+	const Entity* viewEntity(EntityId<Arch, Entity> id) const
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
 		OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermissionCallback<Sys>>::fn();
@@ -2356,7 +2377,7 @@ struct Accessor
 	}
 
 	template <typename Entity>
-	EntityId<Arch, Entity> getEntityId(const Entity* ent)
+	EntityId<Arch, Entity> getEntityId(const Entity* ent) const
 	{
 		return Arch::getEntityId(ent);
 	}
@@ -2404,7 +2425,7 @@ struct Accessor
 	}
 
 	template <typename Resource>
-	const Resource* viewResource()
+	const Resource* viewResource() const
 	{
 		static_assert(isResource<Resource>(), "Attempted to read non-resource.");
 		static_assert(canRead<Sys, Resource>(), "System lacks permission to read Resource.");
