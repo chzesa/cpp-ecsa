@@ -1364,8 +1364,8 @@ private:
 	{
 		setEntityId(ent, guid.get());
 		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
-		onCreate(*ent, accessor);
 		OncePerType<typename Entity::Cont, OnCreateCallback>::fn(*ent, accessor);
+		onCreate(*ent, accessor);
 	}
 
 	template <typename System, typename Entity, typename Context>
@@ -1373,8 +1373,8 @@ private:
 	{
 		setEntityId(ent, guid.get());
 		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
-		onCreate(*ent, accessor, context);
 		OncePerType<typename Entity::Cont, OnCreateContextCallback>::fn(*ent, accessor, context);
+		onCreate(*ent, accessor, context);
 	}
 
 public:
