@@ -345,7 +345,8 @@ constexpr bool isThreadSafe()
 template<typename T>
 constexpr bool isVirtual()
 {
-	return isBaseType<EntityBase, T>() && std::is_base_of<Virtual, T>();
+	return (isBaseType<EntityBase, T>() || isBaseType<ComponentBase, T>())
+		&& std::is_base_of<Virtual, T>();
 }
 
 template<typename T>
@@ -887,6 +888,20 @@ struct Entity : EntityBase
 
 		return nullptr;
 	}
+
+	template <typename B, typename D>
+	B* setComponent(D d)
+	{
+		static_assert(isVirtual<B>());
+		static_assert(tuple_contains<Cont, B>::value);
+		static_assert(std::is_base_of<B, D>());
+		static_assert(alignof(B) == alignof(D));
+		static_assert(sizeof(B) == sizeof(D));
+		auto ret = getComponent<B>();
+		*reinterpret_cast<D*>(ret) = std::move(d);
+		return ret;
+	}
+
 
 	Guid getGuid() const { return {id}; }
 private:
