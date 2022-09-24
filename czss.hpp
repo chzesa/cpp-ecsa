@@ -1134,8 +1134,8 @@ struct Runner
 #ifdef CZSS_TIMING_BEGIN
 			CZSS_TIMING_BEGIN<Arch, Value>(arch);
 #endif
-
-			Value::run(Accessor<Arch, Value>(arch));
+			Accessor<Arch, Value> accessor(arch);
+			Value::run(accessor);
 
 #ifdef CZSS_TIMING_END
 			CZSS_TIMING_END<Arch, Value>(arch);
@@ -1150,7 +1150,8 @@ struct Runner
 		inline static void callback(const uint64_t* id, czsf::Barrier* barriers, Arch* arch)
 		{
 			OncePerType<Subset, SystemBlocker<Value>>::fn(barriers);
-			Value::initialize(Accessor<Arch, Value>(arch));
+			Accessor<Arch, Value> accessor(arch);
+			Value::initialize(accessor);
 			barriers[*id].signal();
 		}
 	};
@@ -1161,7 +1162,8 @@ struct Runner
 		inline static void callback(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
 		{
 			OncePerType<Subset, DependeeBlocker<Value>>::fn(barriers);
-			Value::shutdown(Accessor<Arch, Value>(arch));
+			Accessor<Arch, Value> accessor(arch);
+			Value::shutdown(accessor);
 			barriers[*id].signal();
 		}
 	};
@@ -2296,6 +2298,11 @@ private:
 template<typename Arch, typename Sys>
 struct Accessor
 {
+	Accessor(const Accessor&) = delete;
+	Accessor(Accessor&&) = delete;
+	Accessor& operator=(const Accessor&) = delete;
+	Accessor& operator=(Accessor&&) = delete;
+
 	template <typename Entity>
 	Entity* createEntity()
 	{
