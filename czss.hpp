@@ -566,6 +566,40 @@ struct ExpandImpl2<std::tuple<>>
 template <typename Tuple>
 using Expand = typename ExpandImpl2<Tuple>::type;
 
+template <template<typename> typename W, typename A, typename ...R>
+struct RewrapElementsImpl;
+
+template <template<typename> typename W, typename ...A, typename V, typename ...R>
+struct RewrapElementsImpl<W, std::tuple<A...>, V, R...>
+{
+	using type = typename RewrapElementsImpl<W, std::tuple<W<V>, A...>, R...>::type;
+};
+
+template <template<typename> typename W, typename ...A, typename V>
+struct RewrapElementsImpl<W, std::tuple<A...>, V>
+{
+	using type = unique_tuple::unique_tuple<W<V>, A...>;
+};
+
+template <template<typename> typename W, typename A>
+struct RewrapElementsImpl2;
+
+template <template<typename> typename W, typename ...A>
+struct RewrapElementsImpl2<W, std::tuple<A...>>
+{
+	using type = typename RewrapElementsImpl<W, std::tuple<>, A...>::type;
+};
+
+template <template<typename> typename W>
+struct RewrapElementsImpl2<W, std::tuple<>>
+{
+	using type = std::tuple<>;
+};
+
+template <template<typename> typename W, typename Tuple>
+using RewrapElements = typename RewrapElementsImpl2<W, Tuple>::type;
+
+
 template <typename Tuple, typename Cat>
 constexpr size_t numUniques()
 {
@@ -867,12 +901,43 @@ struct Entity : EntityBase
 {
 	using Cont = unique_tuple::unique_tuple<Components...>;
 
+private:
+	struct AbstractFilter
+	{
+		template <typename Component>
+		static constexpr bool test()
+		{
+			return std::is_abstract<Component>::value;
+		}
+	};
+
+	template <typename T>
+	struct alignas(alignof(T)) AbstractPlaceholder
+	{
+		AbstractPlaceholder()
+		{
+			static_assert(isVirtual<T>());
+		}
+		char data[sizeof (T)];
+	};
+
+	using Abstracts = subset<Cont, AbstractFilter>;
+	using Concrete = tuple_difference<Cont, subset<Cont, AbstractFilter>>;
+public:
+
 	template <typename T>
 	const T* viewComponent() const
 	{
 		CZSS_CONST_IF(tuple_contains<Cont, T>::value)
 		{
-			return &std::get<min(tuple_type_index<T, Cont>::value, std::tuple_size<Cont>::value - 1)>(storage);
+			CZSS_CONST_IF(tuple_contains<Abstracts, T>::value)
+			{
+				return reinterpret_cast<T*>(&std::get<min(tuple_type_index<T, Abstracts>::value, std::tuple_size<Abstracts>::value - 1)>(abstracts).data);
+			}
+			else
+			{
+				return &std::get<min(tuple_type_index<T, Concrete>::value, std::tuple_size<Concrete>::value - 1)>(concrete);
+			}
 		}
 
 		return nullptr;
@@ -883,7 +948,14 @@ struct Entity : EntityBase
 	{
 		CZSS_CONST_IF(tuple_contains<Cont, T>::value)
 		{
-			return &std::get<min(tuple_type_index<T, Cont>::value, std::tuple_size<Cont>::value - 1)>(storage);
+			CZSS_CONST_IF(tuple_contains<Abstracts, T>::value)
+			{
+				return reinterpret_cast<T*>(&std::get<min(tuple_type_index<T, Abstracts>::value, std::tuple_size<Abstracts>::value - 1)>(abstracts).data);
+			}
+			else
+			{
+				return &std::get<min(tuple_type_index<T, Concrete>::value, std::tuple_size<Concrete>::value - 1)>(concrete);
+			}
 		}
 
 		return nullptr;
@@ -909,7 +981,8 @@ private:
 	friend VirtualArchitecture;
 	uint64_t id;
 
-	Cont storage;
+	RewrapElements<AbstractPlaceholder, Abstracts> abstracts;
+	Concrete concrete;
 };
 
 template<typename Sys, typename Entity>
