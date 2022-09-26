@@ -220,6 +220,22 @@ private:
 	};
 };
 
+template <typename Tuple>
+struct OncePerType2Cb
+{
+	template <size_t I, typename F>
+	static void callback(F f)
+	{
+		f.template operator()<typename std::tuple_element<I, Tuple>::type>();
+	}
+};
+
+template <typename Tuple, typename F>
+void oncePerType2(F f)
+{
+	ForEach<std::tuple_size<Tuple>::value - 1, OncePerType2Cb<Tuple>>::fn(f);
+}
+
 template <typename Tuple, int Num>
 struct SwitchImpl
 {
