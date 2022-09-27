@@ -45,12 +45,6 @@ struct B : Component<B>
 	B* other;
 };
 
-template <>
-void czss::managePointer<B, B>(B& component, const Repair<B>& rep)
-{
-	rep(component.other);
-}
-
 struct Iter : Iterator<A> {};
 struct Iterb : Iterator<B>{};
 
@@ -90,7 +84,7 @@ struct MyArch;
 
 struct Sysa : System <Dependency<>, Orchestrator<Enta>, Writer<RemoveGuid>>
 {
-	static void run(Accessor<MyArch, Sysa> arch)
+	static void run(Accessor<MyArch, Sysa>& arch)
 	{
 		auto ent = arch.createEntity<Enta>();
 		A* a = ent->getComponent<A>();
@@ -104,12 +98,12 @@ struct Sysa : System <Dependency<>, Orchestrator<Enta>, Writer<RemoveGuid>>
 		arch.getResource<RemoveGuid>()->guid = ent->getGuid();
 	};
 
-	static void initialize(Accessor<MyArch, Sysa> arch)
+	static void initialize(Accessor<MyArch, Sysa>& arch)
 	{
 		std::cout << "Initialize Sysa" << std::endl;
 	};
 
-	static void shutdown(Accessor<MyArch, Sysa> arch)
+	static void shutdown(Accessor<MyArch, Sysa>& arch)
 	{
 		std::cout << "Shutdown Sysa" << std::endl;
 	};
@@ -117,18 +111,18 @@ struct Sysa : System <Dependency<>, Orchestrator<Enta>, Writer<RemoveGuid>>
 
 struct Sysb : System<Dependency<Sysa>, Orchestrator<Enta>, Reader<RemoveGuid>>
 {
-	static void run(Accessor<MyArch, Sysb> arch)
+	static void run(Accessor<MyArch, Sysb>& arch)
 	{
 		Guid guid = arch.viewResource<RemoveGuid>()->guid;
 		arch.destroyEntity(guid);
 	};
 
-	static void initialize(Accessor<MyArch, Sysb> arch)
+	static void initialize(Accessor<MyArch, Sysb>& arch)
 	{
 		std::cout << "Initialize Sysb" << std::endl;
 	};
 
-	static void shutdown(Accessor<MyArch, Sysb> arch)
+	static void shutdown(Accessor<MyArch, Sysb>& arch)
 	{
 		std::cout << "Shutdown Sysb" << std::endl;
 	};
@@ -136,7 +130,7 @@ struct Sysb : System<Dependency<Sysa>, Orchestrator<Enta>, Reader<RemoveGuid>>
 
 struct Sysc : System<Dependency<Sysb>, Orchestrator<Enta>, Reader<Iter, Iterb>, Writer<Resa>>
 {
-	static void run(Accessor<MyArch, Sysc> arch)
+	static void run(Accessor<MyArch, Sysc>& arch)
 	{
 		auto res = arch.getResource<Resa>();
 
@@ -156,12 +150,12 @@ struct Sysc : System<Dependency<Sysb>, Orchestrator<Enta>, Reader<Iter, Iterb>, 
 		}
 	};
 
-	static void initialize(Accessor<MyArch, Sysc> arch)
+	static void initialize(Accessor<MyArch, Sysc>& arch)
 	{
 		std::cout << "Initialize Sysc" << std::endl;
 	};
 
-	static void shutdown(Accessor<MyArch, Sysc> arch)
+	static void shutdown(Accessor<MyArch, Sysc>& arch)
 	{
 		std::cout << "Shutdown Sysc" << std::endl;
 	};
@@ -169,9 +163,9 @@ struct Sysc : System<Dependency<Sysb>, Orchestrator<Enta>, Reader<Iter, Iterb>, 
 
 struct Sysd : System<Orchestrator<VirtualA>>
 {
-	static void run(Accessor<MyArch, Sysd> arch) { };
+	static void run(Accessor<MyArch, Sysd>& arch) { };
 
-	static void initialize(Accessor<MyArch, Sysd> arch)
+	static void initialize(Accessor<MyArch, Sysd>& arch)
 	{
 		std::cout << "Initialize Sysd" << std::endl;
 		arch.createEntity<VirtualA>();
@@ -179,11 +173,11 @@ struct Sysd : System<Orchestrator<VirtualA>>
 		arch.createEntity<VirtualC>();
 
 		arch.iterate2<czss::Iterator<V>>([&] (auto accessor) {
-			accessor.entity()->quack();
+			accessor.getEntity()->quack();
 		});
 	};
 
-	static void shutdown(Accessor<MyArch, Sysd> arch)
+	static void shutdown(Accessor<MyArch, Sysd>& arch)
 	{
 		std::cout << "Shutdown Sysd" << std::endl;
 	};
