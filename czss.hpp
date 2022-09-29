@@ -816,7 +816,7 @@ public:
 		used_indices.pop_back();
 	}
 
-	uint64_t size()
+	uint64_t size() const
 	{
 		return used_indices.size();
 	}
