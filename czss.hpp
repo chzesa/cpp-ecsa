@@ -674,7 +674,47 @@ private:
 		return &entities[index.tier][index.index];
 	}
 
+	inline size_t indexToActiveI(const Index& index) const
+	{
+		// The arrays are powers of two in size so offset is calculated
+		// by setting all bits preceding the power of the current tier
+		// to 1 and masking off the section that is below base power
+		// i.e. arrays that don't exist.
+		// e.g. BASE_POWER = 2, index.tier = 1
+		// 00000010 2
+		// 00010000 bit shift
+		// 00001111 subtract
+		// 00001000 and
+		static constexpr size_t maskL = ~0 << (BASE_POWER + 1);
+		size_t offset = ((2 << (index.tier + BASE_POWER)) - 1) & maskL;
+		return offset + index.index;
+	}
+
 public:
+	inline bool isActive(const size_t& i) const
+	{
+		size_t mod = i % (sizeof(size_t) * 8);
+		return active[i / (sizeof(size_t) * 8)] & (1 << mod);
+	}
+
+	inline void setActive(const size_t& i, const bool& value)
+	{
+		size_t mod = i % (sizeof(size_t) * 8);
+		if (value)
+			active[i / (sizeof(size_t) * 8)] |= (1 << mod);
+		else
+			active[i / (sizeof(size_t) * 8)] &= ~(1 << mod);
+	}
+
+	inline bool isActive(const Index& index) const
+	{
+		return isActive(indexToActiveI(index));
+	}
+
+	inline void setActive(const Index& index, const bool& value)
+	{
+		setActive(indexToActiveI(index), value);
+	}
 
 	template <typename T>
 	T* create(uint64_t& id)
@@ -812,6 +852,7 @@ public:
 	}
 
 	std::vector<E*> used_indices;
+	std::vector<size_t> active;
 
 private:
 	E* entities[26];
