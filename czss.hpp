@@ -656,6 +656,8 @@ struct EntityStore
 	}
 
 private:
+	static constexpr size_t BASE_POWER = 5;
+
 	struct Index
 	{
 		bool operator< (const Index& other) const
@@ -791,7 +793,7 @@ public:
 		for (size_t k = 0; k < tierCount; k++)
 		{
 			addArrayKeys(k);
-			size_t n = 2 << (k + 5);
+			size_t n = 2 << (k + BASE_POWER);
 		}
 		CZSS_CONST_IF (!isVirtual<E>())
 		{
@@ -831,7 +833,7 @@ private:
 
 	void expand()
 	{
-		uint64_t n = 2 << (tierCount + 5);
+		uint64_t n = 2 << (tierCount + BASE_POWER);
 		addArrayKeys(tierCount);
 		E* p = reinterpret_cast<E*>(malloc(sizeof (E) * n));
 		entities[tierCount] = p;
@@ -851,7 +853,7 @@ private:
 
 	void addArrayKeys(size_t tier)
 	{
-		size_t n = 2 << (tier + 5);
+		size_t n = 2 << (tier + BASE_POWER);
 		for (size_t i = 0; i < n; i++)
 			free_indices.push({tier, i});
 	}
