@@ -588,13 +588,13 @@ struct RewrapElementsImpl;
 template <template<typename> typename W, typename ...A, typename V, typename ...R>
 struct RewrapElementsImpl<W, std::tuple<A...>, V, R...>
 {
-	using type = typename RewrapElementsImpl<W, std::tuple<W<V>, A...>, R...>::type;
+	using type = typename RewrapElementsImpl<W, std::tuple<typename W<V>::type, A...>, R...>::type;
 };
 
 template <template<typename> typename W, typename ...A, typename V>
 struct RewrapElementsImpl<W, std::tuple<A...>, V>
 {
-	using type = unique_tuple::unique_tuple<W<V>, A...>;
+	using type = unique_tuple::unique_tuple<typename W<V>::type, A...>;
 };
 
 template <template<typename> typename W, typename A>
