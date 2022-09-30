@@ -973,6 +973,7 @@ private:
 	template <typename T>
 	struct alignas(alignof(T)) AbstractPlaceholder
 	{
+		using type = AbstractPlaceholder<T>;
 		AbstractPlaceholder()
 		{
 			static_assert(isVirtual<T>());
