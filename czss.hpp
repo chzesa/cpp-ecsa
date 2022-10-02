@@ -2407,6 +2407,31 @@ struct Accessor
 	Accessor& operator=(const Accessor&) = delete;
 	Accessor& operator=(Accessor&&) = delete;
 
+
+private:
+	template <typename P>
+	struct PermissionCompare
+	{
+		template <typename V>
+		static constexpr void callback()
+		{
+			static_assert(canOrchestrate<P, V>() ? canOrchestrate<Sys, V>()
+					: (canWrite<P, V>() ? canWrite<Sys, V>()
+						: (canRead<P, V>() ? canRead<Sys, V>()
+							: true)),
+				"Derived accessor must have same or lesser permissions than the original.");
+		}
+	};
+
+public:
+	template <typename P>
+	operator Accessor<Arch, P>& ()
+	{
+		OncePerType<typename Arch::Cont, PermissionCompare<P>>::fn();
+
+		return *reinterpret_cast<Accessor<Arch, P>*>(this);
+	}
+
 	template <typename Entity>
 	Entity* createEntity()
 	{
