@@ -1063,19 +1063,19 @@ constexpr static bool isIteratorCompatibleWithEntity()
 // #####################
 
 template <typename ...T>
-struct Reader : TemplateStubs, ReaderBase
+struct Reader : TemplateStubs, ReaderBase, PermissionsBase
 {
 	using Cont = unique_tuple::unique_tuple<T...>;
 };
 
 template <typename ...T>
-struct Writer : TemplateStubs, WriterBase
+struct Writer : TemplateStubs, WriterBase, PermissionsBase
 {
 	using Cont = unique_tuple::unique_tuple<T...>;
 };
 
 template <typename ...Entities>
-struct Orchestrator : TemplateStubs, OrchestratorBase
+struct Orchestrator : TemplateStubs, OrchestratorBase, PermissionsBase
 {
 	using Cont = unique_tuple::unique_tuple<Entities...>;
 };
