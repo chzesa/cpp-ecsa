@@ -1375,7 +1375,8 @@ void onDestroy(Component& component, Entity& entity, Accessor& accessor) {};
 template <typename Desc, typename ...Systems>
 struct Architecture : VirtualArchitecture
 {
-	using Cont = Flatten<Rbox<Systems...>>;
+	using Cont = tuple_difference<tuple_difference<Flatten<Rbox<Systems...>>, Filter<Flatten<Rbox<Systems...>>, PermissionsBase>>
+		, Filter<Flatten<Rbox<Systems...>>, DependencyBase>>;
 	using This = Architecture<Desc, Systems...>;
 	using OmniSystem = System <
 		Rewrap<Orchestrator, Filter<Cont, EntityBase>>,
