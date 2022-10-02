@@ -1080,13 +1080,13 @@ struct Orchestrator : TemplateStubs, OrchestratorBase
 	using Cont = unique_tuple::unique_tuple<Entities...>;
 };
 
-template <typename Base>
+template <typename Derived>
 struct BaseTypeOfFilter
 {
-	template <typename Entity>
+	template <typename T>
 	static constexpr bool test()
 	{
-		return isEntity<Entity>() && std::is_base_of<Entity, Base>();
+		return std::is_base_of<T, Derived>();
 	}
 };
 
