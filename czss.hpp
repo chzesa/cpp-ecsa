@@ -1024,7 +1024,7 @@ public:
 	}
 
 	template <typename B, typename D>
-	B* setComponent(D d)
+	B* setComponent(D&& d)
 	{
 		static_assert(isVirtual<B>());
 		static_assert(tuple_contains<Cont, B>::value);
@@ -1032,7 +1032,33 @@ public:
 		static_assert(alignof(B) == alignof(D));
 		static_assert(sizeof(B) == sizeof(D));
 		auto ret = getComponent<B>();
-		*reinterpret_cast<D*>(ret) = std::move(d);
+		new(ret) D(d);
+		return ret;
+	}
+
+	template <typename B, typename D>
+	B* setComponent()
+	{
+		static_assert(isVirtual<B>());
+		static_assert(tuple_contains<Cont, B>::value);
+		static_assert(std::is_base_of<B, D>());
+		static_assert(alignof(B) == alignof(D));
+		static_assert(sizeof(B) == sizeof(D));
+		auto ret = getComponent<B>();
+		new(ret) D();
+		return ret;
+	}
+
+	template <typename B, typename D, typename ...Params>
+	B* setComponent(Params&&... params)
+	{
+		static_assert(isVirtual<B>());
+		static_assert(tuple_contains<Cont, B>::value);
+		static_assert(std::is_base_of<B, D>());
+		static_assert(alignof(B) == alignof(D));
+		static_assert(sizeof(B) == sizeof(D));
+		auto ret = getComponent<B>();
+		new(ret) D(std::forward(params)...);
 		return ret;
 	}
 
