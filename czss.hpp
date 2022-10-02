@@ -641,6 +641,8 @@ private:
 template <typename E>
 struct EntityStore
 {
+	using type = EntityStore<E>;
+
 	EntityStore()
 	{
 		CZSS_CONST_IF (!isVirtual<E>())
@@ -1386,7 +1388,6 @@ struct Architecture : VirtualArchitecture
 		// TODO assert all components are used in at least one entity
 		// TODO assert every entity can be instantiated
 		oncePerPair<Filter<Cont, SystemBase>, SystemDependencyCheck>(0);
-		OncePerType<Cont, ConstructorCallback>::fn(this);
 	}
 
 	static constexpr uint64_t numSystems() { return numUniques<Cont, SystemBase>(); }
@@ -1409,24 +1410,24 @@ struct Architecture : VirtualArchitecture
 	{
 		static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
 		static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
-		static const uint64_t index = indexOf<Cont, Resource, ResourceBase>();
-		resources[index] = res;
+		static constexpr uint64_t INDEX = indexOf<Cont, Resource, ResourceBase>();
+		std::get<tuple_type_index<Resource*, RewrapElements<std::add_pointer, Filter<Cont, ResourceBase>>>::value>(resources) = res;
 	}
 
 	template <typename Resource>
 	Resource* getResource()
 	{
-		// static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
+		static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
 		static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
-		static const uint64_t index = indexOf<Cont, Resource, ResourceBase>();
-		return reinterpret_cast<Resource*>(resources[index]);
+		return std::get<tuple_type_index<Resource*, RewrapElements<std::add_pointer, Filter<Cont, ResourceBase>>>::value>(resources);
 	}
 
 	template <typename Entity>
 	EntityStore<Entity>* getEntities()
 	{
+		static_assert(inspect::contains<Cont, Entity>(), "Architecture doesn't contain the entity.");
 		// assert(isEntity<Entity>());
-		return reinterpret_cast<EntityStore<Entity>*>(&entities[0]) + entityIndex<Entity>();
+		return &std::get<tuple_type_index<EntityStore<Entity>, RewrapElements<EntityStore, Filter<Cont, EntityBase>>>::value>(entities);
 	}
 
 	template <typename Category>
@@ -1737,11 +1738,6 @@ public:
 		return guid.get() - key;
 	}
 
-	~Architecture()
-	{
-		OncePerType<Cont, DestructorCallback>::fn(this);
-	}
-
 	template <typename V>
 	static constexpr uint64_t absoluteIndex()
 	{
@@ -1847,8 +1843,8 @@ public:
 	};
 
 private:
-	void* resources[max(numUniques<Cont, ResourceBase>(), uint64_t(1))] = {0};
-	char entities[max(numUniques<Cont, EntityBase>(), uint64_t(1)) * sizeof(EntityStore<uint64_t>)] = {0};
+	RewrapElements<std::add_pointer, Filter<Cont, ResourceBase>> resources;
+	RewrapElements<EntityStore, Filter<Cont, EntityBase>> entities;
 
 	template <typename Entity>
 	struct InitializeEntityCallback
@@ -1916,32 +1912,6 @@ private:
 		inline static void callback(This* arch, const uint64_t& id)
 		{
 			arch->template destroyEntity<System, Value>(id);
-		}
-	};
-
-	struct ConstructorCallback
-	{
-		template <typename Value>
-		static inline void callback(This* arch)
-		{
-			CZSS_CONST_IF (isEntity<Value>())
-			{
-				auto p = arch->template getEntities<Value>();
-				new(p) EntityStore<Value>();
-			}
-		}
-	};
-
-	struct DestructorCallback
-	{
-		template <typename Value>
-		static inline void callback(This* arch)
-		{
-			CZSS_CONST_IF (isEntity<Value>())
-			{
-				auto ent = arch->template getEntities<Value>();
-				ent->~EntityStore<Value>();
-			}
 		}
 	};
 
