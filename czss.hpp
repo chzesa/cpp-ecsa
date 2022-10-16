@@ -987,6 +987,12 @@ private:
 	using Concrete = tuple_difference<Cont, subset<Cont, AbstractFilter>>;
 public:
 
+	template <typename Component>
+	static constexpr bool hasComponent()
+	{
+		return inspect::contains<Cont, Component>();
+	}
+
 	template <typename T>
 	const T* viewComponent() const
 	{
