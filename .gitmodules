@@ -1,6 +1,3 @@
 [submodule "external/c-fiber"]
 	path = external/c-fiber
 	url = https://github.com/chzesa/c-fiber.git
-[submodule "external/unique_tuple"]
-	path = external/unique_tuple
-	url = https://github.com/chzesa/unique_tuple.git
