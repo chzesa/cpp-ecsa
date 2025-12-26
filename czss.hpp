@@ -1,7 +1,7 @@
 #ifndef CZSS_HEADERS_H
 #define CZSS_HEADERS_H
 
-#include "tuple_utils.hpp"
+#include "external/cpp-tuple-utils/tuple_utils.hpp"
 
 #ifndef CZSF_HEADERS_H
 #include "external/c-fiber/czsf.h"
@@ -53,7 +53,7 @@ struct Dummy
 };
 
 template <typename ...A>
-using Rbox = unique_tuple::unique_tuple<A...>;
+using Rbox = tuple_utils::Set<A...>;
 
 template <typename T>
 constexpr T min(T a, T b)
@@ -73,215 +73,16 @@ namespace inspect
 template <typename Tuple, typename T>
 constexpr bool contains()
 {
-	return tuple_contains<Tuple, T>::value;
+	return tuple_utils::Contains<Tuple, T>::value;
 }
 
 template<typename Left, typename Right>
 constexpr bool containsAllIn()
 {
-	return std::tuple_size< tuple_difference<Right, Left> >::value == 0;
+	return std::tuple_size< tuple_utils::Difference<Right, Left> >::value == 0;
 }
 
 } // namespace inspect
-
-template <size_t I, typename T>
-struct ForEach
-{
-	inline static void fn()
-	{
-		T::template callback<I>();
-		ForEach<I - 1, T>::fn();
-	}
-
-	template<typename ...Params>
-	inline static void fn(Params&&... params)
-	{
-		T::template callback<I>(std::forward<Params>(params)...);
-		ForEach<I - 1, T>::fn(std::forward<Params>(params)...);
-	}
-
-	constexpr static bool constFn()
-	{
-		return T::template callback<I>() || ForEach<I - 1, T>::constFn();
-	}
-
-	template<typename ...Params>
-	constexpr static bool constFn(Params&&... params)
-	{
-		return T::template callback<I>(std::forward<Params>(params)...) || ForEach<I - 1, T>::constFn(std::forward<Params>(params)...);
-	}
-
-	constexpr static size_t constSum()
-	{
-		return T::template callback<I>() + ForEach<I - 1, T>::constFn();
-	}
-};
-
-template <typename T>
-struct ForEach<0, T>
-{
-	inline static void fn()
-	{
-		T::template callback<0>();
-	}
-
-	template<typename ...Params>
-	inline static void fn(Params&&... params)
-	{
-		T::template callback<0>(std::forward<Params>(params)...);
-	}
-
-	constexpr static bool constFn()
-	{
-		return T::template callback<0>() || false;
-	}
-
-	template<typename ...Params>
-	constexpr static bool constFn(Params&&... params)
-	{
-		return T::template callback<0>(std::forward<Params>(params)...) || false;
-	}
-
-	constexpr static size_t constSum()
-	{
-		return T::template callback<0>();
-	}
-};
-
-template <typename T>
-struct ForEach<uint64_t(-1), T>
-{
-	inline static void fn() { }
-
-	template<typename ...Params>
-	inline static void fn(Params&&... params) { }
-};
-
-template <typename Tuple, typename Callback>
-struct OncePerType
-{
-	inline static void fn()
-	{
-		ForEach<std::tuple_size<Tuple>::value - 1, CB>::fn();
-	}
-
-	template <typename ...Params>
-	inline static void fn(Params&&... params)
-	{
-		ForEach<std::tuple_size<Tuple>::value - 1, CB>::fn(std::forward<Params>(params)...);
-	}
-
-	constexpr static bool constFn()
-	{
-		return ForEach<std::tuple_size<Tuple>::value - 1, CB2<bool>>::constFn();
-	}
-
-	template <typename ...Params>
-	constexpr static bool constFn(Params&&... params)
-	{
-		return ForEach<std::tuple_size<Tuple>::value - 1, CB2<bool>>::constFn(std::forward<Params>(params)...);
-	}
-
-	constexpr static size_t constSum()
-	{
-		return ForEach<std::tuple_size<Tuple>::value - 1, CB2<size_t>>::constFn();
-	}
-
-private:
-	struct CB
-	{
-		template <size_t I>
-		inline static void callback()
-		{
-			Callback::template callback<typename std::tuple_element<I, Tuple>::type>();
-		}
-
-		template <size_t I, typename ...Params>
-		inline static void callback(Params&&... params)
-		{
-			Callback::template callback<typename std::tuple_element<I, Tuple>::type>(std::forward<Params>(params)...);
-		}
-	};
-
-	template <typename Ret>
-	struct CB2
-	{
-		template <size_t I>
-		constexpr static Ret callback()
-		{
-			return Callback::template callback<typename std::tuple_element<I, Tuple>::type>();
-		}
-
-		template <size_t I, typename ...Params>
-		constexpr static Ret callback(Params&&... params)
-		{
-			return Callback::template callback<typename std::tuple_element<I, Tuple>::type>(std::forward<Params>(params)...);
-		}
-	};
-};
-
-template <typename Tuple>
-struct OncePerType2Cb
-{
-	template <size_t I, typename F>
-	static void callback(F f)
-	{
-		f.template operator()<typename std::tuple_element<I, Tuple>::type>();
-	}
-};
-
-template <typename Tuple, typename F>
-void oncePerType2(F f)
-{
-	ForEach<std::tuple_size<Tuple>::value - 1, OncePerType2Cb<Tuple>>::fn(f);
-}
-
-template <typename Tuple, int Num>
-struct SwitchImpl
-{
-	template <typename Return, typename Inspector, typename ...Params>
-	constexpr static Return fn(int i, Params&&... params)
-	{
-		return i == Num - 1
-			? Inspector::template callback<typename std::tuple_element<Num - 1, Tuple>::type>(std::forward<Params>(params)...)
-			: SwitchImpl<Tuple, Num - 1>::template fn<Return, Inspector>(i, std::forward<Params>(params)...);
-	}
-
-	template <typename Inspector, typename ...Params>
-	inline static void fn(int i, Params&&... params)
-	{
-		if (i == Num - 1)
-			Inspector::template callback<typename std::tuple_element<Num - 1, Tuple>::type>(std::forward<Params>(params)...);
-		else
-			SwitchImpl<Tuple, Num - 1>::template fn<Inspector>(i, std::forward<Params>(params)...);
-	}
-};
-
-template <typename Tuple>
-struct SwitchImpl <Tuple, 0>
-{
-	template <typename Return,  typename Inspector, typename ...Params>
-	constexpr static Return fn(int i, Params&&... params) { return Return(); }
-
-	template <typename Inspector, typename ...Params>
-	inline static void fn(int i, Params&&... params) { }
-};
-
-template <typename Tuple>
-struct Switch
-{
-	template <typename Return, typename Inspector, typename ...Params>
-	constexpr static Return fn(int i, Params&&... params)
-	{
-		return SwitchImpl<Tuple, std::tuple_size<Tuple>::value>::template fn<Return, Inspector>(i, std::forward<Params>(params)...);
-	}
-
-	template <typename Inspector, typename ...Params>
-	inline static void fn(int i, Params&&... params)
-	{
-		SwitchImpl<Tuple, std::tuple_size<Tuple>::value>::template fn<Inspector>(i, std::forward<Params>(params)...);
-	}
-};
 
 template <typename Tuple, typename Callback>
 struct OncePerTypeCallback
@@ -300,7 +101,7 @@ struct OncePerTypeCallback
 	static void callback(Params&&... params)
 	{
 		for (int i = 0; i < std::tuple_size<Tuple>::value; i++)
-			Switch<Tuple>::template fn<CB<Value>>(i, std::forward<Params>(params)...);
+			tuple_utils::Switch<Tuple>::template fn<CB<Value>>(i, std::forward<Params>(params)...);
 	}
 };
 
@@ -308,7 +109,7 @@ template <typename Tuple, typename Callback, typename ...Params>
 void oncePerPair(Params&&... params)
 {
 	for (int i = 0; i < std::tuple_size<Tuple>::value; i++)
-		Switch<Tuple>::template fn<OncePerTypeCallback<Tuple, Callback>>(i, std::forward<Params>(params)...);
+		tuple_utils::Switch<Tuple>::template fn<OncePerTypeCallback<Tuple, Callback>>(i, std::forward<Params>(params)...);
 }
 
 // #####################
@@ -452,8 +253,8 @@ struct Filter2Impl<F, std::tuple<A...>, V>
 {
 	using type = typename std::conditional<
 		F::template test<V>()
-		, unique_tuple::unique_tuple<V, A...>
-		, unique_tuple::unique_tuple<A...>
+		, tuple_utils::Set<V, A...>
+		, tuple_utils::Set<A...>
 	>::type;
 };
 
@@ -493,8 +294,8 @@ struct FilterImpl<Cat, std::tuple<A...>, V>
 {
 	using type = typename std::conditional<
 		std::is_base_of<Cat, V>() ? true : false
-		, unique_tuple::unique_tuple<V, A...>
-		, unique_tuple::unique_tuple<A...>
+		, tuple_utils::Set<V, A...>
+		, tuple_utils::Set<A...>
 	>::type;
 };
 
@@ -513,7 +314,7 @@ using Filter = typename FilterImpl2<Tuple, Cat>::type;
 template <typename Tuple, typename T, typename Cat>
 constexpr uint64_t indexOf()
 {
-	return inspect::contains<Filter<Tuple, Cat>, T>() ? tuple_type_index<T, Filter<Tuple, Cat>>::value : -1;
+	return inspect::contains<Filter<Tuple, Cat>, T>() ? tuple_utils::Index<T, Filter<Tuple, Cat>>::value : -1;
 }
 
 template <typename T>
@@ -528,13 +329,13 @@ struct FlattenImpl;
 template <typename ...A, typename V, typename ...R>
 struct FlattenImpl<std::tuple<A...>, V, R...>
 {
-	using type = typename FlattenImpl<tuple_union<std::tuple<A...>, std::tuple<V>, Flatten<typename V::Cont>>, R...>::type;
+	using type = typename FlattenImpl<tuple_utils::Union<std::tuple<A...>, std::tuple<V>, Flatten<typename V::Cont>>, R...>::type;
 };
 
 template <typename ...A, typename V>
 struct FlattenImpl<std::tuple<A...>, V>
 {
-	using type = tuple_union<std::tuple<A...>, std::tuple<V>, Flatten<typename V::Cont>>;
+	using type = tuple_utils::Union<std::tuple<A...>, std::tuple<V>, Flatten<typename V::Cont>>;
 };
 
 template <typename ...A>
@@ -555,13 +356,13 @@ struct ExpandImpl;
 template <typename ...A, typename V, typename ...R>
 struct ExpandImpl<std::tuple<A...>, V, R...>
 {
-	using type = typename ExpandImpl<tuple_union<typename V::Cont, std::tuple<A...>>, R...>::type;
+	using type = typename ExpandImpl<tuple_utils::Union<typename V::Cont, std::tuple<A...>>, R...>::type;
 };
 
 template <typename ...A, typename V>
 struct ExpandImpl<std::tuple<A...>, V>
 {
-	using type = tuple_union<typename V::Cont, std::tuple<A...>>;
+	using type = tuple_utils::Union<typename V::Cont, std::tuple<A...>>;
 };
 
 template <typename A>
@@ -594,7 +395,7 @@ struct RewrapElementsImpl<W, std::tuple<A...>, V, R...>
 template <template<typename> typename W, typename ...A, typename V>
 struct RewrapElementsImpl<W, std::tuple<A...>, V>
 {
-	using type = unique_tuple::unique_tuple<typename W<V>::type, A...>;
+	using type = tuple_utils::Set<typename W<V>::type, A...>;
 };
 
 template <template<typename> typename W, typename A>
@@ -946,7 +747,7 @@ private:
 template <typename ...Components>
 struct Iterator : IteratorBase, TemplateStubs
 {
-	using Cont = unique_tuple::unique_tuple<Components...>;
+	using Cont = tuple_utils::Set<Components...>;
 
 	void setGuid(Guid guid) { this->id = guid; }
 	Guid getGuid() const { return id; }
@@ -960,7 +761,7 @@ struct VirtualArchitecture;
 template <typename ...Components>
 struct Entity : EntityBase
 {
-	using Cont = unique_tuple::unique_tuple<Components...>;
+	using Cont = tuple_utils::Set<Components...>;
 
 private:
 	struct AbstractFilter
@@ -983,8 +784,8 @@ private:
 		char data[sizeof (T)];
 	};
 
-	using Abstracts = subset<Cont, AbstractFilter>;
-	using Concrete = tuple_difference<Cont, subset<Cont, AbstractFilter>>;
+	using Abstracts = tuple_utils::Subset<Cont, AbstractFilter>;
+	using Concrete = tuple_utils::Difference<Cont, Abstracts>;
 public:
 
 	template <typename Component>
@@ -996,15 +797,15 @@ public:
 	template <typename T>
 	const T* viewComponent() const
 	{
-		CZSS_CONST_IF(tuple_contains<Cont, T>::value)
+		CZSS_CONST_IF(tuple_utils::Contains<Cont, T>::value)
 		{
-			CZSS_CONST_IF(tuple_contains<Abstracts, T>::value)
+			CZSS_CONST_IF(tuple_utils::Contains<Abstracts, T>::value)
 			{
-				return reinterpret_cast<T*>(&std::get<min(tuple_type_index<T, Abstracts>::value, std::tuple_size<Abstracts>::value - 1)>(abstracts).data);
+				return reinterpret_cast<T*>(&std::get<min(tuple_utils::Index<T, Abstracts>::value, std::tuple_size<Abstracts>::value - 1)>(abstracts).data);
 			}
 			else
 			{
-				return &std::get<min(tuple_type_index<T, Concrete>::value, std::tuple_size<Concrete>::value - 1)>(concrete);
+				return &std::get<min(tuple_utils::Index<T, Concrete>::value, std::tuple_size<Concrete>::value - 1)>(concrete);
 			}
 		}
 
@@ -1014,15 +815,15 @@ public:
 	template<typename T>
 	T* getComponent()
 	{
-		CZSS_CONST_IF(tuple_contains<Cont, T>::value)
+		CZSS_CONST_IF(tuple_utils::Contains<Cont, T>::value)
 		{
-			CZSS_CONST_IF(tuple_contains<Abstracts, T>::value)
+			CZSS_CONST_IF(tuple_utils::Contains<Abstracts, T>::value)
 			{
-				return reinterpret_cast<T*>(&std::get<min(tuple_type_index<T, Abstracts>::value, std::tuple_size<Abstracts>::value - 1)>(abstracts).data);
+				return reinterpret_cast<T*>(&std::get<min(tuple_utils::Index<T, Abstracts>::value, std::tuple_size<Abstracts>::value - 1)>(abstracts).data);
 			}
 			else
 			{
-				return &std::get<min(tuple_type_index<T, Concrete>::value, std::tuple_size<Concrete>::value - 1)>(concrete);
+				return &std::get<min(tuple_utils::Index<T, Concrete>::value, std::tuple_size<Concrete>::value - 1)>(concrete);
 			}
 		}
 
@@ -1033,7 +834,7 @@ public:
 	B* setComponent(D&& d)
 	{
 		static_assert(isVirtual<B>());
-		static_assert(tuple_contains<Cont, B>::value);
+		static_assert(tuple_utils::Contains<Cont, B>::value);
 		static_assert(std::is_base_of<B, D>());
 		static_assert(alignof(B) == alignof(D));
 		static_assert(sizeof(B) == sizeof(D));
@@ -1046,7 +847,7 @@ public:
 	B* setComponent()
 	{
 		static_assert(isVirtual<B>());
-		static_assert(tuple_contains<Cont, B>::value);
+		static_assert(tuple_utils::Contains<Cont, B>::value);
 		static_assert(std::is_base_of<B, D>());
 		static_assert(alignof(B) == alignof(D));
 		static_assert(sizeof(B) == sizeof(D));
@@ -1059,7 +860,7 @@ public:
 	B* setComponent(Params&&... params)
 	{
 		static_assert(isVirtual<B>());
-		static_assert(tuple_contains<Cont, B>::value);
+		static_assert(tuple_utils::Contains<Cont, B>::value);
 		static_assert(std::is_base_of<B, D>());
 		static_assert(alignof(B) == alignof(D));
 		static_assert(sizeof(B) == sizeof(D));
@@ -1097,19 +898,19 @@ constexpr static bool isIteratorCompatibleWithEntity()
 template <typename ...T>
 struct Reader : TemplateStubs, ReaderBase, PermissionsBase
 {
-	using Cont = unique_tuple::unique_tuple<T...>;
+	using Cont = tuple_utils::Set<T...>;
 };
 
 template <typename ...T>
 struct Writer : TemplateStubs, WriterBase, PermissionsBase
 {
-	using Cont = unique_tuple::unique_tuple<T...>;
+	using Cont = tuple_utils::Set<T...>;
 };
 
 template <typename ...Entities>
 struct Orchestrator : TemplateStubs, OrchestratorBase, PermissionsBase
 {
-	using Cont = unique_tuple::unique_tuple<Entities...>;
+	using Cont = tuple_utils::Set<Entities...>;
 };
 
 template <typename Derived>
@@ -1155,7 +956,7 @@ constexpr bool canRead()
 template <typename ...N>
 struct Dependency : DependencyBase, TemplateStubs
 {
-	using Cont = unique_tuple::unique_tuple<N...>;
+	using Cont = tuple_utils::Set<N...>;
 };
 
 template <>
@@ -1198,11 +999,11 @@ struct Accessor;
 template <typename ...Permissions>
 struct System : SystemBase, TemplateStubs
 {
-	using Cont = unique_tuple::unique_tuple<Permissions...>;
+	using Cont = tuple_utils::Set<Permissions...>;
 };
 
 template <typename Sys>
-using SystemAccesses = Flatten<tuple_difference<typename Sys::Cont, Filter<typename Sys::Cont, DependencyBase>>>;
+using SystemAccesses = Flatten<tuple_utils::Difference<typename Sys::Cont, Filter<typename Sys::Cont, DependencyBase>>>;
 // using SystemAccesses = Flatten<tuple_union<Filter<typename Sys::Cont, ReaderBase>, Filter<typename Sys::Cont, WriterBase>, Filter<typename Sys::Cont, OrchestratorBase>>>;
 
 template <typename A, typename B>
@@ -1296,7 +1097,7 @@ struct Runner
 		template <typename Value>
 		inline static void callback(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
 		{
-			OncePerType<Subset, SystemBlocker<Value>>::fn(barriers);
+			tuple_utils::OncePerType<Subset, SystemBlocker<Value>>::fn(barriers);
 
 #ifdef CZSS_TIMING_BEGIN
 			CZSS_TIMING_BEGIN<Arch, Value>(arch);
@@ -1316,7 +1117,7 @@ struct Runner
 		template <typename Value>
 		inline static void callback(const uint64_t* id, czsf::Barrier* barriers, Arch* arch)
 		{
-			OncePerType<Subset, SystemBlocker<Value>>::fn(barriers);
+			tuple_utils::OncePerType<Subset, SystemBlocker<Value>>::fn(barriers);
 			Accessor<Arch, Value> accessor(arch);
 			Value::initialize(accessor);
 			barriers[*id].signal();
@@ -1328,7 +1129,7 @@ struct Runner
 		template <typename Value>
 		inline static void callback(uint64_t* id, czsf::Barrier* barriers, Arch* arch)
 		{
-			OncePerType<Subset, DependeeBlocker<Value>>::fn(barriers);
+			tuple_utils::OncePerType<Subset, DependeeBlocker<Value>>::fn(barriers);
 			Accessor<Arch, Value> accessor(arch);
 			Value::shutdown(accessor);
 			barriers[*id].signal();
@@ -1337,17 +1138,17 @@ struct Runner
 
 	static void systemCallback(RunTaskData<Arch>* data)
 	{
-		Switch<Subset>::template fn<SystemRunner>(data->id, &data->id, data->barriers, data->arch);
+		tuple_utils::Switch<Subset>::template fn<SystemRunner>(data->id, &data->id, data->barriers, data->arch);
 	}
 
 	static void initializeSystemCallback(RunTaskData<Arch>* data)
 	{
-		Switch<Subset>::template fn<SystemInitialize>(data->id, &data->id, data->barriers, data->arch);
+		tuple_utils::Switch<Subset>::template fn<SystemInitialize>(data->id, &data->id, data->barriers, data->arch);
 	}
 
 	static void shutdownSystemCallback(RunTaskData<Arch>* data)
 	{ 
-		Switch<Subset>::template fn<SystemShutdown>(data->id, &data->id, data->barriers, data->arch);
+		tuple_utils::Switch<Subset>::template fn<SystemShutdown>(data->id, &data->id, data->barriers, data->arch);
 	}
 
 	template <typename T>
@@ -1407,7 +1208,7 @@ void onDestroy(Component& component, Entity& entity, Accessor& accessor) {};
 template <typename Desc, typename ...Systems>
 struct Architecture : VirtualArchitecture
 {
-	using Cont = tuple_difference<tuple_difference<Flatten<Rbox<Systems...>>, Filter<Flatten<Rbox<Systems...>>, PermissionsBase>>
+	using Cont = tuple_utils::Difference<tuple_utils::Difference<Flatten<Rbox<Systems...>>, Filter<Flatten<Rbox<Systems...>>, PermissionsBase>>
 		, Filter<Flatten<Rbox<Systems...>>, DependencyBase>>;
 	using This = Architecture<Desc, Systems...>;
 	using OmniSystem = System <
@@ -1444,7 +1245,7 @@ struct Architecture : VirtualArchitecture
 		static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
 		static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
 		static constexpr uint64_t INDEX = indexOf<Cont, Resource, ResourceBase>();
-		std::get<tuple_type_index<Resource*, RewrapElements<std::add_pointer, Filter<Cont, ResourceBase>>>::value>(resources) = res;
+		std::get<tuple_utils::Index<Resource*, RewrapElements<std::add_pointer, Filter<Cont, ResourceBase>>>::value>(resources) = res;
 	}
 
 	template <typename Resource>
@@ -1452,7 +1253,7 @@ struct Architecture : VirtualArchitecture
 	{
 		static_assert(isResource<Resource>(), "Template parameter must be a Resource.");
 		static_assert(inspect::contains<Cont, Resource>(), "Architecture doesn't contain Resource.");
-		return std::get<tuple_type_index<Resource*, RewrapElements<std::add_pointer, Filter<Cont, ResourceBase>>>::value>(resources);
+		return std::get<tuple_utils::Index<Resource*, RewrapElements<std::add_pointer, Filter<Cont, ResourceBase>>>::value>(resources);
 	}
 
 	template <typename Entity>
@@ -1460,7 +1261,7 @@ struct Architecture : VirtualArchitecture
 	{
 		static_assert(inspect::contains<Cont, Entity>(), "Architecture doesn't contain the entity.");
 		// assert(isEntity<Entity>());
-		return &std::get<tuple_type_index<EntityStore<Entity>, RewrapElements<EntityStore, Filter<Cont, EntityBase>>>::value>(entities);
+		return &std::get<tuple_utils::Index<EntityStore<Entity>, RewrapElements<EntityStore, Filter<Cont, EntityBase>>>::value>(entities);
 	}
 
 	template <typename Category>
@@ -1468,7 +1269,7 @@ struct Architecture : VirtualArchitecture
 	{
 		static const char* d = "Unknown";
 		const char** result = &d;
-		OncePerType<Cont, NameFinder<Category>>::fn(id, result);
+		tuple_utils::OncePerType<Cont, NameFinder<Category>>::fn(id, result);
 		return *result;
 	}
 
@@ -1476,7 +1277,7 @@ struct Architecture : VirtualArchitecture
 	{
 		void* ret = nullptr;
 		uint64_t tk = typeKey(guid);
-		Switch<Filter<Cont, EntityBase>>::template fn<GetEntityVoidPtr>(tk, this, tk, guid, &ret);
+		tuple_utils::Switch<Filter<Cont, EntityBase>>::template fn<GetEntityVoidPtr>(tk, this, tk, guid, &ret);
 		return ret;
 	}
 
@@ -1530,7 +1331,7 @@ public:
 	bool accessEntity(Guid guid, F f)
 	{
 		bool result = false;
-		OncePerType<Filter<Cont, EntityBase>, ResolveGuid<Sys>>::fn(this, typeKey(guid), guidId(guid), f, result);
+		tuple_utils::OncePerType<Filter<Cont, EntityBase>, ResolveGuid<Sys>>::fn(this, typeKey(guid), guidId(guid), f, result);
 		return result;
 	}
 
@@ -1538,7 +1339,7 @@ public:
 	bool accessEntityFiltered(Guid guid, F f)
 	{
 		bool result = false;
-		OncePerType<Filter2<Cont, ContainsAllComponentsFilter<Components...>>, ResolveGuid<Sys>>::fn(this, typeKey(guid), guidId(guid), f, result);
+		tuple_utils::OncePerType<Filter2<Cont, ContainsAllComponentsFilter<Components...>>, ResolveGuid<Sys>>::fn(this, typeKey(guid), guidId(guid), f, result);
 		return result;
 	}
 
@@ -1548,7 +1349,7 @@ private:
 	{
 		setEntityId(ent, guid.get());
 		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
-		OncePerType<typename Entity::Cont, OnCreateCallback>::fn(*ent, accessor);
+		tuple_utils::OncePerType<typename Entity::Cont, OnCreateCallback>::fn(*ent, accessor);
 		onCreate(*ent, accessor);
 	}
 
@@ -1557,7 +1358,7 @@ private:
 	{
 		setEntityId(ent, guid.get());
 		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
-		OncePerType<typename Entity::Cont, OnCreateContextCallback>::fn(*ent, accessor, context);
+		tuple_utils::OncePerType<typename Entity::Cont, OnCreateContextCallback>::fn(*ent, accessor, context);
 		onCreate(*ent, accessor, context);
 	}
 
@@ -1661,7 +1462,7 @@ public:
 		auto entities = getEntities<Entity>();
 		auto id = guidId(entity.getGuid());
 		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
-		OncePerType<typename Entity::Cont, OnDestroyCallback>::fn(entity, accessor);
+		tuple_utils::OncePerType<typename Entity::Cont, OnDestroyCallback>::fn(entity, accessor);
 		onDestroy(entity, accessor);
 		entities->destroy(id);
 	}
@@ -1693,7 +1494,7 @@ public:
 	{
 		uint64_t tk = typeKey(guid);
 		uint64_t id = guidId(guid);
-		Switch<Filter<Cont, EntityBase>>::template fn<EntityDestructorCallback<System>>(tk, this, id);
+		tuple_utils::Switch<Filter<Cont, EntityBase>>::template fn<EntityDestructorCallback<System>>(tk, this, id);
 	}
 
 	void destroyEntity(Guid guid)
@@ -1710,7 +1511,7 @@ public:
 	template <typename ...Entities>
 	void destroyEntities()
 	{
-		OncePerType<unique_tuple::unique_tuple<Entities...>, DestroyEntitiesCallback>(this);
+		tuple_utils::OncePerType<tuple_utils::Set<Entities...>, DestroyEntitiesCallback>(this);
 	}
 
 	template <typename T>
@@ -1774,15 +1575,15 @@ public:
 	template <typename V>
 	static constexpr uint64_t absoluteIndex()
 	{
-		return tuple_type_index<V, Cont>::value;
+		return tuple_utils::Index<V, Cont>::value;
 	}
 
 	static std::string dotGraphString()
 	{
 		std::string ret("digraph {\n");
 
-		OncePerType<Cont, DotGenerateNodes>::fn(&ret);
-		using Filtered = tuple_union< Filter<Cont, EntityBase>, Filter<Cont, SystemBase>, Filter<Cont, ComponentBase>, Filter<Cont, IteratorBase>, Filter<Cont, ResourceBase>>;
+		tuple_utils::OncePerType<Cont, DotGenerateNodes>::fn(&ret);
+		using Filtered = tuple_utils::Union< Filter<Cont, EntityBase>, Filter<Cont, SystemBase>, Filter<Cont, ComponentBase>, Filter<Cont, IteratorBase>, Filter<Cont, ResourceBase>>;
 		oncePerPair<Filtered, DotGenerateEdges>(&ret);
 		ret += "}\n";
 
@@ -1905,7 +1706,7 @@ private:
 		static_assert(isEntity<Entity>(), "Template parameter must be an Entity.");
 		Entity* ent;
 		uint64_t id, tk;
-		OncePerType<Filter2<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, tk, ent);
+		tuple_utils::OncePerType<Filter2<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, tk, ent);
 
 		id += tk;
 		setEntityId(ent, id);
@@ -1920,7 +1721,7 @@ private:
 
 		Entity* ent;
 		uint64_t id, tk;
-		OncePerType<Filter2<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, tk, ent, std::forward<Params>(params)...);
+		tuple_utils::OncePerType<Filter2<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, tk, ent, std::forward<Params>(params)...);
 
 		id += tk;
 		setEntityId(ent, id);
@@ -2098,13 +1899,13 @@ struct TypedEntityAccessor
 
 	const Entity* viewEntity() const
 	{
-		OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermissionCallback<Sys>>::fn();
+		tuple_utils::OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermissionCallback<Sys>>::fn();
 		return _entity;
 	}
 
 	Entity* getEntity()
 	{
-		OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermissionCallback<Sys>>::fn();
+		tuple_utils::OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermissionCallback<Sys>>::fn();
 		return _entity;
 	}
 
@@ -2146,7 +1947,7 @@ struct EntityAccessor
 	{
 		Guid guid;
 
-		Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<GuidGetter>(typeKey, &guid, entity);
+		tuple_utils::Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<GuidGetter>(typeKey, &guid, entity);
 		return guid;
 	}
 
@@ -2182,7 +1983,7 @@ private:
 	Component* get_ptr() const
 	{
 		void* result = nullptr;
-		Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<ComponentGetter<Component>>(typeKey, entity, &result);
+		tuple_utils::Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<ComponentGetter<Component>>(typeKey, entity, &result);
 		return reinterpret_cast<Component*>(result);
 	}
 
@@ -2203,7 +2004,7 @@ private:
 		template <typename Value>
 		inline static void callback(void* entity, void** result)
 		{
-			OncePerType<typename Value::Cont, Callback<Component>>::fn(reinterpret_cast<Value*>(entity), result);
+			tuple_utils::OncePerType<typename Value::Cont, Callback<Component>>::fn(reinterpret_cast<Value*>(entity), result);
 		}
 	};
 
@@ -2320,13 +2121,13 @@ struct IteratorIterator
 	This& operator++()
 	{
 		using CompatibleEntities = Filter2<typename Arch::Cont, CompatabilityFilter>;
-		Switch<CompatibleEntities>::template fn<IncrementerCallback>(typeKey, this);
+		tuple_utils::Switch<CompatibleEntities>::template fn<IncrementerCallback>(typeKey, this);
 
 		while (index >= maxIndex && typeKey < limit())
 		{
 			typeKey++;
 			if (typeKey < limit())
-				Switch<CompatibleEntities>::template fn<IncrementerCallback>(typeKey, this);
+				tuple_utils::Switch<CompatibleEntities>::template fn<IncrementerCallback>(typeKey, this);
 		}
 
 		return *this;
@@ -2459,7 +2260,7 @@ public:
 	template <typename P>
 	operator Accessor<Arch, P>& ()
 	{
-		OncePerType<typename Arch::Cont, PermissionCompare<P>>::fn();
+		tuple_utils::OncePerType<typename Arch::Cont, PermissionCompare<P>>::fn();
 
 		return *reinterpret_cast<Accessor<Arch, P>*>(this);
 	}
@@ -2527,7 +2328,7 @@ public:
 	const Entity* viewEntity(Guid guid) const
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermissionCallback<Sys>>::fn();
+		tuple_utils::OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermissionCallback<Sys>>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity<Entity>(guid);
 	}
@@ -2536,7 +2337,7 @@ public:
 	const Entity* viewEntity(EntityId<Arch, Entity> id) const
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermissionCallback<Sys>>::fn();
+		tuple_utils::OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermissionCallback<Sys>>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity(id);
 	}
@@ -2545,7 +2346,7 @@ public:
 	Entity* getEntity(Guid guid)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermissionCallback<Sys>>::fn();
+		tuple_utils::OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermissionCallback<Sys>>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity<Entity>(guid);
 	}
@@ -2554,7 +2355,7 @@ public:
 	Entity* getEntity(EntityId<Arch, Entity> id)
 	{
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
-		OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermissionCallback<Sys>>::fn();
+		tuple_utils::OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermissionCallback<Sys>>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
 		return arch->template getEntity(id);
 	}
@@ -2567,7 +2368,7 @@ public:
 
 	void destroyEntity(Guid guid)
 	{
-		if (OncePerType<typename Arch::Cont, EntityDestructionPermission>::constFn(Arch::typeKey(guid)))
+		if (tuple_utils::OncePerType<typename Arch::Cont, EntityDestructionPermission>::constFn(Arch::typeKey(guid)))
 		{
 			arch->template destroyEntity<Sys>(guid);
 		}
@@ -2583,7 +2384,7 @@ public:
 	template <typename ...Entities>
 	void destroyEntities()
 	{
-		OncePerType<Rbox<Entities...>, EntityOrchestrationPermissionTest>::fn();
+		tuple_utils::OncePerType<Rbox<Entities...>, EntityOrchestrationPermissionTest>::fn();
 		arch->template destroyEntities<Entities...>();
 	}
 
@@ -2642,14 +2443,14 @@ public:
 	void iterate(F f)
 	{
 		iteratorPermission<Iterator>();
-		OncePerType<typename Arch::Cont, IteratorCallback<Iterator>>::fn(f, arch);
+		tuple_utils::OncePerType<typename Arch::Cont, IteratorCallback<Iterator>>::fn(f, arch);
 	}
 
 	template <typename Iterator, typename F>
 	void iterate2(F f)
 	{
 		iteratorPermission<Iterator>();
-		OncePerType<typename Arch::Cont, TypedIteratorCallback<Iterator>>::fn(f, arch);
+		tuple_utils::OncePerType<typename Arch::Cont, TypedIteratorCallback<Iterator>>::fn(f, arch);
 	}
 
 	template <typename Iterator, typename F>
@@ -2668,14 +2469,14 @@ public:
 	uint64_t countCompatibleEntities()
 	{
 		uint64_t entityCount = 0;
-		OncePerType<Filter<typename Arch::Cont, EntityBase>, EntityCountCallback<Iterator>>::fn(&entityCount, arch);
+		tuple_utils::OncePerType<Filter<typename Arch::Cont, EntityBase>, EntityCountCallback<Iterator>>::fn(&entityCount, arch);
 		return entityCount;
 	}
 
 	template <typename Iterator>
 	static constexpr uint64_t numCompatibleEntities()
 	{
-		return OncePerType<typename Arch::Cont, NumCompatibleEntities<Iterator>>::constSum();
+		return tuple_utils::OncePerType<typename Arch::Cont, NumCompatibleEntities<Iterator>>::constSum();
 	}
 // private:
 	// friend Arch;
@@ -2790,7 +2591,7 @@ private:
 		{
 			static_assert(isSystem<V>(), "Only systems allowed as template parameters.");
 			static_assert(!inspect::contains<Arch::Cont, V>(), "Architecture must not refer to system.");
-			typename V::Cont::template evaluate<OncePerType<Dummy, SystemAccessValidationCallback<V, Systems>>>();
+			typename V::Cont::template evaluate<tuple_utils::OncePerType<Dummy, SystemAccessValidationCallback<V, Systems>>>();
 		}
 	};
 
@@ -2915,7 +2716,7 @@ private:
 
 		for (uint64_t i = 0; i < limit; i++)
 		{
-			Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<ParallelIterateTaskCallback<Iterator, F>>(i, data);
+			tuple_utils::Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<ParallelIterateTaskCallback<Iterator, F>>(i, data);
 			if (data->entityCount == 0)
 				return;
 		}
@@ -2970,7 +2771,7 @@ private:
 
 		for (uint64_t i = 0; i < limit; i++)
 		{
-			Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<TypedParallelIterateTaskCallback<Iterator, F>>(i, data);
+			tuple_utils::Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<TypedParallelIterateTaskCallback<Iterator, F>>(i, data);
 			if (data->entityCount == 0)
 				return;
 		}
@@ -3006,8 +2807,8 @@ struct SystemExclusiveCheck
 template <typename A, typename B>
 constexpr bool exclusiveWith()
 {
-	return OncePerType<SystemAccesses<A>, SystemExclusiveCheck<B>>::constFn()
-		|| OncePerType<SystemAccesses<B>, SystemExclusiveCheck<A>>::constFn();
+	return tuple_utils::OncePerType<SystemAccesses<A>, SystemExclusiveCheck<B>>::constFn()
+		|| tuple_utils::OncePerType<SystemAccesses<B>, SystemExclusiveCheck<A>>::constFn();
 }
 
 } // namespace czss
