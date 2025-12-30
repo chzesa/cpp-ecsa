@@ -1,7 +1,7 @@
 #ifndef CZSS_HEADERS_H
 #define CZSS_HEADERS_H
 
-#include "external/cpp-tuple-utils/tuple_utils.hpp"
+#include <tuple_utils.hpp>
 
 #ifndef CZSF_HEADERS_H
 #include "external/c-fiber/czsf.h"
