@@ -1166,7 +1166,7 @@ struct Runner
 
 		for (uint64_t i = 0; i < sysCount; i++)
 		{
-			barriers[i] = czsf::Barrier(1);
+			new (&barriers[i]) czsf::Barrier(1);
 			taskData[i].arch = arch;
 			taskData[i].barriers = barriers;
 			taskData[i].id = i;
