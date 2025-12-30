@@ -279,6 +279,12 @@ using Filter2 = typename Filter2Impl2<Tuple, F>::type;
 template <typename Cat, typename A, typename ...R>
 struct FilterImpl;
 
+template<typename Cat>
+struct FilterImpl<Cat, std::tuple<>>
+{
+	using type = typename std::tuple<>;
+};
+
 template <typename Cat, typename ...A, typename V, typename ...R>
 struct FilterImpl<Cat, std::tuple<A...>, V, R...>
 {
