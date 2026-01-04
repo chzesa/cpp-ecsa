@@ -1932,18 +1932,18 @@ struct EntityAccessor
 	template <typename Component>
 	bool hasComponent() const
 	{
-		return view<Component>() != nullptr;
+		return viewComponent<Component>() != nullptr;
 	}
 
 	template<typename Component>
-	const Component* view() const
+	const Component* viewComponent() const
 	{
 		static_assert(canRead<Sys, Component>(), "System lacks read permissions for the Iterator's components.");
 		return get_ptr<Component>();
 	}
 
 	template<typename Component>
-	Component* get()
+	Component* getComponent()
 	{
 		static_assert(canWrite<Sys, Component>(), "System lacks write permissions for the Iterator's components.");
 		return get_ptr<Component>();
@@ -2036,15 +2036,15 @@ struct IteratorAccessor : EntityAccessor<Arch, Sys>
 	}
 
 	template<typename Component>
-	const Component* view() const
+	const Component* viewComponent() const
 	{
-		return EntityAccessor<Arch, Sys>::template view<Component>();
+		return EntityAccessor<Arch, Sys>::template viewComponent<Component>();
 	}
 
 	template<typename Component>
-	Component* get()
+	Component* getComponent()
 	{
-		return EntityAccessor<Arch, Sys>::template get<Component>();
+		return EntityAccessor<Arch, Sys>::template getComponent<Component>();
 	}
 
 private:
