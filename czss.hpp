@@ -1898,7 +1898,7 @@ struct TypedEntityAccessor
 		return _entity->template getComponent<Component>();
 	}
 
-	Guid guid() const
+	Guid getGuid() const
 	{
 		return _entity->getGuid();
 	}
@@ -1949,7 +1949,7 @@ struct EntityAccessor
 		return get_ptr<Component>();
 	}
 
-	Guid guid() const
+	Guid getGuid() const
 	{
 		Guid guid;
 
