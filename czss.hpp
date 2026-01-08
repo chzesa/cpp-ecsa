@@ -525,37 +525,6 @@ public:
 		setActive(indexToActiveI(index), value);
 	}
 
-	template <typename T>
-	T* create(uint64_t& id)
-	{
-		id = nextId++;
-
-		T* res;
-		auto used_indices_index = used_indices.size();
-
-		CZSS_CONST_IF (isVirtual<T>())
-		{
-			res = new T();
-		}
-		else
-		{
-			if(free_indices.size() == 0)
-				expand();
-
-			auto index = free_indices.top();
-			free_indices.pop();
-			res = get(index);
-			new(res) T();
-			index_map.insert({id, index});
-		}
-
-		used_indices.push_back(res);
-		used_indices_map.insert({id, used_indices_index});
-		used_indices_map_reverse.insert({used_indices_index, id});
-
-		return res;
-	}
-
 	template <typename T, typename ...Params>
 	T* create(uint64_t& id, Params&&... params)
 	{
