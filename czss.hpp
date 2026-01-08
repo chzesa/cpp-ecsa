@@ -845,7 +845,7 @@ public:
 		static_assert(alignof(B) == alignof(D));
 		static_assert(sizeof(B) == sizeof(D));
 		auto ret = getComponent<B>();
-		new(ret) D(d);
+		new(ret) D(std::move(d));
 		return ret;
 	}
 
