@@ -235,47 +235,6 @@ constexpr bool isDummy()
 	return std::is_same<T, Dummy>();
 }
 
-template <typename F, typename A, typename ...R>
-struct Filter2Impl;
-
-template <typename F, typename ...A, typename V, typename ...R>
-struct Filter2Impl<F, std::tuple<A...>, V, R...>
-{
-	using type = typename std::conditional<
-		F::template test<V>()
-		, Filter2Impl<F, std::tuple<V, A...>, R...>
-		, Filter2Impl<F, std::tuple<A...>, R...>
-	>::type::type;
-};
-
-template <typename F, typename ...A, typename V>
-struct Filter2Impl<F, std::tuple<A...>, V>
-{
-	using type = typename std::conditional<
-		F::template test<V>()
-		, tuple_utils::Set<V, A...>
-		, tuple_utils::Set<A...>
-	>::type;
-};
-
-template <typename T, typename F>
-struct Filter2Impl2;
-
-template <typename ...A, typename F>
-struct Filter2Impl2<std::tuple<A...>, F>
-{
-	using type = typename Filter2Impl<F, std::tuple<>, A...>::type;
-};
-
-template <typename F>
-struct Filter2Impl2<std::tuple<>, F>
-{
-	using type = std::tuple<>;
-};
-
-template<typename Tuple, typename F>
-using Filter2 = typename Filter2Impl2<Tuple, F>::type;
-
 template <typename Cat, typename A, typename ...R>
 struct FilterImpl;
 
@@ -903,7 +862,7 @@ constexpr bool canOrchestrate()
 {
 	return isVirtual<T>()
 		? std::tuple_size<
-			Filter2<Flatten<Filter<typename Sys::Cont, OrchestratorBase>>, BaseTypeOfFilter<T>>
+			tuple_utils::Subset<Flatten<Filter<typename Sys::Cont, OrchestratorBase>>, BaseTypeOfFilter<T>>
 		>::value > 0
 		: inspect::contains<Flatten<Filter<typename Sys::Cont, OrchestratorBase>>, T>();
 }
@@ -1314,7 +1273,7 @@ public:
 	bool accessEntityFiltered(Guid guid, F f)
 	{
 		bool result = false;
-		tuple_utils::OncePerType<Filter2<Cont, ContainsAllComponentsFilter<Components...>>, ResolveGuid<Sys>>::fn(this, typeKey(guid), guidId(guid), f, result);
+		tuple_utils::OncePerType<tuple_utils::Subset<Cont, ContainsAllComponentsFilter<Components...>>, ResolveGuid<Sys>>::fn(this, typeKey(guid), guidId(guid), f, result);
 		return result;
 	}
 
@@ -1681,7 +1640,7 @@ private:
 		static_assert(isEntity<Entity>(), "Template parameter must be an Entity.");
 		Entity* ent;
 		uint64_t id, tk;
-		tuple_utils::OncePerType<Filter2<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, tk, ent);
+		tuple_utils::OncePerType<tuple_utils::Subset<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, tk, ent);
 
 		id += tk;
 		setEntityId(ent, id);
@@ -1696,7 +1655,7 @@ private:
 
 		Entity* ent;
 		uint64_t id, tk;
-		tuple_utils::OncePerType<Filter2<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, tk, ent, std::forward<Params>(params)...);
+		tuple_utils::OncePerType<tuple_utils::Subset<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, tk, ent, std::forward<Params>(params)...);
 
 		id += tk;
 		setEntityId(ent, id);
@@ -2095,7 +2054,7 @@ struct IteratorIterator
 
 	This& operator++()
 	{
-		using CompatibleEntities = Filter2<typename Arch::Cont, CompatabilityFilter>;
+		using CompatibleEntities = tuple_utils::Subset<typename Arch::Cont, CompatabilityFilter>;
 		tuple_utils::Switch<CompatibleEntities>::template fn<IncrementerCallback>(typeKey, this);
 
 		while (index >= maxIndex && typeKey < limit())
@@ -2128,7 +2087,7 @@ private:
 
 	static constexpr size_t limit()
 	{
-		using CompatibleEntities = Filter2<typename Arch::Cont, CompatabilityFilter>;
+		using CompatibleEntities = tuple_utils::Subset<typename Arch::Cont, CompatabilityFilter>;
 		return std::tuple_size<CompatibleEntities>::value;
 	}
 
