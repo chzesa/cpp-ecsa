@@ -2769,15 +2769,9 @@ namespace czss
 
 Guid::Guid() { }
 
-Guid::Guid(uint64_t id)
-{
-	this->id = id;
-}
+Guid::Guid(uint64_t v) : id(v) { }
 
-Guid::Guid(const Guid& other)
-{
-	this->id = other.id;
-}
+Guid::Guid(const Guid& other) : id(other.id) { }
 
 uint64_t Guid::get() const
 {
