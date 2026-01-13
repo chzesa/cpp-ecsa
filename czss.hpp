@@ -1985,18 +1985,19 @@ private:
 	IteratorAccessor(uint64_t key, void* entity) : EntityAccessor<Arch, Sys>(key, entity) { }
 };
 
+template <typename Iter>
+struct IteratorCompatabilityFilter
+{
+	template <typename Entity>
+	static constexpr bool test()
+	{
+		return isEntity<Entity>() && isIteratorCompatibleWithEntity<Iter, Entity>();
+	}
+};
+
 template <typename Iter, typename Arch, typename Sys>
 struct IteratorIterator
 {
-	struct CompatabilityFilter
-	{
-		template <typename Entity>
-		static constexpr bool test()
-		{
-			return isEntity<Entity>() && isIteratorCompatibleWithEntity<Iter, Entity>();
-		}
-	};
-
 	using This = IteratorIterator<Iter, Arch, Sys>;
 	using U = IteratorAccessor<Iter, Arch, Sys>;
 
@@ -2054,7 +2055,7 @@ struct IteratorIterator
 
 	This& operator++()
 	{
-		using CompatibleEntities = tuple_utils::Subset<typename Arch::Cont, CompatabilityFilter>;
+		using CompatibleEntities = tuple_utils::Subset<typename Arch::Cont, IteratorCompatabilityFilter<Iter>>;
 		tuple_utils::Switch<CompatibleEntities>::template fn<IncrementerCallback>(typeKey, this);
 
 		while (index >= maxIndex && typeKey < limit())
@@ -2087,7 +2088,7 @@ private:
 
 	static constexpr size_t limit()
 	{
-		using CompatibleEntities = tuple_utils::Subset<typename Arch::Cont, CompatabilityFilter>;
+		using CompatibleEntities = tuple_utils::Subset<typename Arch::Cont, IteratorCompatabilityFilter<Iter>>;
 		return std::tuple_size<CompatibleEntities>::value;
 	}
 
@@ -2662,9 +2663,6 @@ private:
 		template <typename Value>
 		static inline void callback(ParallelIterateTaskData<F>* data)
 		{
-			CZSS_CONST_IF (!isEntity<Value>() || !isIteratorCompatibleWithEntity<Iterator, Value>())
-				return;
-
 			auto entities = data->arch->template getEntities<Value>();
 			if (entities->size() == 0 || entities->size() < data->beginIndex)
 			{
@@ -2701,11 +2699,12 @@ private:
 	template <typename Iterator, typename F>
 	static void TypedParallelIterateTask(ParallelIterateTaskData<F>* data)
 	{
+		using _compat = tuple_utils::Subset<typename Arch::Cont, IteratorCompatabilityFilter<Iterator>>;
 		static const uint64_t limit = Accessor<Arch, Sys>::numCompatibleEntities<Iterator>();
 
 		for (uint64_t i = 0; i < limit; i++)
 		{
-			tuple_utils::Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<TypedParallelIterateTaskCallback<Iterator, F>>(i, data);
+			tuple_utils::Switch<_compat>::template fn<TypedParallelIterateTaskCallback<Iterator, F>>(i, data);
 			if (data->entityCount == 0)
 				return;
 		}
