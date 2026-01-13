@@ -2647,11 +2647,12 @@ private:
 	template <typename Iterator, typename F>
 	static void ParallelIterateTask(ParallelIterateTaskData<F>* data)
 	{
+		using _compat = tuple_utils::Subset<typename Arch::Cont, IteratorCompatabilityFilter<Iterator>>;
 		static const uint64_t limit = Accessor<Arch, Sys>::numCompatibleEntities<Iterator>();
 
 		for (uint64_t i = 0; i < limit; i++)
 		{
-			tuple_utils::Switch<Filter<typename Arch::Cont, EntityBase>>::template fn<ParallelIterateTaskCallback<Iterator, F>>(i, data);
+			tuple_utils::Switch<_compat>::template fn<ParallelIterateTaskCallback<Iterator, F>>(i, data);
 			if (data->entityCount == 0)
 				return;
 		}
