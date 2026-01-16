@@ -822,7 +822,7 @@ constexpr static bool isIteratorCompatibleWithEntity()
 {
 	return isIterator<Iterator>()
 		&& isEntity<Entity>()
-		&& inspect::containsAllIn<Flatten<typename Entity::Cont>, Flatten<typename Iterator::Cont>>();
+		&& inspect::containsAllIn<Flatten<typename Iterator::Cont>, Flatten<typename Entity::Cont>>();
 }
 
 // #####################
