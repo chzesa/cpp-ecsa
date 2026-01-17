@@ -820,9 +820,11 @@ struct TypedEntityAccessor;
 template <typename Iterator, typename Entity>
 constexpr static bool isIteratorCompatibleWithEntity()
 {
+	using _iteratorComponents = Filter<Flatten<typename Iterator::Cont>, ComponentBase>;
+
 	return isIterator<Iterator>()
 		&& isEntity<Entity>()
-		&& inspect::containsAllIn<Flatten<typename Entity::Cont>, Flatten<typename Iterator::Cont>>();
+		&& inspect::containsAllIn<Flatten<typename Entity::Cont>, _iteratorComponents>();
 }
 
 // #####################
