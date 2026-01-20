@@ -1806,9 +1806,36 @@ struct IteratorIterator;
 template<typename Arch, typename Sys>
 struct Accessor;
 
+template <typename Base, typename Derived>
+struct PermissionCompare
+{
+	template <typename V>
+	static constexpr void callback()
+	{
+		static_assert(isEntity<V>() && canOrchestrate<Derived, V>() ? canOrchestrate<Base, V>()
+				: ((isComponent<V>() || isResource<V>()) && canWrite<Derived, V>() ? canWrite<Base, V>()
+					: ((isComponent<V>() || isResource<V>()) && canRead<Derived, V>() ? canRead<Base, V>()
+						: true)),
+			"Derived accessor must have same or lesser permissions than the original.");
+	}
+};
+
+template <typename Base, typename Derived>
+static constexpr void canDeriveAssert()
+{
+	tuple_utils::OncePerType<typename Derived::Cont, PermissionCompare<Base, Derived>>::fn();
+}
+
 template<typename Sys, typename Entity>
 struct TypedEntityAccessor
 {
+	template <typename P>
+	operator TypedEntityAccessor<P, Entity>& ()
+	{
+		canDeriveAssert<Sys, P>();
+		return *reinterpret_cast<TypedEntityAccessor<P, Entity>*>(this);
+	}
+
 	TypedEntityAccessor(const Entity* ent)
 	{
 		_entity = const_cast<Entity*>(ent);
@@ -1852,6 +1879,13 @@ private:
 template <typename Arch, typename Sys>
 struct EntityAccessor
 {
+	template <typename P>
+	operator EntityAccessor<Arch, P>& ()
+	{
+		canDeriveAssert<Sys, P>();
+		return *reinterpret_cast<EntityAccessor<Arch, P>*>(this);
+	}
+
 	template <typename Entity>
 	EntityAccessor(const Entity* ent)
 	{
@@ -2177,28 +2211,11 @@ struct Accessor
 	Accessor& operator=(const Accessor&) = delete;
 	Accessor& operator=(Accessor&&) = delete;
 
-
-private:
-	template <typename P>
-	struct PermissionCompare
-	{
-		template <typename V>
-		static constexpr void callback()
-		{
-			static_assert(canOrchestrate<P, V>() ? canOrchestrate<Sys, V>()
-					: (canWrite<P, V>() ? canWrite<Sys, V>()
-						: (canRead<P, V>() ? canRead<Sys, V>()
-							: true)),
-				"Derived accessor must have same or lesser permissions than the original.");
-		}
-	};
-
 public:
 	template <typename P>
 	operator Accessor<Arch, P>& ()
 	{
-		tuple_utils::OncePerType<typename Arch::Cont, PermissionCompare<P>>::fn();
-
+		canDeriveAssert<Sys, P>();
 		return *reinterpret_cast<Accessor<Arch, P>*>(this);
 	}
 
