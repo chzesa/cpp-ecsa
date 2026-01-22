@@ -2430,11 +2430,6 @@ public:
 		return entityCount;
 	}
 
-	template <typename Iterator>
-	static constexpr uint64_t numCompatibleEntities()
-	{
-		return tuple_utils::OncePerType<typename Arch::Cont, NumCompatibleEntities<Iterator>>::constSum();
-	}
 // private:
 	// friend Arch;
 	Accessor(Arch* arch) { this->arch = arch; }
@@ -2604,16 +2599,6 @@ private:
 		}
 	};
 
-	template <typename Iterator>
-	struct NumCompatibleEntities
-	{
-		template <typename Value>
-		static constexpr uint64_t callback()
-		{
-			return isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>() ? 1 : 0;
-		}
-	};
-
 	template <typename F>
 	struct ParallelIterateTaskData
 	{
@@ -2670,7 +2655,7 @@ private:
 	static void ParallelIterateTask(ParallelIterateTaskData<F>* data)
 	{
 		using _compat = tuple_utils::Subset<typename Arch::Cont, IteratorCompatabilityFilter<Iterator>>;
-		static const uint64_t limit = Accessor<Arch, Sys>::numCompatibleEntities<Iterator>();
+		static const uint64_t limit = std::tuple_size<_compat>::value;
 
 		for (uint64_t i = 0; i < limit; i++)
 		{
@@ -2723,7 +2708,7 @@ private:
 	static void TypedParallelIterateTask(ParallelIterateTaskData<F>* data)
 	{
 		using _compat = tuple_utils::Subset<typename Arch::Cont, IteratorCompatabilityFilter<Iterator>>;
-		static const uint64_t limit = Accessor<Arch, Sys>::numCompatibleEntities<Iterator>();
+		static const uint64_t limit = std::tuple_size<_compat>::value;
 
 		for (uint64_t i = 0; i < limit; i++)
 		{
