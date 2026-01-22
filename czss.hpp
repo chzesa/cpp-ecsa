@@ -2396,15 +2396,18 @@ public:
 	template <typename Iterator, typename F>
 	void iterate(F f)
 	{
+		using _compat = tuple_utils::Subset<typename Arch::Cont, IteratorCompatabilityFilter<Iterator>>;
 		iteratorPermission<Iterator>();
-		tuple_utils::OncePerType<typename Arch::Cont, IteratorCallback<Iterator>>::fn(f, arch);
+		tuple_utils::OncePerType<_compat, IteratorCallback<Iterator>>::fn(f, arch);
 	}
 
 	template <typename Iterator, typename F>
 	void iterate2(F f)
 	{
+		using _compat = tuple_utils::Subset<typename Arch::Cont, IteratorCompatabilityFilter<Iterator>>;
 		iteratorPermission<Iterator>();
-		tuple_utils::OncePerType<typename Arch::Cont, TypedIteratorCallback<Iterator>>::fn(f, arch);
+
+		tuple_utils::OncePerType<_compat, TypedIteratorCallback<Iterator>>::fn(f, arch);
 	}
 
 	template <typename Iterator, typename F>
