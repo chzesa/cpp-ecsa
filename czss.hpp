@@ -2576,6 +2576,8 @@ private:
 					static_assert(canOrchestrate<Sys, Value>(), ErrorMessage);
 			}
 
+			#undef ErrorMessage
+
 			CZSS_CONST_IF (isSystem<Value>())
 			{
 				static_assert(!inspect::contains<Arch::Cont, Value>(), "Subsystems must not refer any types in the architecture");
