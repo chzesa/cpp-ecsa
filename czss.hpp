@@ -453,7 +453,7 @@ private:
 		// 00010000 bit shift
 		// 00001111 subtract
 		// 00001000 and
-		static constexpr size_t maskL = ~0 << (BASE_POWER + 1);
+		static constexpr size_t maskL = ~size_t(0) << (BASE_POWER + 1);
 		size_t offset = ((2 << (index.tier + BASE_POWER)) - 1) & maskL;
 		return offset + index.index;
 	}
