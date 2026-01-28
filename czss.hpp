@@ -2490,7 +2490,8 @@ private:
 		iteratorPermission<Iterator>();
 		uint64_t counter = countCompatibleEntities<Iterator>();
 
-		ParallelIterateTaskData<F> tasks[numTasks];
+		std::vector<ParallelIterateTaskData<F>> taskvec(numTasks);
+		ParallelIterateTaskData<F>* tasks = taskvec.data();
 
 		for (uint64_t i = 0; i < numTasks; i++)
 		{
