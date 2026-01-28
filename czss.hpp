@@ -1252,6 +1252,26 @@ private:
 		}
 	};
 
+	template <typename System, typename Component>
+	struct AccessComponent
+	{
+		template <typename T, typename F>
+		static void callback(This* arch, uint64_t key, uint64_t id, F f, bool& result)
+		{
+			if (entityIndex<T>() == key)
+			{
+				auto entities = arch->getEntities<T>();
+				auto entity = entities->get(id);
+				if (entity != nullptr)
+				{
+					auto accessor = TypedEntityAccessor<System, T>(entity);
+					f(accessor.template getComponent<Component>());
+					result = true;
+				}
+			}
+		}
+	};
+
 	template <typename ...Components>
 	struct ContainsAllComponentsFilter
 	{
@@ -1268,6 +1288,16 @@ public:
 	{
 		bool result = false;
 		tuple_utils::OncePerType<Filter<Cont, EntityBase>, ResolveGuid<Sys>>::fn(this, typeKey(guid), guidId(guid), f, result);
+		return result;
+	}
+
+	template <typename Sys, typename Component, typename F>
+	bool accessComponent(Guid guid,  F f)
+	{
+		using _entities = Filter<Cont, EntityBase>;
+		using _set = tuple_utils::Subset<_entities, ContainsAllComponentsFilter<Component>>;
+		bool result = false;
+		tuple_utils::OncePerType<_set, AccessComponent<Sys, Component>>::fn(this, typeKey(guid), guidId(guid), f, result);
 		return result;
 	}
 
@@ -2264,6 +2294,12 @@ public:
 	bool accessEntity(Guid guid, F f)
 	{
 		return arch->template accessEntity<Sys>(guid, f);
+	}
+
+	template <typename Component, typename F>
+	bool accessComponent(Guid guid, F f)
+	{
+		return arch->template accessComponent<Sys, Component>(guid, f);
 	}
 
 	template <typename ...Components>
