@@ -1304,8 +1304,10 @@ public:
 	template <typename Sys, typename F, typename ...Components>
 	bool accessEntityFiltered(Guid guid, F f)
 	{
+		using _entities = Filter<Cont, EntityBase>;
+		using _set = tuple_utils::Subset<_entities, ContainsAllComponentsFilter<Components...>>;
 		bool result = false;
-		tuple_utils::OncePerType<tuple_utils::Subset<Cont, ContainsAllComponentsFilter<Components...>>, ResolveGuid<Sys>>::fn(this, typeKey(guid), guidId(guid), f, result);
+		tuple_utils::OncePerType<_set, ResolveGuid<Sys>>::fn(this, typeKey(guid), guidId(guid), f, result);
 		return result;
 	}
 
