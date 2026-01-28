@@ -2803,15 +2803,17 @@ constexpr bool exclusiveWith()
 
 } // namespace czss
 
+namespace std {
 template<>
-struct std::hash<czss::Guid>
+struct hash<czss::Guid>
 {
-	std::size_t operator()(czss::Guid const& guid) const noexcept
+	size_t operator()(const czss::Guid& guid) const noexcept
 	{
-		return guid.get();
+		return std::hash<uint64_t>()(guid.get());
 	}
 };
 
+} // namespace std
 
 #endif // CZSS_HEADERS_H
 
