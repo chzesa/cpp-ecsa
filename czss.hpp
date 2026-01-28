@@ -2418,6 +2418,16 @@ public:
 		return arch->template getResource<Resource>();
 	}
 
+	// TODO add special permission?
+	template <typename Resource>
+	void setResource(Resource* res)
+	{
+		static_assert(isResource<Resource>(), "Attempted to write to non-resource.");
+		static_assert(canWrite<Sys, Resource>(), "System lacks permission to modify Resource.");
+		static_assert(inspect::contains<typename Arch::Cont, Resource>(), "Architecture doesn't contain the Resource.");
+		arch->setResource(res);
+	}
+
 	template <typename Iterator>
 	IterableStub<Iterator, Arch, Sys> iterate()
 	{
