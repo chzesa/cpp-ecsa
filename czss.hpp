@@ -1184,6 +1184,62 @@ struct Architecture : VirtualArchitecture
 		std::get<tuple_utils::Index<Resource*, RewrapElements<std::add_pointer, Filter<Cont, ResourceBase>>>::value>(resources) = res;
 	}
 
+	template <typename Alloc>
+	struct ResourceInitializer
+	{
+		template <typename R>
+		static void callback(This* arch, Alloc& alloc)
+		{
+			typedef typename std::allocator_traits<Alloc>::template rebind_alloc<R> ralloc;
+			using traits = std::allocator_traits<ralloc>;
+			auto a = ralloc(alloc);
+			auto p = traits::allocate(a, 1);
+			traits::construct(a, p);
+			arch->setResource(p);
+		}
+	};
+
+	template <typename Alloc>
+	struct ResourceDestructor
+	{
+		template <typename R>
+		static void callback(This* arch, Alloc& alloc)
+		{
+			typedef typename std::allocator_traits<Alloc>::template rebind_alloc<R> ralloc;
+			using traits = std::allocator_traits<ralloc>;
+			auto a = ralloc(alloc);
+			auto p = arch->getResource<R>();
+			traits::destroy(a, p);
+			traits::deallocate(a, p, 1);
+		}
+	};
+
+	template <typename T, typename Alloc>
+	void initializeResources(Alloc& alloc)
+	{
+		tuple_utils::OncePerType<T, ResourceInitializer<Alloc>>::fn(this, alloc);
+	}
+
+	template <typename Alloc>
+	void initializeResources(Alloc& alloc)
+	{
+		using _r = Filter<Cont, ResourceBase>;
+		this->initializeResources<_r, Alloc>(alloc);
+	}
+
+	template <typename T, typename Alloc>
+	void freeResources(Alloc& alloc)
+	{
+		tuple_utils::OncePerType<T, ResourceDestructor<Alloc>>::fn(this, alloc);
+	}
+
+	template <typename Alloc>
+	void freeResources(Alloc& alloc)
+	{
+		using _r = Filter<Cont, ResourceBase>;
+		this->freeResources<_r, Alloc>(alloc);
+	}
+
 	template <typename Resource>
 	Resource* getResource()
 	{
