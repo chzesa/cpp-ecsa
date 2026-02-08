@@ -1,6 +1,0 @@
-[submodule "external/c-fiber"]
-	path = external/c-fiber
-	url = https://github.com/chzesa/c-fiber.git
-[submodule "external/cpp-tuple-utils"]
-	path = external/cpp-tuple-utils
-	url = https://github.com/chzesa/cpp-tuple-utils.git
