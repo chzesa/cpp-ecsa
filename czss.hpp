@@ -4,7 +4,7 @@
 #include <tuple_utils.hpp>
 
 #ifndef CZSF_HEADERS_H
-#include "external/c-fiber/czsf.h"
+#include <czsf.h>
 #endif
 
 #include <cmath>
