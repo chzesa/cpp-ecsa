@@ -2456,6 +2456,116 @@ public:
 		run<Dummy, Systems...>(nullptr, init);
 	}
 
+	struct MiniRunMapper
+	{
+		template <typename V>
+		struct MrmImpl
+		{
+			using type = V;
+			using fn = V;
+		};
+
+		template <typename A, typename S>
+		struct MrmImpl<void(*)(Accessor<A, S>)>
+		{
+			using type = S;
+			using fn = void(*)(Accessor<A, S>);
+		};
+
+		template <typename A, typename S>
+		struct MrmImpl<void(*)(Accessor<A, S>&)>
+		{
+			using type = S;
+			using fn = void(*)(Accessor<A, S>&);
+		};
+
+		template <typename A, typename S>
+		struct MrmImpl<void(*)(const Accessor<A, S>&)>
+		{
+			using type = S;
+			using fn = void(*)(const Accessor<A, S>&);
+		};
+
+		template <typename V>
+		using type = typename MrmImpl<V>::type;
+
+		template <typename V>
+		using fn = typename MrmImpl<V>::fn;
+	};
+
+	template <std::size_t I, typename A>
+	struct MiniRunFilter
+	{
+		template <typename V>
+		struct FilterImpl;
+
+		template <std::size_t J, typename B>
+		struct FilterImpl<std::tuple< std::integral_constant<std::size_t, J>, B >>
+		{
+			static constexpr bool value = (J < I) && exclusiveWith<A, B>();
+		};
+
+		template <typename V>
+		static constexpr bool test()
+		{
+			return FilterImpl<V>::value;
+		}
+	};
+
+	struct MinirunTaskData
+	{
+		czsf::Barrier* barriers;
+		void (*fn) (void*);
+		Accessor<Arch, Sys>* arch;
+		size_t i;
+	};
+
+	template <size_t I, typename Others, typename P>
+	static void _minirun(MinirunTaskData* task)
+	{
+		using _s = typename MiniRunMapper::template type<P>;
+		using _filt = tuple_utils::Subset<Others, MiniRunFilter<I, _s>>;
+
+		// Redundant waits here
+		tuple_utils::oncePerType2<_filt>([&] <typename O> () {
+			auto i = std::tuple_element<0, O>::type::value;
+			task->barriers[i].wait();
+		});
+
+		auto fn = reinterpret_cast<typename MiniRunMapper::template fn<P>>(task->fn);
+		fn(*task->arch);
+	}
+
+	template <typename ...S>
+	void minirun(S... fn)
+	{
+		using _systems = tuple_utils::Map<std::tuple<S...>, MiniRunMapper>;
+		using _numbered = tuple_utils::Numbered<_systems>;
+
+		static constexpr size_t N = sizeof...(S);
+		auto pointers = std::tuple(fn...);
+
+		std::vector<czsf::Barrier> barriers(N);
+		std::vector<MinirunTaskData> taskData(N);
+
+		for (size_t i = 0; i < N; i++)
+			new(&barriers[i]) czsf::Barrier(1);
+
+		tuple_utils::oncePerType2<_numbered>([&] <typename P> () {
+			static constexpr size_t I = std::tuple_element<0, P>::type::value;
+
+			taskData[I].barriers = barriers.data();
+			taskData[I].fn = reinterpret_cast<void(*)(void*)> (std::get<I>(pointers));
+			taskData[I].arch = this;
+			taskData[I].i = I;
+			czsf::run(_minirun<I, _numbered, typename std::tuple_element<I, decltype(pointers)>::type>, &taskData[I], 1, &barriers[I]);
+		});
+
+		for (size_t i = 0; i < N; i++)
+			barriers[i].wait();
+	}
+
+
 	template <typename Resource>
 	const Resource* viewResource() const
 	{
