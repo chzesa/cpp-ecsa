@@ -1388,20 +1388,6 @@ private:
 	}
 
 public:
-	template <typename Entity, typename System>
-	Entity* createEntity()
-	{
-		CZSS_CONST_IF (isEntity<Entity>())
-		{
-			auto ent = initializeEntity<Entity>();
-			Guid guid = ent->getGuid();
-			postInitializeEntity<System>(guid, ent);
-			return ent;
-		}
-
-		return nullptr;
-	}
-
 	template <typename Entity, typename System, typename ...Params>
 	Entity* createEntity(Params&&... params)
 	{
@@ -1416,30 +1402,10 @@ public:
 		return nullptr;
 	}
 
-	template <typename Entity>
-	Entity* createEntity()
-	{
-		return createEntity<Entity, OmniSystem>();
-	}
-
 	template <typename Entity, typename ...Params>
 	Entity* createEntity(Params&&... params)
 	{
 		return createEntity<Entity, OmniSystem>(std::forward(params)...);
-	}
-
-	template <typename Entity, typename System, typename Context>
-	Entity* createEntityWithContext(const Context& context)
-	{
-		CZSS_CONST_IF (isEntity<Entity>())
-		{
-			auto ent = initializeEntity<Entity>();
-			Guid guid = ent->getGuid();
-			postInitializeEntity<System>(guid, ent, context);
-			return ent;
-		}
-
-		return nullptr;
 	}
 
 	template <typename Entity, typename System, typename Context, typename ...Params>
@@ -1454,12 +1420,6 @@ public:
 		}
 
 		return nullptr;
-	}
-
-	template <typename Entity, typename Context>
-	Entity* createEntityWithContext(const Context& context)
-	{
-		return createEntityWithContext<Entity, OmniSystem>(context);
 	}
 
 	template <typename Entity, typename Context, typename ...Params>
@@ -1708,14 +1668,6 @@ private:
 	template <typename Entity>
 	struct InitializeEntityCallback
 	{
-		template <typename T>
-		static void callback(This* arch, uint64_t& id, uint64_t& tk, Entity*& ent)
-		{
-			tk = indexOf<Cont, T, EntityBase>() << 63 - typeKeyLength();
-			auto entities = arch->getEntities<T>();
-			ent = entities->template create<Entity>(id);
-		}
-
 		template <typename T, typename ...Params>
 		static void callback(This* arch, uint64_t& id, uint64_t& tk, Entity*& ent, Params&&... params)
 		{
@@ -1724,20 +1676,6 @@ private:
 			ent = entities->template create<Entity>(id, std::forward<Params>(params)...);
 		}
 	};
-
-	template <typename Entity>
-	Entity* initializeEntity()
-	{
-		static_assert(isEntity<Entity>(), "Template parameter must be an Entity.");
-		Entity* ent;
-		uint64_t id, tk;
-		tuple_utils::OncePerType<tuple_utils::Subset<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, tk, ent);
-
-		id += tk;
-		setEntityId(ent, id);
-
-		return ent;
-	}
 
 	template <typename Entity, typename ...Params>
 	Entity* initializeEntity(Params&&... params)
@@ -2308,25 +2246,11 @@ public:
 		return *reinterpret_cast<Accessor<Arch, P>*>(this);
 	}
 
-	template <typename Entity>
-	Entity* createEntity()
-	{
-		entityPermission<Entity>();
-		return arch->template createEntity<Entity>();
-	}
-
 	template <typename Entity, typename ...Params>
 	Entity* createEntity(Params&&... params)
 	{
 		entityPermission<Entity>();
 		return arch->template createEntity<Entity>(std::forward<Params>(params)...);
-	}
-
-	template <typename Entity, typename Context>
-	Entity* createEntityWithContext(Context&& context)
-	{
-		entityPermission<Entity>();
-		return arch->template createEntityWithContext<Entity>(context);
 	}
 
 	template <typename Entity, typename Context, typename ...Params>
