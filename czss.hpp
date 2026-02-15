@@ -1542,19 +1542,19 @@ public:
 	template <typename T>
 	void run(T* fls)
 	{
-		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::systemCallback, fls);
+		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems<T>(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::systemCallback, fls);
 	}
 
 	template <typename T>
 	void initialize(T* fls)
 	{
-		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::initializeSystemCallback, fls);
+		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems<T>(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::initializeSystemCallback, fls);
 	}
 
 	template <typename T>
 	void shutdown(T* fls)
 	{
-		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::shutdownSystemCallback, fls);
+		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems<T>(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::shutdownSystemCallback, fls);
 	}
 
 	void run()
@@ -2388,7 +2388,7 @@ public:
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
 		tuple_utils::OncePerType<Flatten<typename Entity::Cont>, HasEntityReadPermissionCallback<Sys>>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
-		return arch->template getEntity(id);
+		return arch->template getEntity<Entity>(id);
 	}
 
 	template <typename Entity>
@@ -2406,7 +2406,7 @@ public:
 		static_assert(isEntity<Entity>(), "Attempted to create non-entity.");
 		tuple_utils::OncePerType<Flatten<typename Entity::Cont>, HasEntityWritePermissionCallback<Sys>>::fn();
 		static_assert(inspect::contains<typename Arch::Cont, Entity>(), "Architecture doesn't contain the Entity.");
-		return arch->template getEntity(id);
+		return arch->template getEntity<Entity>(id);
 	}
 
 	template <typename Entity>
