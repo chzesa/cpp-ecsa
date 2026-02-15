@@ -535,7 +535,7 @@ public:
 			auto index = res->second;
 			auto p = get(index);
 			p->~E();
-			memset(p, 0, sizeof(E));
+			memset(reinterpret_cast<void*>(p), 0, sizeof(E));
 			free_indices.push(index);
 			index_map.erase(id);
 		}
