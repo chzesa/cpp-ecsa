@@ -1637,26 +1637,16 @@ private:
 	RewrapElements<std::add_pointer, Filter<Cont, ResourceBase>> resources;
 	RewrapElements<EntityStore, Filter<Cont, EntityBase>> entities;
 
-	template <typename Entity>
-	struct InitializeEntityCallback
-	{
-		template <typename T, typename ...Params>
-		static void callback(This* arch, uint64_t& id, uint64_t& tk, Entity*& ent, Params&&... params)
-		{
-			tk = indexOf<Cont, T, EntityBase>() << 63 - typeKeyLength();
-			auto entities = arch->getEntities<T>();
-			ent = entities->template create<Entity>(id, std::forward<Params>(params)...);
-		}
-	};
-
 	template <typename Entity, typename ...Params>
 	Entity* initializeEntity(Params&&... params)
 	{
 		static_assert(isEntity<Entity>(), "Template parameter must be an Entity.");
 
 		Entity* ent;
-		uint64_t id, tk;
-		tuple_utils::OncePerType<tuple_utils::Subset<Cont, BaseTypeOfFilter<Entity>>, InitializeEntityCallback<Entity>>::fn(this, id, tk, ent, std::forward<Params>(params)...);
+		uint64_t tk = entityIndex<Entity>() << 63 - typeKeyLength();
+		uint64_t id;
+		auto entities = getEntities<Entity>();
+		ent = entities->template create<Entity>(id, std::forward<Params>(params)...);
 
 		id += tk;
 		setEntityId(ent, id);
