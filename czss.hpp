@@ -399,6 +399,7 @@ struct Guid
 	Guid(uint64_t id);
 	uint64_t get() const;
 	bool operator ==(const Guid& other) const;
+	bool operator !=(const Guid& other) const;
 	bool operator <(const Guid& other) const;
 private:
 	uint64_t id;
@@ -3007,6 +3008,11 @@ uint64_t Guid::get() const
 bool Guid::operator ==(const Guid& other) const
 {
 	return this->id == other.id;
+}
+
+bool Guid::operator !=(const Guid& other) const
+{
+	return this->id != other.id;
 }
 
 bool Guid::operator <(const Guid& other) const
