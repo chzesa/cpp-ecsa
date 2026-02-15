@@ -47,6 +47,19 @@ const static char* name()
 	return name;
 }
 
+template <typename Base>
+struct BaseTypeFilter
+{
+	template <typename T>
+	static constexpr bool test()
+	{
+		return std::is_base_of<Base, T>();
+	}
+};
+
+template<typename Tuple, typename Cat>
+using Filter = tuple_utils::Subset<Tuple, BaseTypeFilter<Cat>>;
+
 struct Dummy
 {
 	using Cont = std::tuple<>;
@@ -234,47 +247,6 @@ constexpr bool isDummy()
 {
 	return std::is_same<T, Dummy>();
 }
-
-template <typename Cat, typename A, typename ...R>
-struct FilterImpl;
-
-template<typename Cat>
-struct FilterImpl<Cat, std::tuple<>>
-{
-	using type = typename std::tuple<>;
-};
-
-template <typename Cat, typename ...A, typename V, typename ...R>
-struct FilterImpl<Cat, std::tuple<A...>, V, R...>
-{
-	using type = typename std::conditional<
-		std::is_base_of<Cat, V>() ? true : false
-		, FilterImpl<Cat, std::tuple<V, A...>, R...>
-		, FilterImpl<Cat, std::tuple<A...>, R...>
-	>::type::type;
-};
-
-template <typename Cat, typename ...A, typename V>
-struct FilterImpl<Cat, std::tuple<A...>, V>
-{
-	using type = typename std::conditional<
-		std::is_base_of<Cat, V>() ? true : false
-		, tuple_utils::Set<V, A...>
-		, tuple_utils::Set<A...>
-	>::type;
-};
-
-template <typename T, typename Cat>
-struct FilterImpl2;
-
-template <typename ...A, typename Cat>
-struct FilterImpl2<std::tuple<A...>, Cat>
-{
-	using type = typename FilterImpl<Cat, std::tuple<>, A...>::type;
-};
-
-template<typename Tuple, typename Cat>
-using Filter = typename FilterImpl2<Tuple, Cat>::type;
 
 template <typename Tuple, typename T, typename Cat>
 constexpr uint64_t indexOf()
