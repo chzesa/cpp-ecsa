@@ -1114,33 +1114,22 @@ void onDestroy(Entity& entity, Accessor& accessor) {};
 template <typename Component, typename Entity, typename Accessor>
 void onDestroy(Component& component, Entity& entity, Accessor& accessor) {};
 
-template <typename Desc, typename ...Systems>
+template <typename ...Contents>
 struct Architecture : VirtualArchitecture
 {
-	using Cont = tuple_utils::Difference<tuple_utils::Difference<Flatten<Rbox<Systems...>>, Filter<Flatten<Rbox<Systems...>>, PermissionsBase>>
-		, Filter<Flatten<Rbox<Systems...>>, DependencyBase>>;
-	using This = Architecture<Desc, Systems...>;
+	using Cont = tuple_utils::Set<Contents...>;
+	using This = Architecture<Contents...>;
 	using OmniSystem = System <
 		Rewrap<Orchestrator, Filter<Cont, EntityBase>>,
 		Rewrap<Writer, Filter<Cont, ResourceBase>>
 	>;
 
-	Architecture()
+	Accessor<This, OmniSystem> accessor()
 	{
-		static_assert(!isSystem<Desc>(), "The first template parameter for Architecture must be the inheriting object");
-		// TODO assert all components are used in at least one entity
-		// TODO assert every entity can be instantiated
-		oncePerPair<Filter<Cont, SystemBase>, SystemDependencyCheck>(0);
+		return Accessor<This, OmniSystem>(this);
 	}
 
-	static constexpr uint64_t numSystems() { return numUniques<Cont, SystemBase>(); }
 	static constexpr uint64_t numEntities() { return numUniques<Cont, EntityBase>(); }
-
-	template <typename System>
-	static constexpr uint64_t systemIndex()
-	{
-		return isSystem<System>() ? indexOf<Cont, System, SystemBase>() : -1;
-	}
 
 	template<typename Entity>
 	static constexpr uint64_t entityIndex()
@@ -1345,7 +1334,7 @@ private:
 	void postInitializeEntity(Guid guid, Entity* ent)
 	{
 		setEntityId(ent, guid.get());
-		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
+		auto accessor = Accessor<This, System>(this);
 		tuple_utils::OncePerType<typename Entity::Cont, OnCreateCallback>::fn(*ent, accessor);
 		onCreate(*ent, accessor);
 	}
@@ -1354,7 +1343,7 @@ private:
 	void postInitializeEntity(Guid guid, Entity* ent, const Context& context)
 	{
 		setEntityId(ent, guid.get());
-		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
+		auto accessor = Accessor<This, System>(this);
 		tuple_utils::OncePerType<typename Entity::Cont, OnCreateContextCallback>::fn(*ent, accessor, context);
 		onCreate(*ent, accessor, context);
 	}
@@ -1408,9 +1397,9 @@ public:
 	}
 
 	template <typename Entity>
-	static EntityId<Desc, Entity> getEntityId(Entity* ent)
+	static EntityId<This, Entity> getEntityId(Entity* ent)
 	{
-		return VirtualArchitecture::getEntityId<Desc, Entity>(ent);
+		return VirtualArchitecture::getEntityId<This, Entity>(ent);
 	}
 
 	template <typename System, typename Entity>
@@ -1418,7 +1407,7 @@ public:
 	{
 		auto entities = getEntities<Entity>();
 		auto id = guidId(entity.getGuid());
-		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
+		auto accessor = Accessor<This, System>(reinterpret_cast<This*>(this));
 		tuple_utils::OncePerType<typename Entity::Cont, OnDestroyCallback>::fn(entity, accessor);
 		onDestroy(entity, accessor);
 		entities->destroy(id);
@@ -1460,7 +1449,7 @@ public:
 	}
 
 	template <typename Entity>
-	void destroyEntity(EntityId<Desc, Entity> key)
+	void destroyEntity(EntityId<This, Entity> key)
 	{
 		destroyEntity<Entity>(This::getEntityId(key));
 	}
@@ -1469,45 +1458,6 @@ public:
 	void destroyEntities()
 	{
 		tuple_utils::OncePerType<tuple_utils::Set<Entities...>, DestroyEntitiesCallback>(this);
-	}
-
-	template <typename T>
-	void run(T* fls)
-	{
-		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems<T>(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::systemCallback, fls);
-	}
-
-	template <typename T>
-	void initialize(T* fls)
-	{
-		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems<T>(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::initializeSystemCallback, fls);
-	}
-
-	template <typename T>
-	void shutdown(T* fls)
-	{
-		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems<T>(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::shutdownSystemCallback, fls);
-	}
-
-	void run()
-	{
-		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems<Dummy>(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::systemCallback, nullptr);
-	}
-
-	void initialize()
-	{
-		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems<Dummy>(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::initializeSystemCallback, nullptr);
-	}
-
-	void shutdown()
-	{
-		Runner<Desc, Filter<Cont, SystemBase>>::template runForSystems<Dummy>(reinterpret_cast<Desc*>(this), Runner<Desc, Filter<Cont, SystemBase>>::shutdownSystemCallback, nullptr);
-	}
-
-	template <typename Sys>
-	void run()
-	{
-		Sys::run(Accessor<Desc, Sys>(reinterpret_cast<Desc*>(this)));
 	}
 
 	static constexpr uint64_t typeKeyLength()
@@ -1671,40 +1621,6 @@ private:
 		inline static void callback(This* arch, const uint64_t& id)
 		{
 			arch->template destroyEntity<System, Value>(id);
-		}
-	};
-
-	struct SystemsCompleteCheck
-	{
-		template <typename Value, typename Inner, typename Next>
-		static constexpr bool inspect()
-		{
-			return isSystem<Value>() && !inspect::contains<Cont, Value>()
-				|| Next::template evaluate<bool, SystemsCompleteCheck>()
-				|| Inner::template evaluate<bool, SystemsCompleteCheck>();
-		}
-	};
-
-	struct SystemDependencyIterator
-	{
-		template <typename Value, typename Inner, typename Next>
-		static constexpr bool inspect()
-		{
-			return (Value::Dep::template evaluate<bool, SystemsCompleteCheck>())
-				|| Next::template evaluate<bool, SystemDependencyIterator>();
-		}
-	};
-
-	struct SystemDependencyCheck
-	{
-		template <typename A, typename B>
-		static void callback(int i)
-		{
-			static_assert(!std::is_same<A, B>() && (exclusiveWith<A, B>() || exclusiveWith<B, A>())
-				? (dependsOn<A, B>() || dependsOn<B, A>())
-				: true,
-				"Explicit dependency missing between systems."
-			);
 		}
 	};
 
@@ -2321,26 +2237,6 @@ public:
 	{
 		tuple_utils::OncePerType<Rbox<Entities...>, EntityOrchestrationPermissionTest>::fn();
 		arch->template destroyEntities<Entities...>();
-	}
-
-	template <typename T, typename ...Systems>
-	void run(T* fls, bool init)
-	{
-		// Rbox<Systems...>::template evaluate<Filter<TestAlwaysTrue, TestIfRbox, SystemsRunPermissionTest<Rbox<Systems...>>>>();
-
-		if (init)
-			Runner<Arch, Rbox<Systems...>>::runForSystems(arch, Runner<Arch, Rbox<Systems...>>::initializeSystemCallback, fls);
-
-		Runner<Arch, Rbox<Systems...>>::runForSystems(arch, Runner<Arch, Rbox<Systems...>>::systemCallback, fls);
-
-		if (init)
-			Runner<Arch, Rbox<Systems...>>::runForSystems(arch, Runner<Arch, Rbox<Systems...>>::shutdownSystemCallback, fls);
-	}
-
-	template <typename ...Systems>
-	void run(bool init)
-	{
-		run<Dummy, Systems...>(nullptr, init);
 	}
 
 	struct MiniRunMapper
