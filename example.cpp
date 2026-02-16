@@ -50,12 +50,13 @@ struct Iterb : Iterator<B>{};
 struct Enta : Entity<A, B> {};
 struct Entb : Entity<A> {};
 
-using MyArch = czss::Architecture<
+struct MyArch : czss::Architecture<
+	MyArch,
 	Resa,
 	RemoveGuid,
 	Enta,
 	Entb
->;
+> {};
 
 using A_run_a = Accessor<MyArch, System <
 	Orchestrator<Enta>,
