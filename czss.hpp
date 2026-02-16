@@ -1170,7 +1170,7 @@ struct Architecture : VirtualArchitecture
 			typedef typename std::allocator_traits<Alloc>::template rebind_alloc<R> ralloc;
 			using traits = std::allocator_traits<ralloc>;
 			auto a = ralloc(alloc);
-			auto p = arch->getResource<R>();
+			auto p = arch->template getResource<R>();
 			traits::destroy(a, p);
 			traits::deallocate(a, p, 1);
 		}
@@ -1258,7 +1258,7 @@ private:
 		{
 			if (entityIndex<T>() == key)
 			{
-				auto entities = arch->getEntities<T>();
+				auto entities = arch->template getEntities<T>();
 				auto entity = entities->get(id);
 				if (entity != nullptr)
 				{
@@ -1278,7 +1278,7 @@ private:
 		{
 			if (entityIndex<T>() == key)
 			{
-				auto entities = arch->getEntities<T>();
+				auto entities = arch->template getEntities<T>();
 				auto entity = entities->get(id);
 				if (entity != nullptr)
 				{
@@ -1609,7 +1609,7 @@ private:
 		template <typename Value>
 		static void callback(This* arch)
 		{
-			EntityStore<Value>* entities = arch->getEntities<Value>();
+			EntityStore<Value>* entities = arch->template getEntities<Value>();
 			entities->clear();
 		}
 	};
@@ -1630,7 +1630,7 @@ private:
 		inline static void callback(This* arch, const uint64_t& typeKey, const Guid& guid, void** ret)
 		{
 			if(isEntity<Value>() && inspect::contains<Cont, Value>() && indexOf<Cont, Value, EntityBase>() == typeKey)
-				*ret = arch->getEntity<Value>(guid);
+				*ret = arch->template getEntity<Value>(guid);
 		}
 	};
 
