@@ -1114,19 +1114,19 @@ void onDestroy(Entity& entity, Accessor& accessor) {};
 template <typename Component, typename Entity, typename Accessor>
 void onDestroy(Component& component, Entity& entity, Accessor& accessor) {};
 
-template <typename ...Contents>
+template <typename Desc, typename ...Contents>
 struct Architecture : VirtualArchitecture
 {
 	using Cont = tuple_utils::Set<Contents...>;
-	using This = Architecture<Contents...>;
+	using This = Architecture<Desc, Contents...>;
 	using OmniSystem = System <
 		Rewrap<Orchestrator, Filter<Cont, EntityBase>>,
 		Rewrap<Writer, Filter<Cont, ResourceBase>>
 	>;
 
-	Accessor<This, OmniSystem> accessor()
+	Accessor<Desc, OmniSystem> accessor()
 	{
-		return Accessor<This, OmniSystem>(this);
+		return Accessor<Desc, OmniSystem>(reinterpret_cast<Desc*>(this));
 	}
 
 	static constexpr uint64_t numEntities() { return numUniques<Cont, EntityBase>(); }
@@ -1334,7 +1334,7 @@ private:
 	void postInitializeEntity(Guid guid, Entity* ent)
 	{
 		setEntityId(ent, guid.get());
-		auto accessor = Accessor<This, System>(this);
+		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
 		tuple_utils::OncePerType<typename Entity::Cont, OnCreateCallback>::fn(*ent, accessor);
 		onCreate(*ent, accessor);
 	}
@@ -1343,7 +1343,7 @@ private:
 	void postInitializeEntity(Guid guid, Entity* ent, const Context& context)
 	{
 		setEntityId(ent, guid.get());
-		auto accessor = Accessor<This, System>(this);
+		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
 		tuple_utils::OncePerType<typename Entity::Cont, OnCreateContextCallback>::fn(*ent, accessor, context);
 		onCreate(*ent, accessor, context);
 	}
@@ -1397,9 +1397,9 @@ public:
 	}
 
 	template <typename Entity>
-	static EntityId<This, Entity> getEntityId(Entity* ent)
+	static EntityId<Desc, Entity> getEntityId(Entity* ent)
 	{
-		return VirtualArchitecture::getEntityId<This, Entity>(ent);
+		return VirtualArchitecture::getEntityId<Desc, Entity>(ent);
 	}
 
 	template <typename System, typename Entity>
@@ -1407,7 +1407,7 @@ public:
 	{
 		auto entities = getEntities<Entity>();
 		auto id = guidId(entity.getGuid());
-		auto accessor = Accessor<This, System>(reinterpret_cast<This*>(this));
+		auto accessor = Accessor<Desc, System>(reinterpret_cast<Desc*>(this));
 		tuple_utils::OncePerType<typename Entity::Cont, OnDestroyCallback>::fn(entity, accessor);
 		onDestroy(entity, accessor);
 		entities->destroy(id);
@@ -1449,7 +1449,7 @@ public:
 	}
 
 	template <typename Entity>
-	void destroyEntity(EntityId<This, Entity> key)
+	void destroyEntity(EntityId<Desc, Entity> key)
 	{
 		destroyEntity<Entity>(This::getEntityId(key));
 	}
