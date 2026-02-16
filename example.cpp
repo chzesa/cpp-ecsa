@@ -2,7 +2,7 @@
 #include "czss.hpp"
 
 #define CZSF_IMPLEMENTATION
-#include "external/c-fiber/czsf.h"
+#include <czsf.h>
 
 #include <iostream>
 #include <chrono>
@@ -19,7 +19,6 @@ int main()
 {
 	czsf::run(fmain);
 	while (!EXITING) { czsf_yield(); }
-
 }
 
 struct Resa : Resource<Resa>
@@ -51,139 +50,116 @@ struct Iterb : Iterator<B>{};
 struct Enta : Entity<A, B> {};
 struct Entb : Entity<A> {};
 
-struct V : czss::Component<V> {};
+using MyArch = czss::Architecture<
+	Resa,
+	RemoveGuid,
+	Enta,
+	Entb
+>;
 
-struct VirtualA : czss::Entity<V>, czss::Virtual
+using A_run_a = Accessor<MyArch, System <
+	Orchestrator<Enta>,
+	Writer<RemoveGuid>
+>>;
+
+void run_a(A_run_a& arch)
 {
-	virtual void quack()
+	auto ent = arch.createEntity<Enta>();
+	A* a = ent->getComponent<A>();
+	a->value = rand()%10000;
+
+	B* b = ent->getComponent<B>();
+	b->value = a->value;
+	b->other = b;
+
+	ent = arch.createEntity<Enta>();
+	arch.getResource<RemoveGuid>()->guid = ent->getGuid();
+}
+
+using A_run_b = Accessor<MyArch, System <
+	Orchestrator<Enta>,
+	Reader<RemoveGuid>
+>>;
+
+
+static void run_b(A_run_b& arch)
+{
+	Guid guid = arch.viewResource<RemoveGuid>()->guid;
+	arch.destroyEntity(guid);
+};
+
+using A_run_c = Accessor<MyArch, System <
+	Orchestrator<Enta>,
+	Reader<Iter, Iterb>,
+	Writer<Resa>
+>>;
+
+void run_c(A_run_c& arch)
+{
+	auto res = arch.getResource<Resa>();
+
+	arch.parallelIterate<Iter>(8, [&] (uint64_t index, auto& accessor)
 	{
-		std::cout << "Quack" << std::endl;
+		res->parallel += accessor.template viewComponent<A>()->value;
+	});
+
+	arch.iterate<Iterb>([&] (auto& accessor) {
+		res->pointer += accessor.template viewComponent<B>()->other->value;
+	});
+
+	for (auto& iter : arch.template iterate<Iter>())
+	{
+		res->iter += iter.template viewComponent<A>()->value;
 	}
 };
 
-struct VirtualB : VirtualA
-{
-	void quack() override
-	{
-		std::cout << "Woof" << std::endl;
-	}
-};
+// struct V : czss::Component<V> {};
 
-struct VirtualC : VirtualA
-{
-	void quack() override
-	{
-		std::cout << "Meow" << std::endl;
-	}
-};
+// struct VirtualA : czss::Entity<V>, czss::Virtual
+// {
+// 	virtual void quack()
+// 	{
+// 		std::cout << "Quack" << std::endl;
+// 	}
+// };
 
-CZSS_NAME(Enta, "Enta")
-CZSS_NAME(Entb, "Entb")
+// struct VirtualB : VirtualA
+// {
+// 	void quack() override
+// 	{
+// 		std::cout << "Woof" << std::endl;
+// 	}
+// };
 
-struct MyArch;
+// struct VirtualC : VirtualA
+// {
+// 	void quack() override
+// 	{
+// 		std::cout << "Meow" << std::endl;
+// 	}
+// };
 
-struct Sysa : System <Dependency<>, Orchestrator<Enta>, Writer<RemoveGuid>>
-{
-	static void run(Accessor<MyArch, Sysa>& arch)
-	{
-		auto ent = arch.createEntity<Enta>();
-		A* a = ent->getComponent<A>();
-		a->value = rand()%10000;
+// struct Sysd : System<Orchestrator<VirtualA>>
+// {
+// 	static void run(Accessor<MyArch, Sysd>& arch) { };
 
-		B* b = ent->getComponent<B>();
-		b->value = a->value;
-		b->other = b;
+// 	static void initialize(Accessor<MyArch, Sysd>& arch)
+// 	{
+// 		std::cout << "Initialize Sysd" << std::endl;
+// 		arch.createEntity<VirtualA>();
+// 		arch.createEntity<VirtualB>();
+// 		arch.createEntity<VirtualC>();
 
-		ent = arch.createEntity<Enta>();
-		arch.getResource<RemoveGuid>()->guid = ent->getGuid();
-	};
+// 		arch.iterate2<czss::Iterator<V>>([&] (auto accessor) {
+// 			accessor.getEntity()->quack();
+// 		});
+// 	};
 
-	static void initialize(Accessor<MyArch, Sysa>& arch)
-	{
-		std::cout << "Initialize Sysa" << std::endl;
-	};
-
-	static void shutdown(Accessor<MyArch, Sysa>& arch)
-	{
-		std::cout << "Shutdown Sysa" << std::endl;
-	};
-}; 
-
-struct Sysb : System<Dependency<Sysa>, Orchestrator<Enta>, Reader<RemoveGuid>>
-{
-	static void run(Accessor<MyArch, Sysb>& arch)
-	{
-		Guid guid = arch.viewResource<RemoveGuid>()->guid;
-		arch.destroyEntity(guid);
-	};
-
-	static void initialize(Accessor<MyArch, Sysb>& arch)
-	{
-		std::cout << "Initialize Sysb" << std::endl;
-	};
-
-	static void shutdown(Accessor<MyArch, Sysb>& arch)
-	{
-		std::cout << "Shutdown Sysb" << std::endl;
-	};
-};
-
-struct Sysc : System<Dependency<Sysb>, Orchestrator<Enta>, Reader<Iter, Iterb>, Writer<Resa>>
-{
-	static void run(Accessor<MyArch, Sysc>& arch)
-	{
-		auto res = arch.getResource<Resa>();
-
-		arch.parallelIterate<Iter>(8, [&] (uint64_t index, IteratorAccessor<Iter, MyArch, Sysc>& accessor)
-		{
-			res->parallel += accessor.view<A>()->value;
-		});
-
-
-		arch.iterate<Iterb>([&] (IteratorAccessor<Iterb, MyArch, Sysc>& accessor) {
-			res->pointer += accessor.view<B>()->other->value;
-		});
-
-		for (auto& iter : arch.template iterate<Iter>())
-		{
-			res->iter += iter.template view<A>()->value;
-		}
-	};
-
-	static void initialize(Accessor<MyArch, Sysc>& arch)
-	{
-		std::cout << "Initialize Sysc" << std::endl;
-	};
-
-	static void shutdown(Accessor<MyArch, Sysc>& arch)
-	{
-		std::cout << "Shutdown Sysc" << std::endl;
-	};
-};
-
-struct Sysd : System<Orchestrator<VirtualA>>
-{
-	static void run(Accessor<MyArch, Sysd>& arch) { };
-
-	static void initialize(Accessor<MyArch, Sysd>& arch)
-	{
-		std::cout << "Initialize Sysd" << std::endl;
-		arch.createEntity<VirtualA>();
-		arch.createEntity<VirtualB>();
-		arch.createEntity<VirtualC>();
-
-		arch.iterate2<czss::Iterator<V>>([&] (auto accessor) {
-			accessor.getEntity()->quack();
-		});
-	};
-
-	static void shutdown(Accessor<MyArch, Sysd>& arch)
-	{
-		std::cout << "Shutdown Sysd" << std::endl;
-	};
-};
-
-struct MyArch : Architecture <MyArch, Sysb, Sysa, Sysc, Sysd> {};
+// 	static void shutdown(Accessor<MyArch, Sysd>& arch)
+// 	{
+// 		std::cout << "Shutdown Sysd" << std::endl;
+// 	};
+// };
 
 void fmain()
 {
@@ -195,7 +171,7 @@ void fmain()
 	arch.setResource(&res);
 	arch.setResource(&guid);
 
-	arch.initialize();
+	auto accessor = arch.accessor();
 
 	std::cout << "Running 50000 iterations" << std::endl;
 	auto start = high_resolution_clock::now();
@@ -206,10 +182,12 @@ void fmain()
 			std::cout << "iter #" << i << " " << double(duration_cast<microseconds>(high_resolution_clock::now() - lap).count()) / 1000 << "ms" << std::endl;
 
 		lap = high_resolution_clock::now();
-		arch.run();
+		accessor.minirun(
+			run_a,
+			run_b,
+			run_c
+		);
 	}
-
-	arch.shutdown();
 
 	auto stop = high_resolution_clock::now();
 	auto duration = duration_cast<microseconds>(stop - start);
