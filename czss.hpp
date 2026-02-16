@@ -53,7 +53,7 @@ struct BaseTypeFilter
 	template <typename T>
 	static constexpr bool test()
 	{
-		return std::is_base_of<Base, T>();
+		return std::is_base_of<Base, T>::value;
 	}
 };
 
@@ -147,36 +147,36 @@ template <typename T>
 constexpr bool isValidType()
 {
 	return (1
-		<< std::is_base_of<ComponentBase, T>()
-		<< std::is_base_of<IteratorBase, T>()
-		<< std::is_base_of<EntityBase, T>()
-		<< std::is_base_of<SystemBase, T>()
-		<< std::is_base_of<ResourceBase, T>()
-		<< std::is_base_of<PermissionsBase, T>()
-		<< std::is_base_of<DependencyBase, T>()
-		<< std::is_base_of<ReaderBase, T>()
-		<< std::is_base_of<WriterBase, T>()
-		<< std::is_base_of<OrchestratorBase, T>()
+		<< std::is_base_of<ComponentBase, T>::value
+		<< std::is_base_of<IteratorBase, T>::value
+		<< std::is_base_of<EntityBase, T>::value
+		<< std::is_base_of<SystemBase, T>::value
+		<< std::is_base_of<ResourceBase, T>::value
+		<< std::is_base_of<PermissionsBase, T>::value
+		<< std::is_base_of<DependencyBase, T>::value
+		<< std::is_base_of<ReaderBase, T>::value
+		<< std::is_base_of<WriterBase, T>::value
+		<< std::is_base_of<OrchestratorBase, T>::value
 	) == 2;
 }
 
 template<typename B, typename T>
 constexpr bool isBaseType()
 {
-	return isValidType<T>() && std::is_base_of<B, T>();
+	return isValidType<T>() && std::is_base_of<B, T>::value;
 }
 
 template<typename T>
 constexpr bool isThreadSafe()
 {
-	return isBaseType<ResourceBase, T>() && std::is_base_of<ThreadSafe, T>();
+	return isBaseType<ResourceBase, T>() && std::is_base_of<ThreadSafe, T>::value;
 }
 
 template<typename T>
 constexpr bool isVirtual()
 {
 	return (isBaseType<EntityBase, T>() || isBaseType<ComponentBase, T>())
-		&& std::is_base_of<Virtual, T>();
+		&& std::is_base_of<Virtual, T>::value;
 }
 
 template<typename T>
@@ -742,7 +742,7 @@ public:
 	{
 		static_assert(isVirtual<B>());
 		static_assert(tuple_utils::Contains<Cont, B>::value);
-		static_assert(std::is_base_of<B, D>());
+		static_assert(std::is_base_of<B, D>::value);
 		static_assert(alignof(B) == alignof(D));
 		static_assert(sizeof(B) == sizeof(D));
 		auto ret = getComponent<B>();
@@ -755,7 +755,7 @@ public:
 	{
 		static_assert(isVirtual<B>());
 		static_assert(tuple_utils::Contains<Cont, B>::value);
-		static_assert(std::is_base_of<B, D>());
+		static_assert(std::is_base_of<B, D>::value);
 		static_assert(alignof(B) == alignof(D));
 		static_assert(sizeof(B) == sizeof(D));
 		auto ret = getComponent<B>();
@@ -768,7 +768,7 @@ public:
 	{
 		static_assert(isVirtual<B>());
 		static_assert(tuple_utils::Contains<Cont, B>::value);
-		static_assert(std::is_base_of<B, D>());
+		static_assert(std::is_base_of<B, D>::value);
 		static_assert(alignof(B) == alignof(D));
 		static_assert(sizeof(B) == sizeof(D));
 		auto ret = getComponent<B>();
