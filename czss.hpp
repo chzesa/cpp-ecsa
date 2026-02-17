@@ -2752,6 +2752,9 @@ constexpr bool exclusiveWith()
 		|| tuple_utils::OncePerType<SystemAccesses<B>, SystemExclusiveCheck<A>>::constFn();
 }
 
+template <typename Arch>
+void synchronize(Accessor<Arch, typename Arch::OmniSystem>& arch) {}
+
 } // namespace czss
 
 namespace std {
