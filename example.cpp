@@ -193,7 +193,7 @@ void run_c(A_run_c& arch)
 
 int main(int argc, char** argv)
 {
-	srand(time(0));
+	srand(548739);
 
 	MyArch arch;
 	Resa res;
