@@ -2409,7 +2409,8 @@ public:
 	uint64_t countCompatibleEntities()
 	{
 		uint64_t entityCount = 0;
-		tuple_utils::OncePerType<Filter<typename Arch::Cont, EntityBase>, EntityCountCallback<Iterator>>::fn(&entityCount, arch);
+		using _compat = tuple_utils::Subset<typename Arch::Cont, IteratorCompatabilityFilter<Iterator>>;
+		tuple_utils::OncePerType<_compat, EntityCountCallback>::fn(&entityCount, arch);
 		return entityCount;
 	}
 
@@ -2551,17 +2552,13 @@ private:
 		}
 	};
 
-	template <typename Iterator>
 	struct EntityCountCallback
 	{
 		template <typename Entity>
 		static inline void callback(uint64_t* count, Arch* arch)
 		{
-			CZSS_CONST_IF (isIteratorCompatibleWithEntity<Iterator, Entity>())
-			{
-				auto entities = arch->template getEntities<Entity>();
-				*count += entities->size();
-			}
+			auto entities = arch->template getEntities<Entity>();
+			*count += entities->size();
 		}
 	};
 
