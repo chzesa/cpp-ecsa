@@ -2589,15 +2589,11 @@ private:
 			it += data->beginIndex;
 
 			auto end = entities->used_indices.end();
-			uint64_t handled;
 
 			if (data->entityCount < end - it)
-			{
-				handled = data->entityCount;
 				end = it + data->entityCount;
-			} else {
-				handled = end - it;
-			}
+
+			uint64_t handled = end - it;
 
 			for (; it != end; it++)
 			{
