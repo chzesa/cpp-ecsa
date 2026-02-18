@@ -1,4 +1,4 @@
-#define CZSF_IMPL_THREADS
+// #define CZSF_IMPL_THREADS
 #define CZSS_IMPLEMENTATION
 #include "czss.hpp"
 
@@ -8,6 +8,7 @@
 #include <iostream>
 #include <chrono>
 #include <iomanip>
+#include <thread>
 
 using namespace czss;
 using namespace std;
@@ -15,10 +16,10 @@ using namespace chrono;
 
 volatile static bool EXITING = false;
 static constexpr size_t N_PARALLEL = 4;
+static constexpr size_t CACHE_PADDING = 32;
 
 struct Resa : Resource<Resa>
 {
-	uint64_t parr[N_PARALLEL] = {0};
 	uint64_t parallel = 0;
 	uint64_t pointer = 0;
 	uint64_t iter = 0;
@@ -84,7 +85,6 @@ using A_run_b = Accessor<MyArch, System <
 	Reader<RemoveGuid>
 >>;
 
-
 static void run_b(A_run_b& arch)
 {
 	Guid guid = arch.viewResource<RemoveGuid>()->guid;
@@ -105,16 +105,22 @@ void run_c(A_run_c& arch)
 
 	auto a = high_resolution_clock::now();
 
-	arch.parallelIterate<Iter>(N_PARALLEL, [&] (uint64_t index, auto& accessor)
+#ifdef CZSF_IMPL_THREADS
+	size_t parallel = N_PARALLEL;
+#else
+	size_t ents = arch.countCompatibleEntities<Iter>();
+	size_t parallel = ents / 8192;
+	if (parallel == 0) parallel = 1;
+#endif
+	std::vector<uint64_t> counters(parallel * CACHE_PADDING, 0);
+
+	arch.parallelIterate<Iter>(parallel, [&] (uint64_t index, auto& accessor)
 	{
-		res->parr[index] += accessor.template viewComponent<A>()->value;
+		counters[index * CACHE_PADDING] += accessor.template viewComponent<A>()->value;
 	});
 
-	for (int i = 0; i < N_PARALLEL; i++)
-	{
-		res->parallel += res->parr[i];
-		res->parr[i] = 0;
-	}
+	for (int i = 0; i < parallel; i++)
+		res->parallel += counters[i * CACHE_PADDING];
 
 	auto b = high_resolution_clock::now();
 
@@ -131,7 +137,7 @@ void run_c(A_run_c& arch)
 
 	auto d = high_resolution_clock::now();
 
-	arch.iterate2<Iter>([&] (auto& accessor) {
+	arch.iterate<Iter>([&] (auto& accessor) {
 		res->iter2 += accessor.template viewComponent<A>()->value;
 	});
 
@@ -191,7 +197,7 @@ void run_c(A_run_c& arch)
 // 	};
 // };
 
-int main(int argc, char** argv)
+void fmain()
 {
 	srand(548739);
 
@@ -206,7 +212,7 @@ int main(int argc, char** argv)
 	std::cout << "Running 50000 iterations" << std::endl;
 	auto start = high_resolution_clock::now();
 	auto lap = high_resolution_clock::now();
-	for (int i = 0; i < 40000; i++)
+	for (int i = 0; i < 50000; i++)
 	{
 		if (i % 1000 == 0)
 			std::cout << "iter #" << i << " " << double(duration_cast<microseconds>(high_resolution_clock::now() - lap).count()) / 1000 << "ms" << std::endl;
@@ -224,18 +230,35 @@ int main(int argc, char** argv)
 	std::cout << "Total duration " << double(duration.count())/1000000 << "s" << std::endl;
 
 	std::cout << "Results: "
-		<< "\n\t Lambda using pointers: " << res.pointer
-		<< "\n\t Parallel lambda:       " << res.parallel
 		<< "\n\t For-loop:              " << res.iter
+		<< "\n\t Lambda using pointers: " << res.pointer
 		<< "\n\t Typed lambda (iter2):  " << res.iter
+		<< "\n\t Parallel lambda:       " << res.parallel
 		<< std::endl;
 
 	std::cout << "Timing: "
-		<< "\n\t Lambda using pointers: " << std::setw(13) << res.pointer_ns << "ns"
-		<< "\n\t Parallel lambda:       " << std::setw(13) << res.parallel_ns << "ns"
 		<< "\n\t For-loop:              " << std::setw(13) << res.iter_ns << "ns"
+		<< "\n\t Lambda using pointers: " << std::setw(13) << res.pointer_ns << "ns"
 		<< "\n\t Typed lambda (iter2):  " << std::setw(13) << res.iter2_ns << "ns"
+		<< "\n\t Parallel lambda:       " << std::setw(13) << res.parallel_ns << "ns"
 		<< std::endl;
 
 	EXITING = true;
+}
+
+int main()
+{
+#ifdef CZSF_IMPL_THREADS
+	fmain();
+#else
+	czsf::run(fmain);
+
+	std::thread threads[N_PARALLEL];
+
+	for (int i = 0; i < N_PARALLEL; i++)
+		threads[i] = std::thread([] { while (!EXITING) { czsf_yield(); } });
+
+	for (int i = 0; i < N_PARALLEL; i++)
+		threads[i].join();
+#endif
 }
