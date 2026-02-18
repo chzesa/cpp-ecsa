@@ -2395,26 +2395,12 @@ public:
 	{
 		using _compat = tuple_utils::Subset<typename Arch::Cont, IteratorCompatabilityFilter<Iterator>>;
 		iteratorPermission<Iterator>();
-		tuple_utils::OncePerType<_compat, IteratorCallback<Iterator>>::fn(f, arch);
-	}
-
-	template <typename Iterator, typename F>
-	void iterate2(F f)
-	{
-		using _compat = tuple_utils::Subset<typename Arch::Cont, IteratorCompatabilityFilter<Iterator>>;
-		iteratorPermission<Iterator>();
 
 		tuple_utils::OncePerType<_compat, TypedIteratorCallback<Iterator>>::fn(f, arch);
 	}
 
 	template <typename Iterator, typename F>
 	void parallelIterate(uint64_t numTasks, F f)
-	{
-		parallelIterateImpl<Iterator>(numTasks, f, ParallelIterateTask<Iterator, F>);
-	}
-
-	template <typename Iterator, typename F>
-	void parallelIterate2(uint64_t numTasks, F f)
 	{
 		parallelIterateImpl<Iterator>(numTasks, f, TypedParallelIterateTask<Iterator, F>);
 	}
@@ -2548,25 +2534,6 @@ private:
 	};
 
 	template <typename Iterator>
-	struct IteratorCallback
-	{
-		template <typename Value, typename F>
-		static inline void callback(F& f, Arch* arch)
-		{
-			CZSS_CONST_IF (isEntity<Value>() && isIteratorCompatibleWithEntity<Iterator, Value>())
-			{
-				auto ents = arch->template getEntities<Value>();
-				for (auto& ent : ents->used_indices)
-				{
-					IteratorAccessor<Iterator, Arch, Sys> accessor(ent);
-					auto lambda = f;
-					lambda(accessor);
-				}
-			}
-		}
-	};
-
-	template <typename Iterator>
 	struct TypedIteratorCallback
 	{
 		template <typename Value, typename F>
@@ -2607,62 +2574,6 @@ private:
 		Arch* arch;
 		F* func;
 	};
-
-	template <typename Iterator, typename F>
-	struct ParallelIterateTaskCallback
-	{
-		template <typename Value>
-		static inline void callback(ParallelIterateTaskData<F>* data)
-		{
-			CZSS_CONST_IF (!isEntity<Value>() || !isIteratorCompatibleWithEntity<Iterator, Value>())
-				return;
-
-			auto entities = data->arch->template getEntities<Value>();
-			if (entities->size() == 0 || entities->size() < data->beginIndex)
-			{
-				data->beginIndex -= entities->size();
-				return;
-			}
-
-			auto it = entities->used_indices.begin();
-			it += data->beginIndex;
-
-			auto end = entities->used_indices.end();
-			uint64_t handled;
-
-			if (data->entityCount < end - it)
-			{
-				handled = data->entityCount;
-				end = it + data->entityCount;
-			} else {
-				handled = end - it;
-			}
-
-			for (; it != end; it++)
-			{
-				IteratorAccessor<Iterator, Arch, Sys> accessor(*it);
-				F lambda = *data->func;
-				lambda(data->index, accessor);
-			}
-
-			data->entityCount -= handled;
-			data->beginIndex = 0;
-		}
-	};
-
-	template <typename Iterator, typename F>
-	static void ParallelIterateTask(ParallelIterateTaskData<F>* data)
-	{
-		using _compat = tuple_utils::Subset<typename Arch::Cont, IteratorCompatabilityFilter<Iterator>>;
-		static const uint64_t limit = std::tuple_size<_compat>::value;
-
-		for (uint64_t i = 0; i < limit; i++)
-		{
-			tuple_utils::Switch<_compat>::template fn<ParallelIterateTaskCallback<Iterator, F>>(i, data);
-			if (data->entityCount == 0)
-				return;
-		}
-	}
 
 	template <typename Iterator, typename F>
 	struct TypedParallelIterateTaskCallback
