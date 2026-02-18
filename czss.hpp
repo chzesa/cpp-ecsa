@@ -2598,7 +2598,7 @@ private:
 			for (; it != end; it++)
 			{
 				auto accessor = TypedEntityAccessor<Sys, Value>(*it);
-				F lambda = *data->func;
+				F& lambda = *data->func;
 				lambda(data->index, accessor);
 			}
 
