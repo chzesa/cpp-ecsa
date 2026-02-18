@@ -206,7 +206,7 @@ int main(int argc, char** argv)
 	std::cout << "Running 50000 iterations" << std::endl;
 	auto start = high_resolution_clock::now();
 	auto lap = high_resolution_clock::now();
-	for (int i = 0; i < 50000; i++)
+	for (int i = 0; i < 40000; i++)
 	{
 		if (i % 1000 == 0)
 			std::cout << "iter #" << i << " " << double(duration_cast<microseconds>(high_resolution_clock::now() - lap).count()) / 1000 << "ms" << std::endl;
