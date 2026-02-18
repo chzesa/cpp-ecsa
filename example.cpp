@@ -1,3 +1,4 @@
+#define CZSF_IMPL_THREADS
 #define CZSS_IMPLEMENTATION
 #include "czss.hpp"
 
@@ -12,14 +13,6 @@ using namespace std;
 using namespace chrono;
 
 volatile static bool EXITING = false;
-
-void fmain();
-
-int main()
-{
-	czsf::run(fmain);
-	while (!EXITING) { czsf_yield(); }
-}
 
 struct Resa : Resource<Resa>
 {
@@ -162,7 +155,7 @@ void run_c(A_run_c& arch)
 // 	};
 // };
 
-void fmain()
+int main(int argc, char** argv)
 {
 	srand(time(0));
 
