@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <chrono>
+#include <iomanip>
 
 using namespace czss;
 using namespace std;
@@ -21,6 +22,12 @@ struct Resa : Resource<Resa>
 	uint64_t parallel = 0;
 	uint64_t pointer = 0;
 	uint64_t iter = 0;
+	uint64_t iter2 = 0;
+
+	uint64_t parallel_ns = 0;
+	uint64_t pointer_ns = 0;
+	uint64_t iter_ns = 0;
+	uint64_t iter2_ns = 0;
 };
 
 struct RemoveGuid : Resource<RemoveGuid>
@@ -92,7 +99,11 @@ using A_run_c = Accessor<MyArch, System <
 
 void run_c(A_run_c& arch)
 {
+	using namespace std::chrono;
+
 	auto res = arch.getResource<Resa>();
+
+	auto a = high_resolution_clock::now();
 
 	arch.parallelIterate<Iter>(N_PARALLEL, [&] (uint64_t index, auto& accessor)
 	{
@@ -105,14 +116,31 @@ void run_c(A_run_c& arch)
 		res->parr[i] = 0;
 	}
 
+	auto b = high_resolution_clock::now();
+
 	arch.iterate<Iterb>([&] (auto& accessor) {
 		res->pointer += accessor.template viewComponent<B>()->other->value;
 	});
+
+	auto c = high_resolution_clock::now();
 
 	for (auto& iter : arch.template iterate<Iter>())
 	{
 		res->iter += iter.template viewComponent<A>()->value;
 	}
+
+	auto d = high_resolution_clock::now();
+
+	arch.iterate2<Iter>([&] (auto& accessor) {
+		res->iter2 += accessor.template viewComponent<A>()->value;
+	});
+
+	auto e = high_resolution_clock::now();
+
+	res->parallel_ns += duration_cast<nanoseconds>(b - a).count();
+	res->pointer_ns += duration_cast<nanoseconds>(c - b).count();
+	res->iter_ns += duration_cast<nanoseconds>(d - c).count();
+	res->iter2_ns += duration_cast<nanoseconds>(e - d).count();
 };
 
 // struct V : czss::Component<V> {};
@@ -197,8 +225,16 @@ int main(int argc, char** argv)
 
 	std::cout << "Results: "
 		<< "\n\t Lambda using pointers: " << res.pointer
-		<< "\n\t Parallel lambda: " << res.parallel
-		<< "\n\t For-loop: " << res.iter
+		<< "\n\t Parallel lambda:       " << res.parallel
+		<< "\n\t For-loop:              " << res.iter
+		<< "\n\t Typed lambda (iter2):  " << res.iter
+		<< std::endl;
+
+	std::cout << "Timing: "
+		<< "\n\t Lambda using pointers: " << std::setw(13) << res.pointer_ns << "ns"
+		<< "\n\t Parallel lambda:       " << std::setw(13) << res.parallel_ns << "ns"
+		<< "\n\t For-loop:              " << std::setw(13) << res.iter_ns << "ns"
+		<< "\n\t Typed lambda (iter2):  " << std::setw(13) << res.iter2_ns << "ns"
 		<< std::endl;
 
 	EXITING = true;
