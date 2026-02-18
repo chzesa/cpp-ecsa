@@ -13,9 +13,11 @@ using namespace std;
 using namespace chrono;
 
 volatile static bool EXITING = false;
+static constexpr size_t N_PARALLEL = 4;
 
 struct Resa : Resource<Resa>
 {
+	uint64_t parr[N_PARALLEL] = {0};
 	uint64_t parallel = 0;
 	uint64_t pointer = 0;
 	uint64_t iter = 0;
@@ -92,10 +94,16 @@ void run_c(A_run_c& arch)
 {
 	auto res = arch.getResource<Resa>();
 
-	arch.parallelIterate<Iter>(8, [&] (uint64_t index, auto& accessor)
+	arch.parallelIterate<Iter>(N_PARALLEL, [&] (uint64_t index, auto& accessor)
 	{
-		res->parallel += accessor.template viewComponent<A>()->value;
+		res->parr[index] += accessor.template viewComponent<A>()->value;
 	});
+
+	for (int i = 0; i < N_PARALLEL; i++)
+	{
+		res->parallel += res->parr[i];
+		res->parr[i] = 0;
+	}
 
 	arch.iterate<Iterb>([&] (auto& accessor) {
 		res->pointer += accessor.template viewComponent<B>()->other->value;
