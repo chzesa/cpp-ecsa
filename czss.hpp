@@ -147,16 +147,16 @@ template <typename T>
 constexpr bool isValidType()
 {
 	return (1
-		<< std::is_base_of<ComponentBase, T>::value
-		<< std::is_base_of<IteratorBase, T>::value
-		<< std::is_base_of<EntityBase, T>::value
-		<< std::is_base_of<SystemBase, T>::value
-		<< std::is_base_of<ResourceBase, T>::value
-		<< std::is_base_of<PermissionsBase, T>::value
-		<< std::is_base_of<DependencyBase, T>::value
-		<< std::is_base_of<ReaderBase, T>::value
-		<< std::is_base_of<WriterBase, T>::value
-		<< std::is_base_of<OrchestratorBase, T>::value
+		<< (std::is_base_of<ComponentBase, T>::value ? 1 : 0)
+		<< (std::is_base_of<IteratorBase, T>::value ? 1 : 0)
+		<< (std::is_base_of<EntityBase, T>::value ? 1 : 0)
+		<< (std::is_base_of<SystemBase, T>::value ? 1 : 0)
+		<< (std::is_base_of<ResourceBase, T>::value ? 1 : 0)
+		<< (std::is_base_of<PermissionsBase, T>::value ? 1 : 0)
+		<< (std::is_base_of<DependencyBase, T>::value ? 1 : 0)
+		<< (std::is_base_of<ReaderBase, T>::value ? 1 : 0)
+		<< (std::is_base_of<WriterBase, T>::value ? 1 : 0)
+		<< (std::is_base_of<OrchestratorBase, T>::value ? 1 : 0)
 	) == 2;
 }
 
