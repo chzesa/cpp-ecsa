@@ -2578,8 +2578,7 @@ private:
 				for (auto& ent : ents->used_indices)
 				{
 					auto accessor = TypedEntityAccessor<Sys, Value>(ent);
-					auto lambda = f;
-					lambda(accessor);
+					f(accessor);
 				}
 			}
 		}
