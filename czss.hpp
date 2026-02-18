@@ -2615,7 +2615,7 @@ private:
 	static void TypedParallelIterateTask(ParallelIterateTaskData<F>* data)
 	{
 		using _compat = tuple_utils::Subset<typename Arch::Cont, IteratorCompatabilityFilter<Iterator>>;
-		static const uint64_t limit = std::tuple_size<_compat>::value;
+		static constexpr uint64_t limit = std::tuple_size<_compat>::value;
 
 		for (uint64_t i = 0; i < limit; i++)
 		{
