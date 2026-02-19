@@ -2572,6 +2572,31 @@ private:
 		F* func;
 	};
 
+	template <typename Iterator, typename F, typename Entity>
+	static void iterateOverUsedIndices(ParallelIterateTaskData<F>* data)
+	{
+		auto entities = data->arch->template getEntities<Entity>();
+		auto it = entities->used_indices.begin();
+		it += data->beginIndex;
+
+		auto end = entities->used_indices.end();
+
+		if (data->entityCount < end - it)
+			end = it + data->entityCount;
+
+		uint64_t handled = end - it;
+
+		for (; it != end; it++)
+		{
+			auto accessor = TypedEntityAccessor<Sys, Entity>(*it);
+			F& lambda = *data->func;
+			lambda(data->index, accessor);
+		}
+
+		data->entityCount -= handled;
+		data->beginIndex = 0;
+	}
+
 	template <typename Iterator, typename F>
 	struct TypedParallelIterateTaskCallback
 	{
@@ -2585,25 +2610,7 @@ private:
 				return;
 			}
 
-			auto it = entities->used_indices.begin();
-			it += data->beginIndex;
-
-			auto end = entities->used_indices.end();
-
-			if (data->entityCount < end - it)
-				end = it + data->entityCount;
-
-			uint64_t handled = end - it;
-
-			for (; it != end; it++)
-			{
-				auto accessor = TypedEntityAccessor<Sys, Value>(*it);
-				F& lambda = *data->func;
-				lambda(data->index, accessor);
-			}
-
-			data->entityCount -= handled;
-			data->beginIndex = 0;
+			iterateOverUsedIndices<Iterator, F, Value>(data);
 		}
 	};
 
