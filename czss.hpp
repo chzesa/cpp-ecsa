@@ -1069,7 +1069,7 @@ struct Runner
 
 		for (uint64_t i = 0; i < sysCount; i++)
 		{
-			new (&barriers[i]) czsf::Barrier(1);
+			barriers[i].setValue(1);
 			taskData[i].arch = arch;
 			taskData[i].barriers = barriers;
 			taskData[i].id = i;
