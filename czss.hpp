@@ -1121,6 +1121,7 @@ struct Architecture : VirtualArchitecture
 	using This = Architecture<Desc, Contents...>;
 	using OmniSystem = System <
 		Rewrap<Orchestrator, Filter<Cont, EntityBase>>,
+		Rewrap<Writer, Filter<Cont, ComponentBase>>,
 		Rewrap<Writer, Filter<Cont, ResourceBase>>
 	>;
 
