@@ -1147,6 +1147,19 @@ struct Architecture : VirtualArchitecture
 		std::get<tuple_utils::Index<Resource*, RewrapElements<std::add_pointer, Filter<Cont, ResourceBase>>>::value>(resources) = res;
 	}
 
+	template <typename Resource>
+	void setResources(Resource* res)
+	{
+		this->setResource(res);
+	}
+
+	template <typename Resource, typename ...R>
+	void setResources(Resource* res, R... rest)
+	{
+		this->setResource(res);
+		this->setResources(rest...);
+	}
+
 	template <typename Alloc>
 	struct ResourceInitializer
 	{
@@ -2376,6 +2389,12 @@ public:
 		static_assert(canWrite<Sys, Resource>(), "System lacks permission to modify Resource.");
 		static_assert(inspect::contains<typename Arch::Cont, Resource>(), "Architecture doesn't contain the Resource.");
 		arch->setResource(res);
+	}
+
+	template <typename Resource, typename ...R>
+	void setResources(Resource* res, R... rest)
+	{
+		arch->setResources(res, rest...);
 	}
 
 	template <typename Iterator>
