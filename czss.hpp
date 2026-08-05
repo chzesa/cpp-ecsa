@@ -2649,6 +2649,19 @@ private:
 	}
 };
 
+// #####################
+// Utility
+// #####################
+
+template <typename T>
+void copy(T& source, T& destination)
+{
+	tuple_utils::oncePerType2<typename T::Cont>([&] <typename O> () {
+		auto& a = *source.template getComponent<O>();
+		auto& b = *destination.template getComponent<O>();
+		copy(a, b);
+	});
+}
 
 // #####################################################################
 // Implementation
